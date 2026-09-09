@@ -36,6 +36,10 @@ public interface IHistoryStore : IDisposable
     // Refresh the date (copy-from-history with update-date-on-copy on).
     void RefreshDate(long id, DateTime utcNow);
 
+    // Delete one item (popup Delete-key parity). Returns true when a row
+    // was removed.
+    bool Delete(long id);
+
     // Field edits (never collide: no identity change).
     void SetPinned(long id, bool pinned);
     void SetTag(long id, string? tag);

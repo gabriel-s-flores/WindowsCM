@@ -157,6 +157,14 @@ public sealed class SqliteHistoryStore : IHistoryStore
         touch.ExecuteNonQuery();
     }
 
+    public bool Delete(long id)
+    {
+        using var delete = _connection.CreateCommand();
+        delete.CommandText = "DELETE FROM clipboard WHERE id = $id";
+        delete.Parameters.AddWithValue("$id", id);
+        return delete.ExecuteNonQuery() > 0;
+    }
+
     public void SetPinned(long id, bool pinned) => SetField(id, "pinned", pinned ? 1 : 0);
 
     public void SetTag(long id, string? tag) =>
