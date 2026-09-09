@@ -176,7 +176,18 @@ public sealed class Win32ClipboardReader : IClipboardReader
             return null;
         }
         var bytes = ReadBytes(_htmlFormat);
-        return bytes is null ? null : Encoding.UTF8.GetString(bytes);
+        if (bytes is null)
+        {
+            return null;
+        }
+        // The GMEM block is NUL-terminated (C-string artifact, not format
+        // data): trim trailing zeros so the opaque payload ends at EndHTML.
+        var length = bytes.Length;
+        while (length > 0 && bytes[length - 1] == 0)
+        {
+            length--;
+        }
+        return Encoding.UTF8.GetString(bytes, 0, length);
     }
 
     private static byte[]? ReadBytes(uint format)
