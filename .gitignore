@@ -1,0 +1,5 @@
+# .NET
+bin/
+obj/
+.vs/
+TestResults/
