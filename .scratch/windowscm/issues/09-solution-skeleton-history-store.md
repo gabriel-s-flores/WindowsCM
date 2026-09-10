@@ -7,7 +7,7 @@ xUnit suite running against in-memory databases.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] Solution builds with zero errors; xUnit project runs in CI-local (`dotnet test`)
 - [x] Items round-trip (all 8 types, pinned/tagged/dated/metadata/title)
@@ -29,3 +29,5 @@ stored-row upsert return, sub-second datetimes, NotSupportedException guard,
 path validation, read-loop dedup. Declined: Protection record type (flag
 pair stays until a third call site appears). Datetime format locked to
 `yyyy-MM-dd HH:mm:ss.fffffff` UTC (legacy second-precision rows still parse).
+
+Formal /code-review 2026-09-10 (Standards + Spec subagents, `git show 1b1e905`): Standards 1 hard + 4 smells; Spec 7 findings. Fixed: unknown-type rows skipped (List/Search survive future-kind rows); store creates missing parent dir (fresh-machine Default() opens). Accepted/deferred: ItemKind/Kind naming vs CONTEXT.md (repo-wide rename deferred — column, API and prototype share the name); projection duplication, protect-flag clumps, store size, Stamp name (judgement-only); remember-search (needs settings surface); whitespace env (Validate stays strict); TryUpdateContent broad catch + upsert metadata/title overwrite (kept: recopy-bump semantics). Suite 689/689. Status → resolved.

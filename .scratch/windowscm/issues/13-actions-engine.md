@@ -43,3 +43,5 @@ entry→action wording (CONTEXT.md).
 Deferred by ticket boundary: FileSystemWatcher live reload + gesture
 parsing (UI layer, 15/16); SHOpenFolderAndSelectItems PIDL reveal (v1.1);
 QRCoder bitmap dialog (15); actions CRUD UI (16).
+
+Formal /code-review 2026-09-10 (diff 785bbd3..1cee807): Standards 0 hard + 3 smells (kept); Spec 7 findings. Fixed: PathRewriter prefix-only strip, drive-letter slash rule, trailing slashes preserved (directories safe), embedded file:// survives. Accepted: dual %N/$N placeholders (superset), lenient config + store machinery (robustness). Open: QR bitmap, shortcut dispatch (15/16 UI), multi-file reveal (v1.1), qrcode 1:1 coercion note. Suite 689/689.

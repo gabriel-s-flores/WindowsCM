@@ -6,7 +6,7 @@ matrix as the release gate.
 
 **Blocked by:** 15 (hotkeys, tray and popup), 16 (settings), 17 (IPC and lifecycle).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] Inno Setup installs per-user without admin (Start Menu shortcut, no Desktop icon, opt-in autostart, LICENSE bundled)
 - [x] Portable single-file zip runs standalone; upgrades preserve user data
@@ -44,3 +44,5 @@ project (publish/portable rows name it as the build subject; Core
 contract + script + tests are the releasable parts now), About-dialog
 UI binding the credits, H.NotifyIcon.WPF version (research 03 spike
 carried), AppVersion bumps ride the contract+.iss test pair.
+
+Formal /code-review 2026-09-10 (diff 5cc62b9..5deffde): Standards 1 hard (prototype ItemKind/Kind vs CONTEXT.md — repo-wide rename deferred, shares the name with core) + 5 smells (kept); Spec 9 findings. Fixed: Copyous credited GPL-2.0-only (its real LICENSE, not ours); uninstall-prompt dismiss (X/Cancel/Esc) keeps data AND proceeds (removal needs explicit OK + checkbox). Open: portable zip automation, smoke runs, About dialog (shell), publish proofs, unbundled-lib credits (forward-looking, pinned), SPDX gate test. Suite 689/689. Status → resolved.

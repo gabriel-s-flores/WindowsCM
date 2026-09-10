@@ -7,7 +7,7 @@ About/Diagnostics page — first run opens on the Default profile.
 
 **Blocked by:** 13 (actions engine), 15 (hotkeys, tray and popup).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] History screen shows SQLite only with file picker, ranges and the three end-of-session modes
 - [x] Behavior flags, per-process exclusions UI and GNOME-cut list match the decided scope
@@ -51,3 +51,5 @@ Testing Decisions); actions CRUD UI binds the existing engine from 13
 (ActionCatalog/ActionsStore/BuiltinActions/ActionValidation) with no new Core
 shape; full 192-row hljs table stays post-v1 (CodeLanguageMap misses are plain
 text by design).
+
+Formal /code-review 2026-09-10 (diff 6931c1a..54c5686): Standards 0 hard + 6 smells (1 spec-overridden, rest kept); Spec 8 findings. Fixed: HighContrast gets its own black/white set (never Dark); position normalizers accept only own-axis tokens (cross-axis tokens throw — silent wrong-dock mapping removed). Open: Actions screen (binds 13, accepted), WPF window/picker/Explorer/first-run (shell), About dialog (shell binds 18 record), PasteSettings/store/bridges (accepted), Ctrl+Shift tag row (accepted extra), SQLite client-vs-native version string. Suite 689/689. Status → resolved.

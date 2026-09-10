@@ -43,3 +43,5 @@ is the merge point, per the CaptureService comment).
 Review fixes folded in: redundant `with` copy dropped, merge comment
 corrected to top-level keys, case-insensitive merge dict, NaN-gain
 comment, per-language UI guard note, entry->pattern wording (CONTEXT.md).
+
+Formal /code-review 2026-09-10 (diff 5a583d5..f6e98e2): Standards 0 hard + 5 smells (kept); Spec 9 findings. Fixed: volume range capped -20..0dB in SoundOptions + SettingLimits (MediaPlayer ceiling 1.0; +dB unreachable rather than silently equal; boost deferred with DSP mixer); HTTP error statuses map to no-preview (IsSuccess on LinkHttpResponse, set from response status in production client). Open: AngleSharp (regex divergence risk noted), full hljs map, wav/MediaPlayer/NotifyIcon/popup-scale (shell), image-direct + janitor API (accepted extras). Suite 689/689.

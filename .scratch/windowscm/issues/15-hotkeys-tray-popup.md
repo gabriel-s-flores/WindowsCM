@@ -7,7 +7,7 @@ promotion of prototype code).
 
 **Blocked by:** 09 (history store), 11 (capture loop).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] Open/incognito chords register with defaults, remap live, and report conflicts with guidance
 - [x] Tray left-click toggles the popup; right-click shows Open/Incognito/Clear/Settings/Exit
@@ -45,3 +45,5 @@ GetCursorPos/Screen adapters (UI layer; Core is net8.0 with no WPF refs —
 no UI automation in v1 per Testing Decisions); editor/menu/focus-search
 dialogs behind EditItem/EditTitle/ShowActionsMenu/FocusSearch (16);
 Ctrl+Q QR chord stays in the actions layer (13).
+
+Formal /code-review 2026-09-10 (diff f6e98e2..6931c1a): Standards 0 hard + 6 smells (kept); Spec 11 findings. Fixed: hotkey IDs 0x8000/0x8001 (app range); ActivationRequest seam added (ViewModel resolves WHAT — selected id + default-action flag; shell executes HOW via orchestrator/executor). Open: WPF window/TaskbarIcon/adapters/balloon/flash/header-footer/profile-apply (shell), extra chords (accepted, 16 dialogs own them), single-WorkArea clamp, search-box caret, Delete asset leak, guidance suffix. Suite 689/689. Status → resolved.

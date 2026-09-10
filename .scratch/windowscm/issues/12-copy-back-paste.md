@@ -7,7 +7,7 @@ instead of vanishing.
 
 **Blocked by:** 09 (history store).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] Text kinds write text; images write bitmaps; file lists write drop data forcing copy
 - [x] Paste injects the default chord, with the legacy sequence as opt-in setting
@@ -35,3 +35,5 @@ shared order-log proving write→hide→inject. Deferred by ticket boundary:
 hotkey-time target capture source (ticket 15 passes the HWND in);
 CF_DIB conversion of exotic PNG flavors (writer falls back to PNG format);
 `PasteDelayMs` measurement on real targets (default 200, tunable).
+
+Formal /code-review 2026-09-10 (diff 1cee807..5a583d5): Standards 0 hard, 0 actionable (all six smells judged leave-as-is); Spec 7 findings. Fixed: foreground asserted before elevation probe (stale handle → CopiedOnlyForegroundLost, never misdiagnosed as elevated). Open: HWND producer (15 shell), measured delay (manual smoke), Diagnostics-page wiring (shell), exotic PNG (writer PNG fallback). Suite 689/689. Status → resolved.

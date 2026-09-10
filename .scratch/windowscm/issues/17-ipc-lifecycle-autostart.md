@@ -6,7 +6,7 @@ sub-second session-end cleanup that never blocks logout.
 
 **Blocked by:** 09 (history store).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] Second launch forwards to the running instance and exits (named mutex plus pipe handoff)
 - [x] Pipe protocol covers toggle/show/hide/clear/clear-all with current-user-only access
@@ -48,3 +48,5 @@ settings-toggle Run-key binding + installer checkbox (18); known
 `CurrentUserOnly` elevation split (elevated/non-elevated instances do not see
 each other — same-user same-elevation by design, manual smoke only for real
 HKCU writes, elevated-target paste, and multi-session mutex isolation).
+
+Formal /code-review 2026-09-10 (diff 54c5686..5cc62b9): Standards 0 hard + 5 smells (kept); Spec 9 findings. Fixed: bare --hidden second launch forwards nothing (quiet Forwarded exit, UI never pops on login); pipe handler failures reply "error" (IpcProtocol.Error; sender distinguishes failed clear). Accepted: ping + CLI leniency extras. Open: autostart checkbox/toggle + WPF startup wiring + timed cleanup (shell/18), IsEnabled over-match, Local\ per-session mutex semantics. Suite 689/689. Status → resolved.

@@ -7,7 +7,7 @@ content and watching history grow correctly.
 
 **Blocked by:** 09 (history store), 10 (classifier).
 
-**Status:** implemented
+**Status:** resolved
 
 - [x] Change notifications arrive via listener (no polling); activation-time sequence check only
 - [x] Text, bitmap (as PNG) and file-drop captures land with correct types
@@ -37,3 +37,5 @@ excluded-copy prev poisoning (Copyous prev-before-gate parity);
 SaveIfAbsent hash-key enforcement (caller-owned invariant);
 From32bpp/From24bpp + triple-switch duplication (small, stable);
 `_lastSeen` tuple and `ClipboardPorts` naming (judgement-only).
+
+Formal /code-review 2026-09-10 (diff e6cc278..785bbd3): Standards 0 hard + 4 smells (kept); Spec 10 findings. Fixed: gate order exclusions → sensitivity → incognito (exclusions checked before Probe); suppression recorded only for stored copies — deliberate documented deviation from Copyous prev-before-gate (poisoning dropped user data). Incognito no-leak preserved with no post-toggle loss (test re-pinned). Open: WPF HWND attach, full DIB coverage, DB-failure rollback (orphan sweep covers), PNG-format read + hand encoder + HTML envelope (v1 scope), per-notification sequence sync (monitor resync). Suite 689/689. Status → resolved.
