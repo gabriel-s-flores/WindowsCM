@@ -3,3 +3,9 @@ bin/
 obj/
 .vs/
 TestResults/
+
+# Release artifacts (ticket 18): portable zips, Inno output/setup exes,
+# and the single-file publish staging dir consumed by installer/*.iss.
+dist/
+installer/Output/
+installer/publish/
