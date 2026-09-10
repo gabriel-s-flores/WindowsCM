@@ -11,8 +11,11 @@ public sealed record CliOptions(IpcCommand? Command, bool StartHidden, bool Show
     public string? FormatCommand() => Command is null ? null : IpcProtocol.Format(Command.Value);
 
     // Second launches with no command toggle the popup (single-instance UX);
-    // the primary with no command just starts normally.
-    public string FormatForForward() => FormatCommand() ?? IpcProtocol.Format(IpcCommand.Toggle);
+    // the primary with no command just starts normally. A bare --hidden
+    // second launch (autostart) forwards nothing: null means "exit quietly",
+    // never pop the window on login.
+    public string? FormatForForward() =>
+        Command is null && StartHidden ? null : FormatCommand() ?? IpcProtocol.Format(IpcCommand.Toggle);
 
     public static CliOptions Parse(string[] args)
     {

@@ -89,10 +89,14 @@ public sealed class ThemeSettingsTests
     }
 
     [Fact]
-    public void HighContrast_FallsBackToDarkSet()
+    public void HighContrast_UsesOwnSet_NeverDark()
     {
         var theme = new ThemeSettings { Theme = ThemeChoice.Default, Scheme = ColorScheme.HighContrast };
 
-        Assert.Equal(CustomThemeDefaults.BgDark, theme.ResolveEffective().Bg);
+        var resolved = theme.ResolveEffective();
+
+        Assert.Equal(CustomThemeDefaults.BgHighContrast, resolved.Bg);
+        Assert.Equal(CustomThemeDefaults.FgHighContrast, resolved.Fg);
+        Assert.NotEqual(CustomThemeDefaults.BgDark, resolved.Bg);
     }
 }

@@ -10,10 +10,14 @@ namespace WindowsCM.Core.Capture;
 // edges faked (reader/event/sequence/process/clock).
 //
 // Gate order per spec: exclusions, sensitivity hints, incognito. Sensitivity
-// is enforced inside Classifier.Probe (null = reject); exclusions and
-// incognito run after the prevClipboard record, so a gated copy still
-// updates prev and can never leak once incognito toggles off (Copyous
-// clipboard.ts:269-274 parity).
+// is enforced inside Classifier.Probe (null = reject). Only stored copies
+// update suppression state: a gated copy (excluded app, sensitive format,
+// incognito) records nothing, so the next identical legitimate copy still
+// lands. This deliberately deviates from Copyous prev-before-gate parity
+// (clipboard.ts:269-274), where an excluded copy poisons the immediate
+// re-copy — on Windows that drops user data, so gates win over parity.
+// Own-copy suppression still works: copy-back writes go through
+// CopiedFromHistory, which always records.
 public sealed class CaptureService
 {
     private readonly IHistoryStore _store;
@@ -42,6 +46,12 @@ public sealed class CaptureService
 
     public ClipboardItem? Capture(ClipboardPayload payload, string? processName, DateTime utcNow)
     {
+        // Exclusions first: an excluded copy returns before classification and
+        // records nothing.
+        if (IsExcluded(processName))
+        {
+            return null;
+        }
         var classified = Classifier.Probe(
             payload.Image, payload.Files, payload.Text,
             _options.MaxCharacters, payload.Formats);
@@ -55,20 +65,12 @@ public sealed class CaptureService
         {
             return null;
         }
-        // Recorded before the save gate (Copyous clipboard.ts parity): a gated
-        // copy still updates prev, so incognito never leaks and our own
-        // copy-back echoes are suppressed. Excluded-app copies therefore also
-        // poison an identical immediate re-copy — intended parity, not a bug.
-        _lastSeen = identity;
-
-        if (IsExcluded(processName))
-        {
-            return null;
-        }
         if (IsIncognito)
         {
             return null;
         }
+        // Recorded only for copies that will be stored.
+        _lastSeen = identity;
 
         var item = classified switch
         {
@@ -146,8 +148,9 @@ public sealed class CaptureService
         };
 
     // Suppression hash for a stored item, mirroring the classifier hashes:
-    // text kinds hash the content, files hash the stripped paths, images use
-    // the bytes hash embedded in the file name (<md5>.<ext>).
+    // text kinds hash the content, file content is already canonical local
+    // paths (hashed verbatim — never re-normalized, so literal % names are
+    // safe), images use the bytes hash in the file name (<md5>.<ext>).
     private static string SuppressionHash(ClipboardItem item)
     {
         if (item.Kind == ItemKind.Image)
@@ -163,7 +166,7 @@ public sealed class CaptureService
         }
         if (item.Kind == ItemKind.File || item.Kind == ItemKind.Files)
         {
-            return ClipboardHash.FileHash(item.Content.Split('\n'));
+            return ClipboardHash.Md5Hex(item.Content);
         }
         return ClipboardHash.Md5Hex(item.Content);
     }

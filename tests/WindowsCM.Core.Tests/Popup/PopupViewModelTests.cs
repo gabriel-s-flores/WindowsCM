@@ -426,4 +426,41 @@ public sealed class PopupViewModelTests
         Assert.Equal(PopupTheme.HighContrast, vm.Theme);
         Assert.Equal(PopupProfile.Compact, vm.Profile);
     }
+
+    [Fact]
+    public void ActivateSelected_ReturnsSelectedId_ForShellToExecute()
+    {
+        Save("a");
+        Save("b");
+        var vm = Subject();
+        vm.JumpToSlot(2);
+
+        var request = vm.ActivateSelected();
+
+        Assert.NotNull(request);
+        Assert.Equal(vm.SelectedItem!.Id, request.ItemId);
+        Assert.False(request.RunDefaultAction);
+    }
+
+    [Fact]
+    public void ActivateSelected_DefaultChord_FlagsDefaultAction()
+    {
+        Save("a");
+        var vm = Subject();
+
+        var request = vm.ActivateSelected(runDefaultAction: true);
+
+        Assert.NotNull(request);
+        Assert.True(request.RunDefaultAction);
+    }
+
+    [Fact]
+    public void ActivateSelected_EmptyFilter_ReturnsNull()
+    {
+        var vm = Subject();
+        vm.SetSearch("nothing-matches-this");
+
+        Assert.Null(vm.SelectedItem);
+        Assert.Null(vm.ActivateSelected());
+    }
 }

@@ -105,25 +105,49 @@ public sealed class ClassifierTests
     public void ClassifyFiles_SinglePath_FileWithCopyMetadata()
     {
         var classified = Classifier.ClassifyFiles(
-            new FileSnapshot(["file:///tmp/a.txt"], FileOperation.Copy));
+            new FileSnapshot(["file:///C:/a.txt"], FileOperation.Copy));
 
         Assert.NotNull(classified);
         Assert.Equal(ItemKind.File, classified.Kind);
-        Assert.Equal("file:///tmp/a.txt", classified.Content);
+        Assert.Equal(@"C:\a.txt", classified.Content);
         Assert.Equal("""{"operation":"copy"}""", classified.MetadataJson);
-        Assert.Equal(ClipboardHash.FileHash(["file:///tmp/a.txt"]), classified.ContentHash);
+        Assert.Equal(ClipboardHash.FileHash(["file:///C:/a.txt"]), classified.ContentHash);
     }
 
     [Fact]
     public void ClassifyFiles_TwoPaths_FilesJoinedWithCutMetadata()
     {
         var classified = Classifier.ClassifyFiles(new FileSnapshot(
-            ["file:///tmp/a.txt", "file:///tmp/b.txt"], FileOperation.Cut));
+            ["file:///C:/a.txt", "file:///C:/b.txt"], FileOperation.Cut));
 
         Assert.NotNull(classified);
         Assert.Equal(ItemKind.Files, classified.Kind);
-        Assert.Equal("file:///tmp/a.txt\nfile:///tmp/b.txt", classified.Content);
+        Assert.Equal(@"C:\a.txt" + "\n" + @"C:\b.txt", classified.Content);
         Assert.Equal("""{"operation":"cut"}""", classified.MetadataJson);
+    }
+
+    [Fact]
+    public void ClassifyFiles_UriAndLocalForms_CanonicalizeEqual()
+    {
+        var fromUri = Classifier.ClassifyFiles(
+            new FileSnapshot(["file:///C:/a%20b.txt"], FileOperation.Copy));
+        var fromLocal = Classifier.ClassifyFiles(
+            new FileSnapshot([@"C:\a b.txt"], FileOperation.Copy));
+
+        Assert.NotNull(fromUri);
+        Assert.NotNull(fromLocal);
+        Assert.Equal(fromLocal.Content, fromUri.Content);
+        Assert.Equal(fromLocal.ContentHash, fromUri.ContentHash);
+    }
+
+    [Fact]
+    public void ClassifyFiles_HashAgreesWithStoredContent()
+    {
+        var classified = Classifier.ClassifyFiles(new FileSnapshot(
+            ["file:///C:/a%20b.txt", "file:///C:/c.txt"], FileOperation.Copy));
+
+        Assert.NotNull(classified);
+        Assert.Equal(ClipboardHash.Md5Hex(classified.Content), classified.ContentHash);
     }
 
     [Theory]

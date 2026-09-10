@@ -6,9 +6,11 @@ namespace WindowsCM.Core.Actions;
 // line for Files items. Pure so the executor and any future UI share it.
 public static class PathRewriter
 {
-    // `Uri.UnescapeDataString(s.Replace("file://","").Trim().Trim('/'))`
-    // in research order: strip the scheme, trim whitespace, trim slashes
-    // (leading "/" from file:///C:/… and any trailing one), then unescape.
+    // `Uri.UnescapeDataString(sansPrefix.Trim())` in research order: strip
+    // the scheme, trim whitespace, then unescape. Only a leading "file://"
+    // is stripped (a literal "file://" inside a file name must survive);
+    // file:///C:/… loses the one slash before the drive letter, but trailing
+    // slashes (directories) and bare POSIX leading slashes are preserved.
     // Separators are preserved verbatim (no backslash normalization):
     // file:///C:/a.txt becomes C:/a.txt, which Win32 and Explorer accept
     // everywhere these results go (open, reveal, paste).
@@ -16,9 +18,15 @@ public static class PathRewriter
     // falls back to the pre-unescape text rather than throwing.
     public static string ToLocalPath(string line)
     {
-        var stripped = line.Replace("file://", string.Empty, StringComparison.Ordinal)
-            .Trim()
-            .Trim('/');
+        var trimmed = line.Trim();
+        var stripped = trimmed.StartsWith("file://", StringComparison.Ordinal)
+            ? trimmed["file://".Length..]
+            : trimmed;
+        if (stripped.Length > 2 && stripped[0] == '/'
+            && char.IsAsciiLetter(stripped[1]) && stripped[2] == ':')
+        {
+            stripped = stripped[1..];
+        }
         try
         {
             return Uri.UnescapeDataString(stripped);

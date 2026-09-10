@@ -20,8 +20,10 @@ public sealed class LinkPreviewUnavailableException : Exception
 
 // One fetched URL: content-type gated by the service (HTML-only metadata,
 // image/* direct). Body is raw bytes; HTML is UTF-8 decoded by the service
-// (charset sniffing deferred to post-v1).
-public sealed record LinkHttpResponse(string? ContentType, byte[] Body)
+// (charset sniffing deferred to post-v1). IsSuccess mirrors the HTTP
+// status: error pages (404/500 HTML) are transport failures, never
+// previews — the service maps them to "no preview" like offline.
+public sealed record LinkHttpResponse(string? ContentType, byte[] Body, bool IsSuccess = true)
 {
     public static LinkHttpResponse Html(string html) =>
         new("text/html; charset=utf-8", System.Text.Encoding.UTF8.GetBytes(html));
@@ -91,7 +93,7 @@ public sealed class LinkPreviewHttpClient : ILinkPreviewHttp
                 throw new LinkPreviewUnavailableException($"Preview read cancelled for {url}.", ex);
             }
             var contentType = response.Content.Headers.ContentType?.ToString();
-            return new LinkHttpResponse(contentType, body);
+            return new LinkHttpResponse(contentType, body, response.IsSuccessStatusCode);
         }
     }
 }

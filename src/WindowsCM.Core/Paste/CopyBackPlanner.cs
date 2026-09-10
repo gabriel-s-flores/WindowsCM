@@ -78,8 +78,9 @@ public static class CopyBackPlanner
         }
     }
 
-    // Stored file content is file:// URIs (Win32ClipboardReader parity), but
-    // anything that is not an absolute file URI passes through literally.
+    // Stored file content is canonical local paths (classifier parity), but
+    // legacy file:// URI rows still resolve via LocalPath below, and anything
+    // that is not an absolute file URI passes through literally.
     private static string? ToLocalPath(string line)
     {
         var trimmed = line.Trim();

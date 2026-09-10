@@ -29,6 +29,9 @@ public static class Classifier
     }
 
     // One path becomes File, many become Files with \n-joined content.
+    // Content is canonical local paths (ClipboardHash parity): equivalent
+    // URI spellings store identically, so the hash always agrees with the
+    // stored content and history dedup can never disagree with it.
     public static ClassifiedFile? ClassifyFiles(FileSnapshot? files)
     {
         if (files is null || files.Paths.Count == 0)
@@ -36,7 +39,7 @@ public static class Classifier
             return null;
         }
         var kind = files.Paths.Count == 1 ? ItemKind.File : ItemKind.Files;
-        var content = files.Paths.Count == 1 ? files.Paths[0] : string.Join("\n", files.Paths);
+        var content = string.Join("\n", files.Paths.Select(ClipboardHash.ToLocalPath));
         var metadata = $"{{\"operation\":\"{files.Operation.ToString().ToLowerInvariant()}\"}}";
         return new ClassifiedFile(kind, content, metadata, ClipboardHash.FileHash(files.Paths));
     }

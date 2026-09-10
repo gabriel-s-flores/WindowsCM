@@ -72,9 +72,17 @@ public sealed class PathRewriterTests
     }
 
     [Fact]
-    public void ToLocalPath_TrimsWhitespaceAndSlashes()
+    public void ToLocalPath_TrimsWhitespace_PreservesTrailingSlash()
     {
-        Assert.Equal("C:/a.txt", PathRewriter.ToLocalPath("  file:///C:/a.txt/  "));
+        Assert.Equal("C:/a.txt/", PathRewriter.ToLocalPath("  file:///C:/a.txt/  "));
+    }
+
+    [Fact]
+    public void ToLocalPath_EmbeddedScheme_Survives()
+    {
+        Assert.Equal(
+            "C:/dir/file://weird.txt",
+            PathRewriter.ToLocalPath("file:///C:/dir/file://weird.txt"));
     }
 
     [Fact]

@@ -64,6 +64,10 @@ public sealed class InstallerScriptTests
         Assert.Contains("DelTree", iss);
         Assert.Contains("{localappdata}\\WindowsCM", iss);
         Assert.Contains("{userappdata}\\WindowsCM", iss);
+        // Dismissing the prompt (X/Cancel) keeps data AND proceeds:
+        // removal needs an explicit OK with the box checked.
+        Assert.Contains("(Form.ShowModal() = mrOk) and Check.Checked", iss);
+        Assert.Contains("Result := True;", iss);
     }
 
     [Fact]

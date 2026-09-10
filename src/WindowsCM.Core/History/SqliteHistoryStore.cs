@@ -13,6 +13,7 @@ public sealed class SqliteHistoryStore : IHistoryStore
 
     public SqliteHistoryStore(string connectionString)
     {
+        EnsureParentDirectory(connectionString);
         _connection = new SqliteConnection(connectionString);
         _connection.Open();
         EnsureSchema();
@@ -209,7 +210,12 @@ public sealed class SqliteHistoryStore : IHistoryStore
         var items = new List<ClipboardItem>();
         while (reader.Read())
         {
-            items.Add(ReadItem(reader));
+            // Rows of an unknown future type are skipped, never fatal: a newer
+            // app version must not break listing/searching old installs.
+            if (ReadItem(reader) is { } item)
+            {
+                items.Add(item);
+            }
         }
         return items;
     }
@@ -221,6 +227,24 @@ public sealed class SqliteHistoryStore : IHistoryStore
         find.Parameters.AddWithValue("$content", content);
         var result = find.ExecuteScalar();
         return result is long id ? id : null;
+    }
+
+    // First-run robustness: Validate() flags a missing directory as a UI
+    // hint, but opening the store itself must succeed by creating the
+    // parent. :memory: and in-memory modes are untouched.
+    private static void EnsureParentDirectory(string connectionString)
+    {
+        var builder = new SqliteConnectionStringBuilder(connectionString);
+        if (builder.Mode == SqliteOpenMode.Memory
+            || string.Equals(builder.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        var parent = Path.GetDirectoryName(builder.DataSource);
+        if (!string.IsNullOrEmpty(parent))
+        {
+            Directory.CreateDirectory(parent);
+        }
     }
 
     private void EnsureSchema()
@@ -305,8 +329,14 @@ public sealed class SqliteHistoryStore : IHistoryStore
 
     private static readonly string[] StampFormats = ["yyyy-MM-dd HH:mm:ss.fffffff", "yyyy-MM-dd HH:mm:ss"];
 
-    private static ClipboardItem ReadItem(SqliteDataReader reader) => new(
-        Kind: Enum.Parse<ItemKind>(reader.GetString(1)),
+    private static ClipboardItem? ReadItem(SqliteDataReader reader)
+    {
+        if (!Enum.TryParse<ItemKind>(reader.GetString(1), out var kind))
+        {
+            return null;
+        }
+        return new ClipboardItem(
+            Kind: kind,
         Content: reader.GetString(2),
         Pinned: reader.GetInt64(3) == 1,
         Tag: reader.IsDBNull(4) ? null : reader.GetString(4),
@@ -318,6 +348,7 @@ public sealed class SqliteHistoryStore : IHistoryStore
         MetadataJson: CoerceMetadata(reader.IsDBNull(6) ? null : reader.GetString(6)),
         Title: reader.IsDBNull(7) ? null : reader.GetString(7),
         Id: reader.GetInt64(0));
+    }
 
     // Corrupt metadata degrades to null: content is user data, metadata is
     // enrichment. Never drop the item for a broken enrichment payload.

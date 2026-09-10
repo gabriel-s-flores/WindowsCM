@@ -34,7 +34,13 @@ public static class SingleInstanceCoordinator
         {
             return SingleInstanceOutcome.IsPrimary;
         }
+        // Bare --hidden (autostart) has nothing to forward: exit quietly with
+        // success, leaving the primary untouched and the UI hidden.
         var line = cli.FormatForForward();
+        if (line is null)
+        {
+            return SingleInstanceOutcome.Forwarded;
+        }
         var ok = forwarder.TryForward(pipeName, line, timeout ?? DefaultForwardTimeout, out _);
         return ok ? SingleInstanceOutcome.Forwarded : SingleInstanceOutcome.ForwardFailed;
     }

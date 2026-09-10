@@ -154,9 +154,10 @@ public sealed class NamedPipeServer : IDisposable
                 }
                 catch
                 {
-                    // A store failure must never kill the listener: report ok
-                    // (the action was received) and keep serving.
-                    response = IpcProtocol.Ok;
+                    // A store failure must never kill the listener, but it
+                    // must not report success either: answer "error" and keep
+                    // serving.
+                    response = IpcProtocol.Error;
                 }
                 await writer.WriteLineAsync(response).ConfigureAwait(false);
             }

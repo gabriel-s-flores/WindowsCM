@@ -3,11 +3,12 @@ namespace WindowsCM.Core.Hotkeys;
 
 // Global-chord defaults (research 03 §2): open under the cursor, incognito
 // on the four-modifier chord. Win+V-style OS combos stay excluded by rule
-// (HotkeyChord rejects Win); IDs are per-HWND app-range constants.
+// (HotkeyChord rejects Win). IDs live in the per-HWND app range 0x8000+:
+// low IDs collide with common control/command IDs on the same window.
 public static class HotkeyDefaults
 {
-    public const int IdOpen = 1;
-    public const int IdIncognito = 2;
+    public const int IdOpen = 0x8000;
+    public const int IdIncognito = 0x8001;
 
     // Always ORed at registration so holding the chord never fires N times
     // (research 03 §1.4, Win7+).

@@ -38,8 +38,11 @@ public static class SettingLimits
     public const int MaxCharactersMax = 4;
     public const int MaxCharactersDefault = 1;
 
+    // Copyous allows +20dB, but the v1 MediaPlayer backend caps gain at 1.0:
+    // +dB would be silently indistinguishable from 0dB, so the max is 0
+    // until a DSP mixer restores true boost (SoundOptions parity note).
     public const double VolumeDbMin = -20.0;
-    public const double VolumeDbMax = 20.0;
+    public const double VolumeDbMax = 0.0;
     public const double VolumeDbDefault = 0.0;
 
     public const int PasteDelayMsMin = 100;

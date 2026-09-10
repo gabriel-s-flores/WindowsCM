@@ -123,11 +123,11 @@ begin
     CancelButton.ModalResult := mrCancel;
     CancelButton.Cancel := True;
 
-    Result := Form.ShowModal() = mrOk;
-    if Result then
-    begin
-      RemoveDataChosen := Check.Checked;
-    end;
+    { Dismissing the prompt (X / Cancel / Esc) means "keep my data":
+      uninstall proceeds, RemoveDataChosen stays False. Only an explicit
+      OK with the box checked removes data. }
+    RemoveDataChosen := (Form.ShowModal() = mrOk) and Check.Checked;
+    Result := True;
   finally
     Form.Free();
   end;

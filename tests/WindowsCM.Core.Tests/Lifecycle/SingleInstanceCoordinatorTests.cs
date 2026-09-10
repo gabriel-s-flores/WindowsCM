@@ -77,6 +77,34 @@ public sealed class SingleInstanceCoordinatorTests
     }
 
     [Fact]
+    public void SecondLaunch_BareHidden_ExitsQuietlyWithoutForward()
+    {
+        // Autostart second launch: no toggle, no pipe traffic, exit success.
+        var forwarder = new FakeForwarder(true);
+
+        var outcome = SingleInstanceCoordinator.Decide(
+            new FakeLock(false), forwarder,
+            CliOptions.Parse(["app.exe", "--hidden"]), "WindowsCM.test");
+
+        Assert.Equal(SingleInstanceOutcome.Forwarded, outcome);
+        Assert.Null(forwarder.SeenPipe);
+        Assert.Null(forwarder.SeenLine);
+    }
+
+    [Fact]
+    public void SecondLaunch_HiddenWithCommand_ForwardsCommand()
+    {
+        var forwarder = new FakeForwarder(true);
+
+        var outcome = SingleInstanceCoordinator.Decide(
+            new FakeLock(false), forwarder,
+            CliOptions.Parse(["app.exe", "--hidden", "--show"]), "WindowsCM.test");
+
+        Assert.Equal(SingleInstanceOutcome.Forwarded, outcome);
+        Assert.Equal("show", forwarder.SeenLine);
+    }
+
+    [Fact]
     public void ForwardFailure_NeverStartsSecondUi()
     {
         var forwarder = new FakeForwarder(false);

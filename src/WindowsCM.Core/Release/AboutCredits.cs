@@ -20,10 +20,10 @@ public static class AboutCredits
 
     public static IReadOnlyList<UpstreamCredit> Upstream { get; } =
     [
-        new("Copyous", "https://github.com/boerdereinar/copyous", "GPL-3.0-or-later",
-            "GNOME clipboard manager ported to Windows"),
         // Upstream LICENSE is GPL v2 with no or-later grant (GitHub
-        // detects GPL-2.0); credited for the lineage via Copyous.
+        // detects GPL-2.0): credit the real license, not ours.
+        new("Copyous", "https://github.com/boerdereinar/copyous", "GPL-2.0-only",
+            "GNOME clipboard manager ported to Windows"),
         new("Pano", "https://github.com/oae/gnome-shell-pano", "GPL-2.0-only",
             "GNOME Shell clipboard manager in Copyous's lineage"),
     ];

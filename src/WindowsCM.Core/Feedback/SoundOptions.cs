@@ -16,22 +16,24 @@ public enum SoundName
     DialogWarning,
 }
 
-// Feedback sound tunables (Copyous feedbackSettings parity, 01 §5):
-// sound default none, volume -20..+20dB default 0.
+// Feedback sound tunables (Copyous feedbackSettings parity, 01 §5, with one
+// deviation): Copyous allows volume -20..+20dB, but the v1 MediaPlayer
+// backend caps gain at 1.0, so +dB would be silently indistinguishable
+// from 0dB. The range is therefore -20..0dB until a DSP mixer restores
+// true boost (deferred per spec).
 public sealed class SoundOptions
 {
     public const double MinVolumeDb = -20.0;
-    public const double MaxVolumeDb = 20.0;
+    public const double MaxVolumeDb = 0.0;
     public const double DefaultVolumeDb = 0.0;
 
     public SoundName Name { get; set; } = SoundName.None;
     public double VolumeDb { get; set; } = DefaultVolumeDb;
 }
 
-// Exponential dB-to-gain map (research 05 §8): gain = 10^(dB/20), clamped
-// to the MediaPlayer Volume range 0..1. 0dB = full volume; -20dB ~= 0.1;
-// +20dB would be x10, so it clamps at 1.0 (documented partial fidelity —
-// true +dB boost needs a DSP mixer like NAudio, deferred per spec).
+// Exponential dB-to-gain map (research 05 §8): gain = 10^(dB/20), floored
+// at 0. 0dB = full volume; -20dB ~= 0.1; -6dB halves amplitude. The range
+// cap above (not this function) is what keeps +dB unreachable.
 public static class SoundGain
 {
     public static double FromDecibels(double db)

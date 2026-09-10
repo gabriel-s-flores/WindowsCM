@@ -24,13 +24,25 @@ public sealed class ClipboardHashTests
     }
 
     [Fact]
-    public void FileHash_StripsSchemeAndUnescapesBeforeHashing()
+    public void FileHash_UriAndLocalForms_Agree()
     {
-        var uris = new[] { "file:///tmp/a%20b.txt", "file:///tmp/c.txt" };
+        var fromUri = ClipboardHash.FileHash(new[] { "file:///C:/a%20b.txt", "file:///C:/c.txt" });
+        var fromLocal = ClipboardHash.FileHash(new[] { @"C:\a b.txt", @"C:\c.txt" });
 
-        Assert.Equal(
-            ClipboardHash.Md5Hex("/tmp/a b.txt\n/tmp/c.txt"),
-            ClipboardHash.FileHash(uris));
+        Assert.Equal(fromLocal, fromUri);
+        Assert.Equal(ClipboardHash.Md5Hex(@"C:\a b.txt" + "\n" + @"C:\c.txt"), fromUri);
+    }
+
+    [Fact]
+    public void ToLocalPath_FileUri_ResolvesDrivePath()
+    {
+        Assert.Equal(@"C:\a b.txt", ClipboardHash.ToLocalPath("file:///C:/a%20b.txt"));
+    }
+
+    [Fact]
+    public void ToLocalPath_BarePath_StaysVerbatim()
+    {
+        Assert.Equal(@"C:\a.txt", ClipboardHash.ToLocalPath(@"C:\a.txt"));
     }
 
     [Fact]

@@ -33,6 +33,13 @@ public static class CustomThemeDefaults
     public const string CardBgLight = "rgb(255,255,255)";
     public const string SearchBgDark = "rgb(71,71,76)";
     public const string SearchBgLight = "rgb(255,255,255)";
+    // High-contrast set (no upstream pair exists): pure black/white so the
+    // theme never collapses into Dark. The WPF layer draws system-color
+    // borders on top — Core has no border channel.
+    public const string BgHighContrast = "rgb(0,0,0)";
+    public const string FgHighContrast = "rgb(255,255,255)";
+    public const string CardBgHighContrast = "rgb(0,0,0)";
+    public const string SearchBgHighContrast = "rgb(0,0,0)";
 }
 
 public sealed record EffectiveThemeColors(string Bg, string Fg, string CardBg, string SearchBg);
@@ -52,8 +59,7 @@ public sealed class ThemeSettings
     public string CustomSearchBg { get; set; } = "";
 
     // System resolves through the OS-followed scheme the UI passes in
-    // (dark when the host gives no answer). HighContrast has no custom
-    // pair upstream, so it falls back to the dark set.
+    // (dark when the host gives no answer).
     public EffectiveThemeColors ResolveEffective(ColorScheme systemScheme = ColorScheme.Dark)
     {
         if (Theme == ThemeChoice.Default)
@@ -64,6 +70,9 @@ public sealed class ThemeSettings
                 ColorScheme.Light => new EffectiveThemeColors(
                     CustomThemeDefaults.BgLight, CustomThemeDefaults.FgLight,
                     CustomThemeDefaults.CardBgLight, CustomThemeDefaults.SearchBgLight),
+                ColorScheme.HighContrast => new EffectiveThemeColors(
+                    CustomThemeDefaults.BgHighContrast, CustomThemeDefaults.FgHighContrast,
+                    CustomThemeDefaults.CardBgHighContrast, CustomThemeDefaults.SearchBgHighContrast),
                 _ => new EffectiveThemeColors(
                     CustomThemeDefaults.BgDark, CustomThemeDefaults.FgDark,
                     CustomThemeDefaults.CardBgDark, CustomThemeDefaults.SearchBgDark),

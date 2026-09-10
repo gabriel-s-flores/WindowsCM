@@ -8,6 +8,9 @@ public static class IpcProtocol
 {
     public const string Ok = "ok";
     public const string Unknown = "unknown";
+    // Handler failure (a store throw mid-command): honest, never "ok" — the
+    // sender must be able to tell an applied clear from a failed one.
+    public const string Error = "error";
 
     public static string Format(IpcCommand command) => command switch
     {

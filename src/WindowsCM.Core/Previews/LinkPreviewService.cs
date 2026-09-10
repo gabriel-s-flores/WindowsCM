@@ -65,6 +65,10 @@ public sealed class LinkPreviewService
         }
 
         // image/* direct becomes {image:url} with cache (01 §8 parity).
+        if (!page.IsSuccess)
+        {
+            return null;
+        }
         if (page.IsImage)
         {
             return ImageDirect(url, page.Body);

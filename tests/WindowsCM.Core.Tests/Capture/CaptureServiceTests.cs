@@ -114,20 +114,37 @@ public sealed class CaptureServiceTests : IDisposable
     }
 
     [Fact]
+    public void Capture_ExcludedCopy_DoesNotPoisonLaterIdenticalCopy()
+    {
+        var options = new CaptureOptions
+        {
+            ExcludedProcesses = new HashSet<string>(["keepassxc"], StringComparer.OrdinalIgnoreCase),
+        };
+        var capture = new CaptureService(_store, _images, options, _clock);
+
+        Assert.Null(capture.Capture(TextPayload("secret"), "KeePassXC.exe", _clock.UtcNow));
+
+        var saved = capture.Capture(TextPayload("secret"), "notepad.exe", _clock.UtcNow);
+
+        Assert.NotNull(saved);
+        Assert.Single(_store.List());
+    }
+
+    [Fact]
     public void Capture_Incognito_SuspendsWithoutLeakAfterToggle()
     {
-        // Copyous parity: prevClipboard is recorded before the save gate, so a
-        // copy made while incognito is on never leaks once toggled off.
+        // Gated copies never touch suppression state: nothing incognito is
+        // stored (no leak), and re-copying after toggle-off lands (no loss).
         _capture.IsIncognito = true;
         Assert.Null(_capture.Capture(TextPayload("secret"), null, _clock.UtcNow));
 
         _capture.IsIncognito = false;
-        Assert.Null(_capture.Capture(TextPayload("secret"), null, _clock.UtcNow));
-        Assert.Empty(_store.List());
+        Assert.NotNull(_capture.Capture(TextPayload("secret"), null, _clock.UtcNow));
+        Assert.Single(_store.List());
 
         // A genuinely new copy after toggle still lands.
         Assert.NotNull(_capture.Capture(TextPayload("hello"), null, _clock.UtcNow));
-        Assert.Single(_store.List());
+        Assert.Equal(2, _store.List().Count);
     }
 
     [Fact]
@@ -151,7 +168,7 @@ public sealed class CaptureServiceTests : IDisposable
 
         Assert.NotNull(saved);
         Assert.Equal(ItemKind.Files, saved.Kind);
-        Assert.Equal("file:///C:/a.txt\nfile:///C:/b.txt", saved.Content);
+        Assert.Equal(@"C:\a.txt" + "\n" + @"C:\b.txt", saved.Content);
         Assert.Equal("""{"operation":"cut"}""", saved.MetadataJson);
     }
 

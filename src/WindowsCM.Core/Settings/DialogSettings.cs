@@ -26,8 +26,10 @@ public enum HorizontalDock
 // Dialog screen (Copyous Dialog parity, 01 §5): orientation, dock,
 // size, margins, search auto-hide and scrollbar. First run is the Default
 // profile: ShowAtPointer off with the show-at-cursor rule kept (grilling
-// 06 Q14). Position aliases left→top / right→bottom (gschema parity) are
-// normalized for settings imported from Copyous.
+// 06 Q14). Each axis accepts only its own tokens: a cross-axis token
+// ("top" on the horizontal key) means a corrupt import, and silently
+// mapping it onto the wrong dock would corrupt direction — so it throws
+// like any unknown token instead of aliasing.
 public sealed class DialogSettings
 {
     public bool ShowAtPointer { get; set; } = false;
@@ -55,8 +57,6 @@ public sealed class DialogSettings
     public static VerticalDock NormalizeVerticalToken(string token) =>
         token.Trim().ToLowerInvariant() switch
         {
-            "left" => VerticalDock.Top,
-            "right" => VerticalDock.Bottom,
             "top" => VerticalDock.Top,
             "center" => VerticalDock.Center,
             "bottom" => VerticalDock.Bottom,
@@ -67,10 +67,6 @@ public sealed class DialogSettings
     public static HorizontalDock NormalizeHorizontalToken(string token) =>
         token.Trim().ToLowerInvariant() switch
         {
-            // gschema carries the same left→top / right→bottom aliases on
-            // the horizontal key; map them onto the horizontal dock.
-            "top" => HorizontalDock.Left,
-            "bottom" => HorizontalDock.Right,
             "left" => HorizontalDock.Left,
             "center" => HorizontalDock.Center,
             "right" => HorizontalDock.Right,

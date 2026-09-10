@@ -93,6 +93,25 @@ public sealed class NamedPipeIpcTests
     }
 
     [Fact]
+    public async Task StoreFailure_AnswersErrorAndKeepsServing()
+    {
+        var pipe = UniquePipe();
+        var popup = new FakePopup();
+        var store = new SqliteHistoryStore("Data Source=:memory:");
+        store.Dispose(); // every command now throws
+        using var server = new NamedPipeServer(pipe, new IpcDispatcher(popup, store));
+        server.Start();
+        await Task.Delay(300);
+        var forwarder = new NamedPipeForwarder();
+
+        Assert.True(forwarder.TryForward(pipe, "clear", TimeSpan.FromSeconds(5), out var first));
+        Assert.Equal("error", first);
+
+        Assert.True(forwarder.TryForward(pipe, "ping", TimeSpan.FromSeconds(5), out var second));
+        Assert.Equal("ok", second);
+    }
+
+    [Fact]
     public void Forward_AbsentServer_ReturnsFalse()
     {
         var ok = new NamedPipeForwarder().TryForward(

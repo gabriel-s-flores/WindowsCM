@@ -37,7 +37,7 @@ public sealed class AppSettingsTests
         Assert.Equal(200, settings.Item.Width);
         Assert.Equal(200, settings.Dialog.Size);
         Assert.Equal(4, settings.PerType.Character.MaxCharacters);
-        Assert.Equal(20.0, settings.Feedback.VolumeDb);
+        Assert.Equal(0.0, settings.Feedback.VolumeDb);
         Assert.Equal(100, settings.Paste.DelayMs);
     }
 

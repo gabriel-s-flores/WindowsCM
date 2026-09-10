@@ -86,7 +86,17 @@ public sealed class PasteOrchestrator
         }
         await hideUi().ConfigureAwait(false);
         await _delay.Delay(_options.PasteDelayMs, ct).ConfigureAwait(false);
-        // UIPI first: an elevated target swallows SendInput silently, so a
+        // Foreground first: the captured handle may be stale (target closed
+        // or focus moved on), and a stale handle must report focus loss, not
+        // a wrong elevation verdict. Only the confirmed handle is probed.
+        if (_foreground.GetCurrent() != capturedTarget)
+        {
+            return new PasteOutcome(
+                PasteStatus.CopiedOnlyForegroundLost, null,
+                "The target window lost focus before pasting, so the item was only copied. " +
+                "If the target runs as administrator, relaunch WindowsCM elevated and try again.");
+        }
+        // UIPI second: an elevated target swallows SendInput silently, so a
         // predicted refusal beats an injected-into-the-void paste.
         if (!_elevation.IsCurrentProcessElevated() && _elevation.IsTargetElevated(capturedTarget))
         {
@@ -94,13 +104,6 @@ public sealed class PasteOrchestrator
                 PasteStatus.CopiedOnlyElevated, null,
                 "Paste was blocked: the target window runs elevated (administrator). " +
                 "The item is on the clipboard; relaunch WindowsCM elevated to paste into it.");
-        }
-        if (_foreground.GetCurrent() != capturedTarget)
-        {
-            return new PasteOutcome(
-                PasteStatus.CopiedOnlyForegroundLost, null,
-                "The target window lost focus before pasting, so the item was only copied. " +
-                "If the target runs as administrator, relaunch WindowsCM elevated and try again.");
         }
         try
         {

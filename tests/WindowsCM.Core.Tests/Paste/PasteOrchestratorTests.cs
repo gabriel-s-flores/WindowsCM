@@ -235,6 +235,23 @@ public sealed class PasteOrchestratorTests : IDisposable
     }
 
     [Fact]
+    public async Task StaleHandle_ReportsForegroundLostNotElevated()
+    {
+        // Foreground is asserted before the elevation probe: a stale handle
+        // must not be misdiagnosed as an elevated target.
+        var saved = SaveText();
+        _foreground.Current = new IntPtr(999); // target moved on
+        _elevation.TargetElevated = true;
+        _elevation.SelfElevated = false;
+
+        var outcome = await Subject().ExecuteAsync(
+            saved.Id, new IntPtr(123), shiftHeld: false, Hide);
+
+        Assert.Equal(PasteStatus.CopiedOnlyForegroundLost, outcome.Status);
+        Assert.Empty(_injector.Events);
+    }
+
+    [Fact]
     public async Task ElevatedSelf_PastesNormally()
     {
         var saved = SaveText();

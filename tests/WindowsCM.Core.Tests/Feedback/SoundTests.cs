@@ -52,9 +52,11 @@ public sealed class SoundTests
     }
 
     [Fact]
-    public void Gain_Plus20Db_ClampsToOne()
+    public void VolumeRange_CapsAtZeroDb_BackendCeiling()
     {
-        Assert.Equal(1.0, SoundGain.FromDecibels(20.0), precision: 9);
+        // MediaPlayer gain caps at 1.0: +dB is unreachable, never silent.
+        Assert.Equal(0.0, SoundOptions.MaxVolumeDb);
+        Assert.Equal(-20.0, SoundOptions.MinVolumeDb);
     }
 
     [Fact]

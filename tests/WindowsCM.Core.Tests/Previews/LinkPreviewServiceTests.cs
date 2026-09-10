@@ -110,6 +110,18 @@ public sealed class LinkPreviewServiceTests
     }
 
     [Fact]
+    public async Task Fetch_ErrorStatus_ReturnsNull()
+    {
+        // A 404 HTML error page is a transport failure, never a preview.
+        _http.Pages[Page] = new LinkHttpResponse(
+            "text/html; charset=utf-8",
+            Encoding.UTF8.GetBytes("<html><head><title>Not Found</title></head></html>"),
+            IsSuccess: false);
+
+        Assert.Null(await Subject().FetchAsync(Page));
+    }
+
+    [Fact]
     public async Task Fetch_NonHtml_ReturnsNull()
     {
         _http.Pages[Page] = new LinkHttpResponse("application/json", "{}"u8.ToArray());

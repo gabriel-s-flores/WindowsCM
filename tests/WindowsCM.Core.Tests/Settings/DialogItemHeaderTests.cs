@@ -38,12 +38,19 @@ public sealed class DialogItemHeaderTests
     }
 
     [Fact]
-    public void DialogAliases_LeftMapsToTop_RightToBottom()
+    public void DialogTokens_EachAxisAcceptsOnlyItsOwn()
     {
-        Assert.Equal(VerticalDock.Top, DialogSettings.NormalizeVerticalToken("left"));
-        Assert.Equal(VerticalDock.Bottom, DialogSettings.NormalizeVerticalToken("right"));
-        Assert.Equal(HorizontalDock.Left, DialogSettings.NormalizeHorizontalToken("top"));
-        Assert.Equal(HorizontalDock.Right, DialogSettings.NormalizeHorizontalToken("bottom"));
+        Assert.Equal(VerticalDock.Top, DialogSettings.NormalizeVerticalToken("top"));
+        Assert.Equal(VerticalDock.Bottom, DialogSettings.NormalizeVerticalToken("bottom"));
+        Assert.Equal(HorizontalDock.Left, DialogSettings.NormalizeHorizontalToken("left"));
+        Assert.Equal(HorizontalDock.Right, DialogSettings.NormalizeHorizontalToken("right"));
+
+        // Cross-axis tokens mean a corrupt import: they throw instead of
+        // silently mapping onto the wrong dock.
+        Assert.Throws<FormatException>(() => DialogSettings.NormalizeVerticalToken("left"));
+        Assert.Throws<FormatException>(() => DialogSettings.NormalizeVerticalToken("right"));
+        Assert.Throws<FormatException>(() => DialogSettings.NormalizeHorizontalToken("top"));
+        Assert.Throws<FormatException>(() => DialogSettings.NormalizeHorizontalToken("bottom"));
     }
 
     [Fact]

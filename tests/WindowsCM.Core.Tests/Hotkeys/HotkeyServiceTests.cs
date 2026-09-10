@@ -55,6 +55,14 @@ public sealed class HotkeyServiceTests
     }
 
     [Fact]
+    public void Ids_LiveInAppRange_AwayFromControlIds()
+    {
+        Assert.True(HotkeyDefaults.IdOpen >= 0x8000);
+        Assert.True(HotkeyDefaults.IdIncognito >= 0x8000);
+        Assert.NotEqual(HotkeyDefaults.IdOpen, HotkeyDefaults.IdIncognito);
+    }
+
+    [Fact]
     public void RegisterAll_Occupied_ReportsGuidance()
     {
         var registrar = new FakeRegistrar

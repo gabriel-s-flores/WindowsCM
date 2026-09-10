@@ -93,6 +93,13 @@ public sealed class CliOptionsTests
     }
 
     [Fact]
+    public void FormatForForward_BareHidden_ForwardsNothing()
+    {
+        Assert.Null(CliOptions.Parse(["app.exe", "--hidden"]).FormatForForward());
+        Assert.Equal("show", CliOptions.Parse(["--hidden", "--show"]).FormatForForward());
+    }
+
+    [Fact]
     public void FormatCommand_NoCommandIsNull()
     {
         Assert.Null(CliOptions.Parse(["app.exe"]).FormatCommand());

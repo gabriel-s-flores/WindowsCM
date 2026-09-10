@@ -13,6 +13,8 @@ namespace WindowsCM.Core.Popup;
 //
 // Selection wraps on Next/Previous (prototype MoveSelection parity);
 // First/Last clamp; Jump out of range keeps the current selection.
+public sealed record ActivationRequest(long ItemId, bool RunDefaultAction);
+
 public sealed class PopupViewModel : ITrayPopup
 {
     private static readonly ItemKind[] TypeOrder =
@@ -50,6 +52,13 @@ public sealed class PopupViewModel : ITrayPopup
         SelectedIndex >= 0 && SelectedIndex < VisibleItems.Count
             ? VisibleItems[SelectedIndex]
             : null;
+
+    // Activation request for the shell: Enter/Space (copy-or-paste) and
+    // Ctrl+Enter (default action) resolve here to WHAT to activate; the WPF
+    // shell executes HOW via PasteOrchestrator (needs the hotkey-time HWND
+    // and hide callback) and ActionExecutor. Null when nothing is selected.
+    public ActivationRequest? ActivateSelected(bool runDefaultAction = false) =>
+        SelectedItem is { } item ? new ActivationRequest(item.Id, runDefaultAction) : null;
 
     public void Show(bool incognito)
     {

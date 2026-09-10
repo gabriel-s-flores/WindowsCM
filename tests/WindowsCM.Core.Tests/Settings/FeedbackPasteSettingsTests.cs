@@ -27,7 +27,7 @@ public sealed class FeedbackPasteSettingsTests
         var feedback = new FeedbackSettings { VolumeDb = 99.0 };
         feedback.Clamp();
 
-        Assert.Equal(20.0, feedback.VolumeDb);
+        Assert.Equal(0.0, feedback.VolumeDb);
         Assert.Equal(1.0, feedback.Gain, precision: 9);
     }
 

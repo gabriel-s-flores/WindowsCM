@@ -23,7 +23,7 @@ public sealed class AboutCreditsTests
 
         Assert.Contains("Copyous", byName);
         Assert.Contains("https://github.com/boerdereinar/copyous", byName["Copyous"].Url);
-        Assert.Equal("GPL-3.0-or-later", byName["Copyous"].License);
+        Assert.Equal("GPL-2.0-only", byName["Copyous"].License);
 
         Assert.Contains("Pano", byName);
         Assert.Contains("https://github.com/oae/gnome-shell-pano", byName["Pano"].Url);

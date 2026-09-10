@@ -394,4 +394,64 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.NotNull(DatabasePaths.Validate("C:\\no-such-dir-xyz\\c.db"));
         Assert.Null(DatabasePaths.Validate(Path.GetTempPath() + "c.db"));
     }
+
+    [Fact]
+    public void List_SkipsUnknownFutureTypeRows()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".db");
+        try
+        {
+            using (var setup = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=false"))
+            {
+                setup.Open();
+                using var ddl = setup.CreateCommand();
+                ddl.CommandText = """
+                    CREATE TABLE clipboard (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL,
+                      content TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0,
+                      tag TEXT NULL, datetime TEXT NOT NULL, metadata TEXT NULL,
+                      title TEXT NULL,
+                      UNIQUE (type, content));
+                    CREATE TABLE clipboard_version (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL);
+                    INSERT INTO clipboard_version (id, version) VALUES (1, 2);
+                    INSERT INTO clipboard (type, content, pinned, tag, datetime, metadata, title)
+                    VALUES ('FutureKind', 'from-newer-app', 0, NULL, '2026-09-09 11:00:00', NULL, NULL);
+                    INSERT INTO clipboard (type, content, pinned, tag, datetime, metadata, title)
+                    VALUES ('Text', 'readable', 0, NULL, '2026-09-09 12:00:00', NULL, NULL);
+                    """;
+                ddl.ExecuteNonQuery();
+            }
+
+            using var store = new SqliteHistoryStore($"Data Source={path};Pooling=false");
+            var listed = store.List();
+
+            Assert.Equal(["readable"], listed.Select(i => i.Content));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Ctor_CreatesMissingParentDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var path = Path.Combine(root, "nested", "c.db");
+        try
+        {
+            using var store = new SqliteHistoryStore($"Data Source={path};Pooling=false");
+            store.AddOrUpdate(Sample(content: "x"));
+
+            Assert.True(File.Exists(path));
+            Assert.Single(store.List());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
 }
