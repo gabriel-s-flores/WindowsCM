@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 using System.IO;
 using System.Security.Principal;
 using System.Windows;
@@ -6,7 +6,6 @@ using MessageBox = System.Windows.MessageBox;
 using WindowsCM.Core.Actions;
 using WindowsCM.Core.Capture;
 using WindowsCM.Core.Capture.Win32;
-using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.Feedback;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Hotkeys;
@@ -100,8 +99,6 @@ public partial class App : System.Windows.Application
         var pipeName = InstanceNames.BuildPipeName(sid);
         var outcome = SingleInstanceCoordinator.Decide(
             mutex, new NamedPipeForwarder(), cli, pipeName);
-        // TEMP ticket 20: file-only proof of the single-instance handoff (removed in 25).
-        TempSmokeLog.Write("single-instance", $"outcome={outcome} startHidden={cli.StartHidden}");
         if (outcome != SingleInstanceOutcome.IsPrimary)
         {
             if (outcome == SingleInstanceOutcome.ForwardFailed)
@@ -190,11 +187,7 @@ public partial class App : System.Windows.Application
                     return IntPtr.Zero;
                 }
             },
-            onCaptured: hw =>
-            {
-                _pasteTarget = hw;
-                TempSmokeLog.Write("activate", $"capture slot=shell capturedTarget=0x{hw.ToInt64():X}");
-            });
+            onCaptured: hw => _pasteTarget = hw);
         var incognito = new ShellIncognito(_capture, _popupModel, _popup);
         var history = new ShellHistory(_store, _popupModel, _popup);
         var settings = new ShellSettingsOpener(dispatcher, () => OpenSettings());
@@ -226,9 +219,6 @@ public partial class App : System.Windows.Application
             return;
         }
         _pasteTarget = new Win32ForegroundWindow().GetCurrent();
-        // TEMP ticket 20: file-only capture proof (removed in 25).
-        TempSmokeLog.Write("activate",
-            $"capture slot={slot} capturedTarget=0x{_pasteTarget.ToInt64():X}");
         if (slot == HotkeySlot.Incognito)
         {
             _capture.IsIncognito = true;
@@ -269,10 +259,6 @@ public partial class App : System.Windows.Application
         if (item is null)
         {
             var missing = ActivationFeedbackPolicy.ForMissingItem(request.ItemId);
-            // TEMP ticket 20: file-only miss proof (removed in 25).
-            TempSmokeLog.Write("activate",
-                $"result itemId={request.ItemId} shiftHeld={shiftHeld} " +
-                $"runDefault={request.RunDefaultAction} outcome=MissingItem diagnostics={TempSmokeLog.Preview(missing.BalloonText)}");
             // Never silent: the list went stale (e.g. cleared via tray/pipe
             // between show and Enter), so refresh and explain instead of
             // vanishing.
@@ -284,15 +270,9 @@ public partial class App : System.Windows.Application
             }
             return;
         }
-        var preview = TempSmokeLog.Preview(item.Content);
         if (request.RunDefaultAction)
         {
             var defaultResult = await _executor.ExecuteDefaultAsync(_actions, item).ConfigureAwait(true);
-            // TEMP ticket 20: file-only default-action proof (removed in 25).
-            TempSmokeLog.Write("activate",
-                $"result itemId={item.Id} kind={item.Kind} shiftHeld={shiftHeld} " +
-                $"runDefault=True preview={preview} " +
-                $"outcome={defaultResult.Status} diagnostics={TempSmokeLog.Preview(defaultResult.Diagnostics)}");
             await HandleActionResultAsync(defaultResult, item).ConfigureAwait(true);
             return;
         }
@@ -300,22 +280,6 @@ public partial class App : System.Windows.Application
         var outcome = await _orchestrator.ExecuteAsync(
             item.Id, captured, shiftHeld,
             () => { _popup.Hide(); return Task.CompletedTask; }).ConfigureAwait(true);
-        IntPtr currentAfterHide;
-        try
-        {
-            currentAfterHide = new Win32ForegroundWindow().GetCurrent();
-        }
-        catch (PlatformNotSupportedException)
-        {
-            currentAfterHide = IntPtr.Zero;
-        }
-        // TEMP ticket 20: file-only paste proof (removed in 25).
-        TempSmokeLog.Write("activate",
-            $"result itemId={item.Id} kind={item.Kind} shiftHeld={shiftHeld} runDefault=False " +
-            $"preview={preview} capturedTarget=0x{captured.ToInt64():X} " +
-            $"currentAfterHide=0x{currentAfterHide.ToInt64():X} " +
-            $"outcome={outcome.Status} chord={outcome.InjectedChord?.ToString() ?? "<none>"} " +
-            $"diagnostics={TempSmokeLog.Preview(outcome.Diagnostics)}");
         // Ticket 22, never silent: success signals the copy; copy-with-a-
         // warning signals plus balloons the reason (focus lost / elevated);
         // hard failures balloon without a copy signal.

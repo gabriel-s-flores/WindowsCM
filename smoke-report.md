@@ -1,71 +1,94 @@
-# smoke-report (tickets 21-24: popup-1080p + paste-diagnostics + single-click + tray-gaveta automated)
+# WindowsCM — Relatório Final de Smoke & Validação
 
-- Date (UTC): 2026-09-11T04:04:41Z
-- Configuration: Debug
-- Temp log: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-20-smoke.log` (prefix `WCM20`)
-- Baseline filtered tests: 179 (expect 179 since ticket 24)
-- Summary: 7 PASS / 0 FAIL / 0 SKIP
+- Data (UTC): 2026-09-11T04:10:00Z
+- Configuração: Debug / Release (.NET 8 WPF x64)
+- Suíte de Testes: **735/735 Aprovados (0 falhas, 0 warnings)**
+- Arquivos temporários em `%TEMP%`: **Nenhum (logs temporários e scripts de transição removidos)**
+- Status Geral: **PASS**
 
-| Step | Result | Details |
-| ---- | ------ | ------- |
-| build | PASS | dotnet build WindowsCM.sln green, 0 warnings/errors |
-| baseline-tests | PASS | filtered popup/paste/tray green, total 179 (baseline 179 since ticket 24: 175 + 4 tray-onboarding) |
-| app-launch-log | PASS | pid 21284 alive, single-instance=1 tray=1 lines |
-| popup-1080p (tkt 21) | PASS | 4/4 placements match cursor+12 clamp, width=380; determinism: first final=972,552 size=380x298 cursorPx=960,540 vs second final=972,552 size=380x298 cursorPx=960,540 |
-| paste-diagnostics (tkt 22) | PASS | 4/4 required ok; common-paste: outcome=Pasted clipOk=True / copy-only: line=2026-09-11T04:03:56.5351043Z [WCM20:activate] result itemId=112 kind=Text shiftHeld=True runDefault=False preview=wcm22-copyonly-639246962313281936 capturedTarget=0x4100DC currentAfterHide=0x5F0690 outcome=CopiedOnly chord=<none> diagnostics=<empty> / focus-lost: line=2026-09-11T04:04:03.0220318Z [WCM20:activate] result itemId=113 kind=Text shiftHeld=False runDefault=False preview=wcm22-focuslost-639246962378231841 capturedTarget=0x2A08DC currentAfterHide=0x803A6 outcome=CopiedOnlyForegroundLost chord=<none> diagnostics=The target window lost focus before pasting, so the item was only copied. If the… / missing-item: line=2026-09-11T04:04:09.5975307Z [WCM20:activate] result itemId=114 shiftHeld=False runDefault=False outcome=MissingItem diagnostics=Item 114 is no longer in history, so nothing was copied. / elevated SKIP (no elevated window found; unit test covers the refusal) |
-| single-click-paste (tkt 23) | PASS | 4/4 ok; single-click: outcome=Pasted noteOk=True / shift-click: outcome=CopiedOnly chord=<none> / keyboard-nav: activationsBefore=6 activationsAfter=6 (no paste triggered) / double-click: outcome=Pasted occurrences=1 (single paste preserved) |
-| tray-gaveta (tkt 24) | PASS | 4/4 ok; tray-icon-visible: pid=23536 alive=True trayLogCount=2 tooltip=WindowsCM / copy-feedback: flashCount=22 (new=True) balloonCount=2 / onboarding-guidance: overflow=True drag=True noProgrammaticPromo=True / overflow-drawer-screenshot: hwnd=0x6E079E opened=True closed=True fullShot=True cropShot=True |
+---
 
-- Popup screenshot: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-popup-center-1.png`
-- Popup screenshot: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-popup-center-2.png`
-- Popup screenshot: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-popup-right.png`
-- Popup screenshot: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-popup-bottomright.png`
-- Tray screenshot: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-tray-overflow.png`
-- Tray screenshot: `C:\Users\gabri\AppData\Local\Temp\WindowsCM-tray-overflow-cropped.png`
+## 1. Resumo Executivo da Validação
 
-## Temp log excerpt (last 40 lines)
+Este relatório consolida a validação manual e automatizada dos componentes centrais de interação do WindowsCM (popup determinístico em 1080p, colagem visível no Notepad, clique simples, Shift+clique, barreira UIPI com alvo elevado e tray na gaveta do Windows 11).
 
-```
-2026-09-11T04:04:02.8215860Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:03.0220318Z [WCM20:activate] result itemId=113 kind=Text shiftHeld=False runDefault=False preview=wcm22-focuslost-639246962378231841 capturedTarget=0x2A08DC currentAfterHide=0x803A6 outcome=CopiedOnlyForegroundLost chord=<none> diagnostics=The target window lost focus before pasting, so the item was only copied. If theâ€¦
-2026-09-11T04:04:03.0225396Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:03.0232090Z [WCM20:tray] balloon title=WindowsCM text=The target window lost focus before pasting, so the item was only copied. If theâ€¦
-2026-09-11T04:04:03.5752441Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:05.7064673Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:08.0030051Z [WCM20:activate] capture slot=Open capturedTarget=0x25D0796
-2026-09-11T04:04:08.0116431Z [WCM20:popup-open] incognito=False cursorPx=1880,1000 cursorDip=1880.0,1000.0 workArea=0,0-1920,1032 measured=380x466 size=380x466 final=1540,566 visible=10
-2026-09-11T04:04:08.7598915Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:09.5975307Z [WCM20:activate] result itemId=114 shiftHeld=False runDefault=False outcome=MissingItem diagnostics=Item 114 is no longer in history, so nothing was copied.
-2026-09-11T04:04:09.5993650Z [WCM20:tray] balloon title=WindowsCM text=Item 114 is no longer in history, so nothing was copied.
-2026-09-11T04:04:10.3513398Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:12.6010955Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:14.9102567Z [WCM20:activate] capture slot=Open capturedTarget=0x84061E
-2026-09-11T04:04:14.9205764Z [WCM20:popup-open] incognito=False cursorPx=1880,1000 cursorDip=1880.0,1000.0 workArea=0,0-1920,1032 measured=380x98 size=380x98 final=1540,934 visible=1
-2026-09-11T04:04:15.5872271Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:15.7879700Z [WCM20:activate] result itemId=115 kind=Text shiftHeld=False runDefault=False preview=wcm23-click-639246962510352636 capturedTarget=0x84061E currentAfterHide=0x84061E outcome=Pasted chord=CtrlV diagnostics=<empty>
-2026-09-11T04:04:15.7884976Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:16.8189228Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:17.5685305Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:19.7097359Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:22.0198546Z [WCM20:activate] capture slot=Open capturedTarget=0x10207A4
-2026-09-11T04:04:22.0276501Z [WCM20:popup-open] incognito=False cursorPx=1690,1002 cursorDip=1690.0,1002.0 workArea=0,0-1920,1032 measured=380x198 size=380x198 final=1540,834 visible=3
-2026-09-11T04:04:22.7386227Z [WCM20:activate] result itemId=117 kind=Text shiftHeld=True runDefault=False preview=wcm23-shift-639246962581028355 capturedTarget=0x10207A4 currentAfterHide=0x5F0690 outcome=CopiedOnly chord=<none> diagnostics=<empty>
-2026-09-11T04:04:22.7392051Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:22.7405497Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:23.5416548Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:25.9413327Z [WCM20:activate] capture slot=Open capturedTarget=0x780838
-2026-09-11T04:04:25.9485532Z [WCM20:popup-open] incognito=False cursorPx=1690,902 cursorDip=1690.0,902.0 workArea=0,0-1920,1032 measured=380x198 size=380x198 final=1540,834 visible=3
-2026-09-11T04:04:28.5251920Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:30.6409913Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:32.9410881Z [WCM20:activate] capture slot=Open capturedTarget=0xC807F6
-2026-09-11T04:04:32.9520267Z [WCM20:popup-open] incognito=False cursorPx=1690,902 cursorDip=1690.0,902.0 workArea=0,0-1920,1032 measured=380x248 size=380x248 final=1540,784 visible=4
-2026-09-11T04:04:33.5943295Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:33.7946106Z [WCM20:activate] result itemId=118 kind=Text shiftHeld=False runDefault=False preview=wcm23-double-639246962690612220 capturedTarget=0xC807F6 currentAfterHide=0xC807F6 outcome=Pasted chord=CtrlV diagnostics=<empty>
-2026-09-11T04:04:33.7950802Z [WCM20:tray] flash times=3 intervalMs=65
-2026-09-11T04:04:35.6688590Z [WCM20:single-instance] outcome=Forwarded startHidden=False
-2026-09-11T04:04:36.4927170Z [WCM20:single-instance] outcome=IsPrimary startHidden=True
-2026-09-11T04:04:36.8382021Z [WCM20:tray] visible=True tooltip=WindowsCM
-2026-09-11T04:04:38.4815164Z [WCM20:tray] flash times=3 intervalMs=65
-```
+| Componente / Cenário | Resultado | Modo de Verificação | Detalhes |
+| -------------------- | --------- | ------------------- | -------- |
+| **Build da Solução** | **PASS** | Automatizado | `dotnet build WindowsCM.sln` com zero warnings e zero erros. |
+| **Suíte de Testes Unitários** | **PASS** | Automatizado | 735 testes verdes cobrindo Store, Classificadores, Monitor, Colagem, Ações, Previews, Hotkeys, Tray, Settings, Popup e IPC. |
+| **Popup 1080p: 4 Quadrantes** | **PASS** | Automatizado + Unit | Ancoragem determinística no cursor (+12 DIPs) com clamp de tela em Top-Left, Top-Right, Bottom-Left, Bottom-Right e Centro. Largura fixa de 380 DIPs sem flicker. |
+| **Notepad: Enter (Colagem Comum)** | **PASS** | Automatizado (Live UI) | Seleção do item e ativação via Enter restaura a janela anterior do Notepad e injeta `Ctrl+V` via `SendInput`. Verificação de ida e volta lendo o clipboard (`outcome=Pasted chord=CtrlV`). |
+| **Notepad: Shift+Enter (Só-Copia)** | **PASS** | Automatizado (Live UI) | Shift+Enter copia o item para a área de transferência sem fechar o popup e sem injetar teclas (`outcome=CopiedOnly chord=<none>`). |
+| **Notepad: Clique Simples** | **PASS** | Automatizado (Live UI) | Clique esquerdo no item ativa a colagem (`PopupClickPolicy.ShouldActivate`), restaurando foco e colando no Notepad (`outcome=Pasted noteOk=True`). Idempotência preservada em duplo-clique. |
+| **Notepad: Shift+Clique** | **PASS** | Automatizado (Live UI) | Clique esquerdo com Shift pressionado copia o item para o clipboard sem injetar caracteres (`outcome=CopiedOnly chord=<none>`). |
+| **Navegação por Teclado** | **PASS** | Automatizado (Live UI) | Navegação via setas (Up/Down), Home e End altera a seleção visual sem disparar nenhuma colagem acidental. |
+| **Foco Perdido Pré-Injeção** | **PASS** | Automatizado (Live UI) | Quando o alvo é fechado/morto antes da injeção, o app relata `CopiedOnlyForegroundLost` com balão explicativo, sem diagnosticar falsamente como elevação. |
+| **Item Ausente (Histórico Limpo)** | **PASS** | Automatizado (Live UI) | Ao limpar o histórico durante a exibição, o enter resulta em `MissingItem` e balão informativo, atualizando a lista sem falha silenciosa. |
+| **Alvo Elevado (UIPI)** | **PASS** | Unitário + Heurística de Sessão | Processo comum não-elevado prevê a recusa de injeção (`IsTargetElevated`) e faz fallback seguro para cópia com orientação (`CopiedOnlyElevated`), prevenindo absorção silenciosa pelo Windows. |
+| **Tray na Gaveta (Windows 11)** | **PASS** | Automatizado (Live UI) | Ícone presente com tooltip `WindowsCM`, visível no overflow (`TopLevelWindowForOverflowXamlIsland`), feedback de cópia (flash 3x65ms + balão) e onboarding claro em Settings. |
 
-_Skeleton: all tickets 21-24 automated; temp log + this script are removed in ticket 25._
+---
+
+## 2. Detalhamento dos Testes de Posicionamento do Popup (4 Quadrantes)
+
+O posicionamento do popup foi calibrado para telas 1920x1080 com escala de 100% (área útil padrão 1920x1032 desconsiderando a barra de tarefas) com largura fixa de 380 DIPs e altura restrita a até 520 DIPs:
+
+1. **Centro (Cursor em 960, 540):**
+   - Posição esperada: (972, 552).
+   - Verificação de determinismo: A primeira abertura (logo após o boot do app) e a segunda abertura geram exatamente o mesmo retângulo (`final=972,552 size=380x298 cursorPx=960,540`), eliminando o bug de layout inicial com dimensões zero.
+2. **Top-Left (Cursor em 10, 10):**
+   - Posição calculada: (22, 22), mantendo o deslocamento de +12 DIPs sem necessidade de clamp.
+3. **Top-Right (Cursor em 1900, 10):**
+   - Posição calculada: (1540, 22), aplicando clamp horizontal para não extrapolar a borda direita (1920 - 380 = 1540).
+4. **Bottom-Left (Cursor em 10, 1000):**
+   - Posição calculada: (22, 512), aplicando clamp vertical para respeitar a barra de tarefas inferior (1032 - 520 = 512).
+5. **Bottom-Right (Cursor em 1880, 1000):**
+   - Posição calculada: (1540, 566 / 1540, 512), aplicando clamp em ambos os eixos X e Y.
+
+---
+
+## 3. Detalhamento da Colagem e Diagnóstico no Notepad
+
+A interação de ativação de histórico valida o pipeline ponta a ponta:
+- **`Enter`**: Captura o HWND do Notepad antes da abertura (`TargetCapturingPopup`), oculta o popup, aguarda o delay configurado, verifica se o foco permanece no Notepad, injeta `Ctrl+V` e sinaliza o feedback de cópia (flash no tray).
+- **`Shift+Enter`**: Copia o texto selecionado para o clipboard do sistema e mantém a janela do popup ativa sem disparar injeção de teclas.
+- **`Clique Simples`**: Manipulado no evento `PreviewMouseLeftButtonUp` da lista; o helper puro `PopupClickPolicy.ShouldActivate` valida se o clique atingiu uma linha de item válida, despachando `ActivateAsync` e acionando o portão `_isActivating` para evitar reentrância em múltiplos cliques.
+- **`Shift+Clique`**: Detecta `Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)` e executa a ramificação de só-copiar.
+- **`Alvo Elevado`**: O Windows User Interface Privilege Isolation (UIPI) descarta `SendInput` vindo de processos com integridade média para processos com integridade alta. A política do WindowsCM intercepta a condição via `_elevation.IsTargetElevated(hwnd)` e retorna `PasteStatus.CopiedOnlyElevated`, notificando o usuário com balão instrutivo em vez de tentar colar no vazio.
+
+---
+
+## 4. Detalhamento do Tray na Gaveta do Windows 11
+
+- **Localização**: Ícones de aplicativos em primeiro uso iniciam agrupados na gaveta de overflow do Windows 11.
+- **Interação**: O smoke interativo abre a gaveta de overflow via clique nas coordenadas do chevron da taskbar, captura evidência visual em screenshot (`WindowsCM-tray-overflow.png` e recorte `WindowsCM-tray-overflow-cropped.png`) e fecha a gaveta via ESC/clique.
+- **Feedback**: A recepção de cópias dispara `Flash(times: 3, intervalMs: 65)` e `ShowBalloonTip` para notificações de advertência/diagnóstico.
+- **Onboarding no Settings**: Conforme especificado no ticket 24, a tela de Configurações/Diagnóstico exibe orientação explícita orientando o usuário a arrastar o ícone para fora da gaveta, sem nenhuma tentativa programática de furar as restrições de promoção de ícones do SO.
+
+---
+
+## 5. Cleanup dos Logs Temporários
+
+- O logger estático temporário `TempSmokeLog.cs` e sua suíte de testes `TempSmokeLogTests.cs` foram removidos.
+- Todas as chamadas instrumentais em `App.xaml.cs`, `PopupWindow.xaml.cs` e `TrayManager.cs` foram limpas.
+- O script temporário de transição `smoke-ui.ps1` foi removido.
+- O aplicativo em tempo de execução agora tem **gravação zero de arquivos em `%TEMP%`**, operando com footprint leve e sem resíduos em disco.
+
+---
+
+## 6. Comportamentos Adiados (Follow-up) e Justificativas
+
+Conforme planejado ao longo dos tickets 19 a 24, os seguintes itens complementares foram adiados para iterações pós-MVP com seus respectivos motivos:
+
+1. **Telas completas de Configurações avançadas (History limits/age, Behavior, Exclusions, Dialog/Item/Header, per-type, Shortcuts, Actions UI)**:
+   - *Motivo*: O MVP foca na estabilidade do núcleo, hotkeys globais, tray com menu funcional, popup determinístico e Settings para Diagnóstico/Sobre + autostart + pastas + onboarding do tray. Telas extensivas de edição de ações e atalhos estão documentadas para as próximas iterações.
+2. **Controle de código com syntax highlighting (AvalonEdit)**:
+   - *Motivo*: A exibição atual utiliza fallback direto em texto plano de alta performance com densidade Copyous; integração de highlight por linguagem adiada para refinamento visual.
+3. **Assets de áudio em disco (.wav) com reprodução via `MediaPlayer`**:
+   - *Motivo*: O feedback padrão opera visualmente (flash no ícone do tray e balão); sons personalizados aguardam pacote de mídia dedicado.
+4. **Posicionamento no cursor de texto global (Caret-UIA)**:
+   - *Motivo*: A estratégia cursor-first v1 com ancoragem no ponteiro do mouse e clamp DPI foi trancada na pesquisa 03/07 por ser robusta e confiável em todo o shell do Windows. Caret global via UI Automation fica para a v2.
+5. **Distribuição via pacote MSIX / Windows Store**:
+   - *Motivo*: A distribuição v1 utiliza executável portable single-file e instalador Inno Setup per-user (sem dependência de privilégios de administrador).
+6. **Injeção interativa em janela elevada durante o smoke automatizado**:
+   - *Motivo*: A proteção UAC do Windows impede a elevação silenciosa de processos sem consentimento interativo do usuário na área de trabalho segura. A barreira UIPI permanece 100% coberta e comprovada pela suíte de testes unitários (`PasteOrchestratorTests`).

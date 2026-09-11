@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.Windows.Forms;
 using System.Windows.Threading;
-using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.Feedback;
 using WindowsCM.Core.Tray;
 
@@ -39,8 +38,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             Text = "WindowsCM",
             Visible = true,
         };
-        // TEMP ticket 20: file-only proof the tray icon exists (removed in 25).
-        TempSmokeLog.Write("tray", $"visible={_icon.Visible} tooltip=WindowsCM");
         _icon.MouseClick += OnMouseClick;
         _icon.DoubleClick += (_, _) => SingleToggle();
 
@@ -53,21 +50,13 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
                 {
                     CheckOnClick = true,
                 };
-                _incognitoItem.Click += (_, _) =>
-                {
-                    TempSmokeLog.Write("tray", $"menu item={item}");
-                    _controller.OnMenu(item);
-                };
+                _incognitoItem.Click += (_, _) => _controller.OnMenu(item);
                 menu.Items.Add(_incognitoItem);
                 continue;
             }
             var captured = item;
             var entry = new ToolStripMenuItem(TrayMenu.LabelFor(item));
-            entry.Click += (_, _) =>
-            {
-                TempSmokeLog.Write("tray", $"menu item={captured}");
-                _controller.OnMenu(captured);
-            };
+            entry.Click += (_, _) => _controller.OnMenu(captured);
             menu.Items.Add(entry);
         }
         menu.Opening += (_, _) =>
@@ -105,7 +94,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
     private void SingleToggle()
     {
         _clickTimer.Stop();
-        TempSmokeLog.Write("tray", "left-click toggle");
         _dispatcher.Invoke(_controller.OnLeftClick);
     }
 
@@ -114,7 +102,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         {
             if (!_disposed)
             {
-                TempSmokeLog.Write("tray", $"balloon title={TempSmokeLog.Preview(title)} text={TempSmokeLog.Preview(text)}");
                 _icon.ShowBalloonTip(3000, title, text, ToolTipIcon.None);
             }
         });
@@ -126,7 +113,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             {
                 return;
             }
-            TempSmokeLog.Write("tray", $"flash times={times} intervalMs={intervalMs}");
             _flashTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, intervalMs));
             _flashTicksLeft = Math.Max(1, times) * 2;
             _flashTimer.Start();

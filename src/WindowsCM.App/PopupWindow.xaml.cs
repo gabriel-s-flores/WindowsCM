@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using WindowsCM.Core.Actions;
-using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
 using WinForms = System.Windows.Forms;
@@ -119,10 +118,6 @@ public partial class PopupWindow : Window
             new WorkArea(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y));
         Left = left;
         Top = top;
-        // TEMP ticket 20: file-only proof for the 1080p fix (removed in 25).
-        // Invariant culture: a decimal comma (e.g. pt-BR) would break the
-        // smoke parser that greps final=/size= out of this line.
-        TempSmokeLog.Write("popup-open", FormattableString.Invariant($"incognito={incognito} cursorPx={cursor.X},{cursor.Y} cursorDip={cursorDips.X:F1},{cursorDips.Y:F1} workArea={topLeft.X:F0},{topLeft.Y:F0}-{bottomRight.X:F0},{bottomRight.Y:F0} measured={ActualWidth:F0}x{ActualHeight:F0} size={placedWidth:F0}x{placedHeight:F0} final={left:F0},{top:F0} visible={_model.VisibleItems.Count}"));
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
