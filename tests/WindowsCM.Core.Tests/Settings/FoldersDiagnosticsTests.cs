@@ -45,5 +45,6 @@ public sealed class FoldersDiagnosticsTests
         Assert.Equal(settings.History.ResolveDatabasePath(), info.DatabasePath);
         Assert.Equal(AppFolders.ActionsDefault(), info.ActionsPath);
         Assert.Equal(AppFolders.SettingsPath(), info.SettingsPath);
+        Assert.Equal(WindowsCM.Core.Tray.TrayOnboarding.Guidance, info.TrayGuidance);
     }
 }

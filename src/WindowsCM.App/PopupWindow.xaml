@@ -1,0 +1,80 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<Window x:Class="WindowsCM.App.PopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:core="clr-namespace:WindowsCM.Core.History;assembly=WindowsCM.Core"
+        xmlns:local="clr-namespace:WindowsCM.App"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        Width="380" MaxHeight="520" SizeToContent="Height"
+        Deactivated="OnDeactivated" PreviewKeyDown="OnPreviewKeyDown" Loaded="OnLoaded">
+  <Window.Resources>
+    <local:TagBrushConverter x:Key="TagBrush" />
+    <local:TitleLineConverter x:Key="TitleLine" />
+    <local:KindLabelConverter x:Key="KindLabel" />
+    <local:ImageThumbConverter x:Key="ImageThumb" />
+    <local:PinnedVisibilityConverter x:Key="PinnedVisibility" />
+  </Window.Resources>
+  <Border Background="#36363A" CornerRadius="8" BorderBrush="#48484E"
+          BorderThickness="1" Padding="8">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+        <TextBox x:Name="SearchBox" Width="190" Margin="0,0,6,0"
+                 ToolTip="Search (live)"
+                 TextChanged="OnSearchChanged" />
+        <Button x:Name="PinsButton" Content="Pinned" Margin="0,0,6,0"
+                ToolTip="Show only pins (Alt+P)" Click="OnPinsClicked" />
+        <Button x:Name="IncognitoButton" Content="Incognito" Margin="0,0,6,0"
+                ToolTip="Pause capture" Click="OnIncognitoClicked" />
+        <Button Content="Clear" Margin="0,0,6,0"
+                ToolTip="Clear history (keeps pins and tags)" Click="OnClearClicked" />
+        <Button Content="Settings" ToolTip="Open settings"
+                Click="OnSettingsClicked" />
+      </StackPanel>
+      <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
+               SelectionMode="Single" MaxHeight="420"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               PreviewMouseLeftButtonUp="OnItemClicked"
+               MouseDoubleClick="OnItemDoubleClicked">
+        <ListBox.ItemContainerStyle>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0,2" />
+          </Style>
+        </ListBox.ItemContainerStyle>
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="{x:Type core:ClipboardItem}">
+            <Border Background="#47474C" CornerRadius="6" Padding="8,6">
+              <DockPanel>
+                <Rectangle DockPanel.Dock="Left" Width="4" Margin="0,0,8,0"
+                           Fill="{Binding Tag, Converter={StaticResource TagBrush}}" />
+                <TextBlock DockPanel.Dock="Right" Text="Pinned" Foreground="#ED5B00"
+                           FontSize="11" Margin="8,0,0,0"
+                           Visibility="{Binding Pinned, Converter={StaticResource PinnedVisibility}}" />
+                <StackPanel>
+                  <TextBlock Text="{Binding Converter={StaticResource TitleLine}}"
+                             Foreground="White" FontSize="13"
+                             TextTrimming="CharacterEllipsis" MaxHeight="40" />
+                  <TextBlock Text="{Binding Kind, Converter={StaticResource KindLabel}}"
+                             Foreground="#AEAEB2" FontSize="11" />
+                  <Image Source="{Binding Content, Converter={StaticResource ImageThumb}}"
+                         MaxHeight="64" Stretch="Uniform" Margin="0,4,0,0">
+                    <Image.Style>
+                      <Style TargetType="Image">
+                        <Style.Triggers>
+                          <Trigger Property="Source" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                          </Trigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Image.Style>
+                  </Image>
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </Border>
+</Window>

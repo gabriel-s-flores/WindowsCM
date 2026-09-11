@@ -60,6 +60,17 @@ public sealed class PopupViewModel : ITrayPopup
     public ActivationRequest? ActivateSelected(bool runDefaultAction = false) =>
         SelectedItem is { } item ? new ActivationRequest(item.Id, runDefaultAction) : null;
 
+    // Mouse parity (ticket 23): single click selects the row under the
+    // mouse-up point then activates exactly like Enter. The shell resolves
+    // the row index via hit-testing and reads Shift itself — Shift only
+    // changes copy-vs-paste downstream in the orchestrator, never whether
+    // this returns a request. Null when the click lands on no row.
+    public ActivationRequest? ActivateAt(int index, bool runDefaultAction = false)
+    {
+        SetSelectedIndex(index);
+        return ActivateSelected(runDefaultAction);
+    }
+
     public void Show(bool incognito)
     {
         IsIncognito = incognito;
@@ -181,6 +192,15 @@ public sealed class PopupViewModel : ITrayPopup
             return;
         }
         SelectedIndex = index;
+    }
+
+    // Mouse parity: the view reports clicks by index while the model stays
+    // authoritative — clamped into range, -1 when the list is empty.
+    public void SetSelectedIndex(int index)
+    {
+        SelectedIndex = VisibleItems.Count == 0
+            ? -1
+            : Math.Clamp(index, 0, VisibleItems.Count - 1);
     }
 
     public bool TogglePinSelected()

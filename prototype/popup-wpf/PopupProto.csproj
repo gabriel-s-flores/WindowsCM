@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>WindowsCM.PopupProto</AssemblyName>
+    <RootNamespace>PopupProto</RootNamespace>
+    <!-- PROTOTYPE — throwaway. See README.md. Never merge to main. -->
+  </PropertyGroup>
+
+</Project>

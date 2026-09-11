@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+[assembly: InternalsVisibleTo("WindowsCM.Core.Tests")]
 
 namespace WindowsCM.Core.Paste.Win32;
 
@@ -38,8 +41,27 @@ internal static class NativePaste
     [StructLayout(LayoutKind.Explicit)]
     public struct INPUTUNION
     {
+        // All three members: the union must be as wide as the widest arm
+        // (MOUSEINPUT), otherwise Marshal.SizeOf<INPUT>() undershoots the
+        // platform sizeof(INPUT) and SendInput rejects every chord
+        // (ticket 22 live smoke caught cbSize=32 vs 40 on x64).
+        [FieldOffset(0)]
+        public MOUSEINPUT Mi;
         [FieldOffset(0)]
         public KEYBDINPUT Ki;
+        [FieldOffset(0)]
+        public HARDWAREINPUT Hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT
+    {
+        public int Dx;
+        public int Dy;
+        public uint MouseData;
+        public uint DwFlags;
+        public uint Time;
+        public IntPtr DwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -50,6 +72,14 @@ internal static class NativePaste
         public uint DwFlags;
         public uint Time;
         public IntPtr DwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HARDWAREINPUT
+    {
+        public uint UMsg;
+        public ushort WParamL;
+        public ushort WParamH;
     }
 
     [DllImport("user32.dll", SetLastError = true)]

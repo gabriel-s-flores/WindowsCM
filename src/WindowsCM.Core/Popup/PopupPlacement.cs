@@ -46,3 +46,19 @@ public static class PopupPlacement
     // (CompositionTarget.TransformFromDevice parity).
     public static double ToDips(double pixels, double fromDeviceScale) => pixels * fromDeviceScale;
 }
+
+// Ticket 21: stable popup size on 1080p. The card strip keeps one fixed
+// width every open for the same history (XAML Width parity) so right-edge
+// clamping never drifts with measured content width; height is the measured
+// content clamped to the window max. The shell freezes SizeToContent after
+// Show so search filtering never resizes the window.
+public static class PopupSizing
+{
+    // PopupWindow.xaml Width="380" parity (enforced by the shell each open).
+    public const double FixedWidth = 380;
+
+    // PopupWindow.xaml MaxHeight="520" parity.
+    public const double MaxHeight = 520;
+
+    public static double ClampHeight(double measuredHeight) => Math.Min(measuredHeight, MaxHeight);
+}

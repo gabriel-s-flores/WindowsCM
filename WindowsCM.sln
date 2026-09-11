@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{52CDA1A5
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowsCM.Core.Tests", "tests\WindowsCM.Core.Tests\WindowsCM.Core.Tests.csproj", "{95883526-8775-4DEC-A2FC-F7076689EC47}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowsCM.App", "src\WindowsCM.App\WindowsCM.App.csproj", "{4F561D23-B298-4F9F-9997-F85CD1B69D28}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{95883526-8775-4DEC-A2FC-F7076689EC47}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{95883526-8775-4DEC-A2FC-F7076689EC47}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{95883526-8775-4DEC-A2FC-F7076689EC47}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F561D23-B298-4F9F-9997-F85CD1B69D28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F561D23-B298-4F9F-9997-F85CD1B69D28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F561D23-B298-4F9F-9997-F85CD1B69D28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F561D23-B298-4F9F-9997-F85CD1B69D28}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{E69E94BA-D177-408E-ABB7-11D59809DF8D} = {7A179067-C5B8-42E0-B128-5E847968F1B3}
 		{95883526-8775-4DEC-A2FC-F7076689EC47} = {52CDA1A5-B672-4D4A-B26A-4C172018682D}
+		{4F561D23-B298-4F9F-9997-F85CD1B69D28} = {7A179067-C5B8-42E0-B128-5E847968F1B3}
 	EndGlobalSection
 EndGlobal

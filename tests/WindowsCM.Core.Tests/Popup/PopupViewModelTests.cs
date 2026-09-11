@@ -463,4 +463,72 @@ public sealed class PopupViewModelTests
         Assert.Null(vm.SelectedItem);
         Assert.Null(vm.ActivateSelected());
     }
+
+    [Fact]
+    public void SetSelectedIndex_FollowsClick_Clamped()
+    {
+        Save("a", minute: 0);
+        Save("b", minute: 1);
+        Save("c", minute: 2);
+        var vm = Subject(); // [c, b, a]
+
+        vm.SetSelectedIndex(2);
+
+        Assert.Equal("a", vm.SelectedItem!.Content);
+
+        vm.SetSelectedIndex(99);
+        Assert.Equal("a", vm.SelectedItem!.Content);
+
+        vm.SetSelectedIndex(-4);
+        Assert.Equal("c", vm.SelectedItem!.Content);
+    }
+
+    [Fact]
+    public void SetSelectedIndex_EmptyList_StaysNegative()
+    {
+        var vm = Subject();
+
+        vm.SetSelectedIndex(0);
+
+        Assert.Equal(-1, vm.SelectedIndex);
+        Assert.Null(vm.SelectedItem);
+    }
+
+    [Fact]
+    public void ActivateAt_ValidIndex_SelectsItemAndReturnsRequest()
+    {
+        Save("a", minute: 0);
+        Save("b", minute: 1);
+        Save("c", minute: 2);
+        var vm = Subject(); // [c, b, a]
+
+        var request = vm.ActivateAt(1);
+
+        Assert.NotNull(request);
+        Assert.Equal("b", vm.SelectedItem!.Content);
+        Assert.Equal(vm.SelectedItem.Id, request.ItemId);
+        Assert.False(request.RunDefaultAction);
+    }
+
+    [Fact]
+    public void ActivateAt_WithRunDefaultAction_FlagsDefaultAction()
+    {
+        Save("a");
+        var vm = Subject();
+
+        var request = vm.ActivateAt(0, runDefaultAction: true);
+
+        Assert.NotNull(request);
+        Assert.True(request.RunDefaultAction);
+    }
+
+    [Fact]
+    public void ActivateAt_EmptyList_ReturnsNull()
+    {
+        var vm = Subject();
+
+        var request = vm.ActivateAt(0);
+
+        Assert.Null(request);
+    }
 }

@@ -2,13 +2,14 @@
 using System.Reflection;
 using Microsoft.Data.Sqlite;
 using WindowsCM.Core.Actions;
+using WindowsCM.Core.Tray;
 
 namespace WindowsCM.Core.Settings;
 
 // About/Diagnostics page (Copyous Dependencies→About remap, grilling 06
 // Q8): library versions plus Data/Config/Cache shortcuts that the UI opens
 // in Explorer. No process launching here — the WPF layer calls Explorer
-// with these paths.
+// with these paths. Includes tray overflow guidance for Windows 11 (ticket 24).
 public sealed record DiagnosticsInfo(
     string AppVersion,
     string DotNetVersion,
@@ -18,7 +19,8 @@ public sealed record DiagnosticsInfo(
     string CacheDir,
     string DatabasePath,
     string ActionsPath,
-    string SettingsPath)
+    string SettingsPath,
+    string TrayGuidance = TrayOnboarding.Guidance)
 {
     public static DiagnosticsInfo Collect(AppSettings? settings = null, string? settingsPath = null)
     {
@@ -34,6 +36,7 @@ public sealed record DiagnosticsInfo(
             AppFolders.DataDir(), AppFolders.ConfigDir(), AppFolders.CacheDir(),
             settings.History.ResolveDatabasePath(),
             ActionsPaths.Default(),
-            settingsPath ?? AppFolders.SettingsPath());
+            settingsPath ?? AppFolders.SettingsPath(),
+            TrayOnboarding.Guidance);
     }
 }
