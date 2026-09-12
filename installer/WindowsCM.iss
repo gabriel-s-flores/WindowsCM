@@ -86,11 +86,9 @@ var
 begin
   RemoveDataChosen := False;
 
-  Form := CreateCustomForm();
+  Form := CreateCustomForm(ScaleX(420), ScaleY(150), False, True);
   try
     Form.Caption := 'Remove user data?';
-    Form.ClientWidth := ScaleX(420);
-    Form.ClientHeight := ScaleY(150);
     Form.Position := poScreenCenter;
 
     Check := TNewCheckBox.Create(Form);
@@ -99,7 +97,6 @@ begin
     Check.Top := ScaleY(12);
     Check.Width := Form.ClientWidth - ScaleX(24);
     Check.Height := ScaleY(64);
-    Check.WordWrap := True;
     Check.Caption := 'Also remove my clipboard history, settings, actions and caches. Leave unchecked to keep your data for a future reinstall.';
     Check.Checked := False;
 

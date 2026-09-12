@@ -113,11 +113,52 @@ public sealed class PopupPlacementTests
     }
 
     [Fact]
+    public void HorizontalLayout1080p_ClampsWithinWorkArea()
+    {
+        // 880x320 horizontal popup
+        var (left, top) = PopupPlacement.PlaceAtCursor(1800, 950, 880, 320, Area1080p);
+
+        // Right clamp: 1920 - 880 = 1040
+        Assert.Equal(1040, left);
+        // Bottom clamp: 1032 - 320 = 712
+        Assert.Equal(712, top);
+    }
+
+    [Fact]
     public void SameCursor_SameContent_SamePosition()
     {
         var first = PopupPlacement.PlaceAtCursor(960, 540, 380, 300, Area1080p);
         var second = PopupPlacement.PlaceAtCursor(960, 540, 380, 300, Area1080p);
 
         Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void PlaceHorizontalFill_SpansScreenWidthWithMargins_ClampsTop()
+    {
+        var (left, top, width) = PopupPlacement.PlaceHorizontalFill(500, 320, Area1080p, margin: 20);
+
+        Assert.Equal(20, left);
+        Assert.Equal(1880, width);
+        Assert.Equal(512, top);
+    }
+
+    [Fact]
+    public void PlaceHorizontalFill_NearBottom_ClampsToWorkAreaBottom()
+    {
+        var (left, top, width) = PopupPlacement.PlaceHorizontalFill(1000, 320, Area1080p, margin: 20);
+
+        Assert.Equal(20, left);
+        Assert.Equal(1880, width);
+        Assert.Equal(712, top);
+    }
+
+    [Fact]
+    public void CalculateHorizontalFillWidth_EnforcesMinWidth()
+    {
+        var smallScreen = new WorkArea(0, 0, 500, 400);
+        var width = PopupPlacement.CalculateHorizontalFillWidth(smallScreen, margin: 20);
+
+        Assert.Equal(PopupSizing.MinWidth, width);
     }
 }

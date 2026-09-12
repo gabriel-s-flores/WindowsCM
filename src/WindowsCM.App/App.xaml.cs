@@ -76,10 +76,10 @@ public partial class App : System.Windows.Application
         if (cli.ShowHelp)
         {
             MessageBox.Show(
-                "WindowsCM clipboard manager\n\n" +
+                "WindowsCM — Gerenciador de Área de Transferência\n\n" +
                 "--toggle | --show | --hide | --clear | --clear-all\n" +
-                "--hidden   start tray-only (autostart)\n" +
-                "--help     this text",
+                "--hidden   inicia apenas na bandeja (inicialização automática)\n" +
+                "--help     exibe esta ajuda",
                 "WindowsCM", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown(0);
             return;
@@ -88,7 +88,7 @@ public partial class App : System.Windows.Application
         var sid = WindowsIdentity.GetCurrent().User?.Value;
         if (string.IsNullOrWhiteSpace(sid))
         {
-            MessageBox.Show("Could not determine the current user SID; exiting.",
+            MessageBox.Show("Não foi possível determinar o SID do usuário atual; encerrando.",
                 "WindowsCM", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;
@@ -103,7 +103,7 @@ public partial class App : System.Windows.Application
         {
             if (outcome == SingleInstanceOutcome.ForwardFailed)
             {
-                MessageBox.Show("WindowsCM is not running and the command could not be delivered.",
+                MessageBox.Show("O WindowsCM não está em execução e o comando não pôde ser entregue.",
                     "WindowsCM", MessageBoxButton.OK, MessageBoxImage.Warning);
                 Shutdown(1);
                 return;
@@ -197,7 +197,7 @@ public partial class App : System.Windows.Application
         _disposables.Add(_tray);
         if (!string.IsNullOrWhiteSpace(conflictGuidance))
         {
-            _tray.ShowBalloon("Hotkey conflict", conflictGuidance);
+            _tray.ShowBalloon("Conflito de atalhos", conflictGuidance);
         }
 
         var dispatcherFacade = new IpcDispatcher(popup, _store);
@@ -340,7 +340,7 @@ public partial class App : System.Windows.Application
                 }
                 catch (Exception ex) when (ex is PasteInjectionException or System.Runtime.InteropServices.ExternalException)
                 {
-                    _tray?.ShowBalloon("WindowsCM", $"Paste failed after copying: {ex.Message}");
+                    _tray?.ShowBalloon("WindowsCM", $"Falha ao colar após a cópia: {ex.Message}");
                 }
                 break;
             case ActionStatus.ShowQr when result.Output is not null:

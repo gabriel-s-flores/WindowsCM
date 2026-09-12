@@ -9,11 +9,11 @@ namespace WindowsCM.Core.Tray;
 public static class TrayOnboarding
 {
     public const string Guidance =
-        "On Windows 11, new tray icons appear in the taskbar overflow drawer (^) by default.\n" +
-        "To keep WindowsCM always visible next to the clock, click the ^ chevron on your taskbar " +
-        "and drag the WindowsCM icon onto the taskbar (or enable it in Windows Settings > Personalization > Taskbar > Other system tray icons).\n" +
-        "Programmatic promotion is not attempted by design, adhering to Windows platform rules.";
+        "No Windows 11, novos ícones da bandeja aparecem na gaveta de opções ocultas (^) por padrão.\n" +
+        "Para manter o WindowsCM sempre visível ao lado do relógio, clique no ícone ^ na barra de tarefas " +
+        "e arraste o ícone do WindowsCM para a barra de tarefas (ou ative-o em Configurações do Windows > Personalização > Barra de tarefas > Outros ícones da bandeja do sistema).\n" +
+        "A promoção programática não é realizada por padrão, respeitando as regras da plataforma Windows.";
 
     public const string GuidanceSummary =
-        "Drag WindowsCM icon from overflow (^) to taskbar. Programmatic promotion is not attempted.";
+        "Arraste o ícone do WindowsCM da gaveta (^) para a barra de tarefas. Promoção programática não é realizada por padrão.";
 }

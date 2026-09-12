@@ -11,33 +11,32 @@ public sealed class PopupSizingTests
     [Fact]
     public void FixedWidth_MatchesXamlCardStrip()
     {
-        // PopupWindow.xaml Width="380" — the shell enforces this constant
-        // so right-edge clamping never drifts with measured content width.
-        Assert.Equal(380, PopupSizing.FixedWidth);
+        // PopupWindow.xaml Width="880" (horizontal card layout).
+        Assert.Equal(880, PopupSizing.FixedWidth);
     }
 
     [Fact]
     public void MaxHeight_MatchesXamlWindow()
     {
-        // PopupWindow.xaml MaxHeight="520".
-        Assert.Equal(520, PopupSizing.MaxHeight);
+        // PopupWindow.xaml MaxHeight="320".
+        Assert.Equal(320, PopupSizing.MaxHeight);
     }
 
     [Fact]
     public void ClampHeight_PassesThroughBelowMax()
     {
-        Assert.Equal(300, PopupSizing.ClampHeight(300));
+        Assert.Equal(200, PopupSizing.ClampHeight(200));
     }
 
     [Fact]
     public void ClampHeight_ClampsAtMax()
     {
-        Assert.Equal(520, PopupSizing.ClampHeight(900));
+        Assert.Equal(320, PopupSizing.ClampHeight(900));
     }
 
     [Fact]
     public void ClampHeight_DeterministicForSameContent()
     {
-        Assert.Equal(PopupSizing.ClampHeight(412), PopupSizing.ClampHeight(412));
+        Assert.Equal(PopupSizing.ClampHeight(280), PopupSizing.ClampHeight(280));
     }
 }

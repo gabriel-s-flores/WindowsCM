@@ -36,17 +36,17 @@ public partial class SettingsWindow : Window
 
         OpenGestureBox.Text = settings.Shortcuts.OpenGesture;
         IncognitoGestureBox.Text = settings.Shortcuts.IncognitoGesture;
-        HotkeyStatus.Text = "Defaults: open Ctrl+Shift+V, incognito Ctrl+Shift+Alt+V. " +
-            "Win+V-style OS combos are rejected by rule.";
+        HotkeyStatus.Text = "Padrões: abrir com Ctrl+Shift+V, anônimo com Ctrl+Shift+Alt+V. " +
+            "Combinações com a tecla Win são reservadas pelo sistema operacional.";
 
         AutostartCheck.IsChecked = AutostartManager.IsEnabled(new RegistryRunKeyStore());
 
         var info = DiagnosticsInfo.Collect(settings, settingsPath);
         TrayGuidanceText.Text = info.TrayGuidance;
-        PathsText.Text = $"Data: {info.DataDir}\nConfig: {info.ConfigDir}\nCache: {info.CacheDir}\n" +
-            $"Database: {info.DatabasePath}\nActions: {info.ActionsPath}\nSettings: {info.SettingsPath}";
+        PathsText.Text = $"Dados: {info.DataDir}\nConfigurações: {info.ConfigDir}\nCache: {info.CacheDir}\n" +
+            $"Banco de dados: {info.DatabasePath}\nAções: {info.ActionsPath}\nConfiguração: {info.SettingsPath}";
         VersionsText.Text = $"WindowsCM {info.AppVersion} ({AboutCredits.LicenseId})\n" +
-            $".NET {info.DotNetVersion}\nSQLite client {info.SqliteVersion}";
+            $".NET {info.DotNetVersion}\nCliente SQLite {info.SqliteVersion}";
         CreditsText.Text = string.Join("\n", AboutCredits.Upstream
                 .Select(u => $"{u.Name} ({u.License}) — {u.Role}"))
             + "\n" + string.Join("\n", AboutCredits.Libraries
@@ -64,7 +64,7 @@ public partial class SettingsWindow : Window
     {
         if (_hotkeys is null || _hotkeyHwnd == IntPtr.Zero)
         {
-            HotkeyStatus.Text = "Hotkeys unavailable in this session.";
+            HotkeyStatus.Text = "Atalhos indisponíveis nesta sessão.";
             return;
         }
         var error = ShortcutSettings.ValidateGlobalGesture(gesture);
@@ -75,8 +75,8 @@ public partial class SettingsWindow : Window
         }
         var outcome = _hotkeys.Remap(_hotkeyHwnd, slot, HotkeyChord.Parse(gesture));
         HotkeyStatus.Text = outcome.Registered
-            ? $"Registered {gesture}."
-            : outcome.Diagnostics ?? "Remap failed.";
+            ? $"Atalho registrado: {gesture}."
+            : outcome.Diagnostics ?? "Falha ao remapear atalho.";
         if (outcome.Registered)
         {
             OpenGestureBox.Text = _settings.Shortcuts.OpenGesture;

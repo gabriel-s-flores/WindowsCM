@@ -25,11 +25,11 @@ public static class TrayMenu
 
     public static string LabelFor(TrayMenuItem item) => item switch
     {
-        TrayMenuItem.Open => "Open",
-        TrayMenuItem.Incognito => "Incognito",
-        TrayMenuItem.Clear => "Clear (keep pins and tags)",
-        TrayMenuItem.Settings => "Settings",
-        TrayMenuItem.Exit => "Exit",
+        TrayMenuItem.Open => "Abrir",
+        TrayMenuItem.Incognito => "Modo anônimo",
+        TrayMenuItem.Clear => "Limpar histórico (manter fixados e tags)",
+        TrayMenuItem.Settings => "Configurações",
+        TrayMenuItem.Exit => "Sair",
         _ => throw new ArgumentOutOfRangeException(nameof(item)),
     };
 }

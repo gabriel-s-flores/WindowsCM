@@ -11,22 +11,22 @@ public sealed class TrayOnboardingTests
     {
         Assert.False(string.IsNullOrWhiteSpace(TrayOnboarding.Guidance));
         Assert.Contains("Windows 11", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("overflow", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("drag", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("gaveta", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("arraste", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Guidance_ExplicitlyDisclaimsProgrammaticPromotion()
     {
-        Assert.Contains("promotion", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("promoção", TrayOnboarding.Guidance, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void GuidanceSummary_IsShortAndAccurate()
     {
         Assert.False(string.IsNullOrWhiteSpace(TrayOnboarding.GuidanceSummary));
-        Assert.Contains("drag", TrayOnboarding.GuidanceSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("overflow", TrayOnboarding.GuidanceSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("arraste", TrayOnboarding.GuidanceSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("gaveta", TrayOnboarding.GuidanceSummary, StringComparison.OrdinalIgnoreCase);
         Assert.True(TrayOnboarding.GuidanceSummary.Length < 120);
     }
 

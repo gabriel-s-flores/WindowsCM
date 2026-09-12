@@ -42,23 +42,53 @@ public static class PopupPlacement
         return (left, top);
     }
 
+    public static (double Left, double Top, double Width) PlaceHorizontalFill(
+        double cursorY,
+        double popupHeight,
+        WorkArea area,
+        double margin = PopupSizing.DefaultHorizontalMargin)
+    {
+        var width = CalculateHorizontalFillWidth(area, margin);
+        var left = area.Left + margin;
+        var top = cursorY + CursorOffset;
+        if (top + popupHeight > area.Bottom)
+        {
+            top = area.Bottom - popupHeight;
+        }
+        if (top < area.Top)
+        {
+            top = area.Top;
+        }
+        return (left, top, width);
+    }
+
+    public static double CalculateHorizontalFillWidth(
+        WorkArea area,
+        double margin = PopupSizing.DefaultHorizontalMargin)
+    {
+        var available = (area.Right - area.Left) - (2 * margin);
+        return Math.Max(PopupSizing.MinWidth, available);
+    }
+
     // Physical pixels to DIPs at the point of positioning
     // (CompositionTarget.TransformFromDevice parity).
     public static double ToDips(double pixels, double fromDeviceScale) => pixels * fromDeviceScale;
 }
 
-// Ticket 21: stable popup size on 1080p. The card strip keeps one fixed
-// width every open for the same history (XAML Width parity) so right-edge
-// clamping never drifts with measured content width; height is the measured
-// content clamped to the window max. The shell freezes SizeToContent after
-// Show so search filtering never resizes the window.
+// Ticket 21, 26 & 27: popup size on Windows 11. The horizontal card strip
+// fills the width of the display working area (with comfortable side margins)
+// in parity with Copyous horizontal layout; height is clamped to the window max (320px).
 public static class PopupSizing
 {
-    // PopupWindow.xaml Width="380" parity (enforced by the shell each open).
-    public const double FixedWidth = 380;
+    public const double DefaultHorizontalMargin = 20;
 
-    // PopupWindow.xaml MaxHeight="520" parity.
-    public const double MaxHeight = 520;
+    public const double MinWidth = 600;
+
+    // Baseline fallback width
+    public const double FixedWidth = 880;
+
+    // PopupWindow.xaml MaxHeight="320" parity.
+    public const double MaxHeight = 320;
 
     public static double ClampHeight(double measuredHeight) => Math.Min(measuredHeight, MaxHeight);
 }

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using WindowsCM.Core.Actions;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
@@ -36,10 +37,7 @@ public partial class PopupWindow : Window
     public void ShowAtCursor(bool incognito)
     {
         _isActivating = false;
-        // Re-enable auto-height for a fresh measure: the previous open
-        // froze SizeToContent=Manual so search filtering never resizes.
-        SizeToContent = SizeToContent.Height;
-        Width = PopupSizing.FixedWidth;
+        SizeToContent = SizeToContent.Manual;
         _model.Show(incognito);
         if (!_app.Settings.Behavior.RememberSearch)
         {
@@ -63,12 +61,6 @@ public partial class PopupWindow : Window
             Opacity = 1;
         }
         Activate();
-        // Freeze: filtering the search must not resize or reposition the
-        // window (ticket 21) — the list scrolls internally. Pin the
-        // laid-out size explicitly so Manual keeps the same size, no jump.
-        Width = ActualWidth;
-        Height = PopupSizing.ClampHeight(ActualHeight);
-        SizeToContent = SizeToContent.Manual;
         ItemsList.Focus();
     }
 
@@ -88,8 +80,36 @@ public partial class PopupWindow : Window
         ItemsList.ItemsSource = null;
         ItemsList.ItemsSource = _model.VisibleItems;
         SyncSelectionFromModel();
-        PinsButton.FontWeight = _model.PinsOnly ? FontWeights.Bold : FontWeights.Normal;
-        IncognitoButton.FontWeight = _model.IsIncognito ? FontWeights.Bold : FontWeights.Normal;
+        UpdateToggleButtons();
+    }
+
+    private void UpdateToggleButtons()
+    {
+        if (_model.PinsOnly)
+        {
+            PinsButton.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
+            PinsButton.Foreground = System.Windows.Media.Brushes.White;
+            PinsButton.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x90, 0xFF));
+        }
+        else
+        {
+            PinsButton.ClearValue(System.Windows.Controls.Button.BackgroundProperty);
+            PinsButton.ClearValue(System.Windows.Controls.Button.ForegroundProperty);
+            PinsButton.ClearValue(System.Windows.Controls.Button.BorderBrushProperty);
+        }
+
+        if (_model.IsIncognito)
+        {
+            IncognitoButton.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
+            IncognitoButton.Foreground = System.Windows.Media.Brushes.White;
+            IncognitoButton.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x90, 0xFF));
+        }
+        else
+        {
+            IncognitoButton.ClearValue(System.Windows.Controls.Button.BackgroundProperty);
+            IncognitoButton.ClearValue(System.Windows.Controls.Button.ForegroundProperty);
+            IncognitoButton.ClearValue(System.Windows.Controls.Button.BorderBrushProperty);
+        }
     }
 
     private void PlaceAtCursor(bool incognito)
@@ -108,16 +128,14 @@ public partial class PopupWindow : Window
         var cursorDips = transform.Transform(new System.Windows.Point(cursor.X, cursor.Y));
         var topLeft = transform.Transform(new System.Windows.Point(area.Left, area.Top));
         var bottomRight = transform.Transform(new System.Windows.Point(area.Right, area.Bottom));
-        // Post-layout ground truth (Show+UpdateLayout already ran, so the
-        // first open measures the same as later ones). Fallbacks keep the
-        // window visible if layout ever reports zero.
-        var placedWidth = ActualWidth > 0 ? ActualWidth : PopupSizing.FixedWidth;
         var placedHeight = PopupSizing.ClampHeight(ActualHeight > 0 ? ActualHeight : PopupSizing.MaxHeight);
-        var (left, top) = PopupPlacement.PlaceAtCursor(
-            cursorDips.X, cursorDips.Y, placedWidth, placedHeight,
-            new WorkArea(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y));
+        var workArea = new WorkArea(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y);
+        var (left, top, width) = PopupPlacement.PlaceHorizontalFill(
+            cursorDips.Y, placedHeight, workArea);
         Left = left;
         Top = top;
+        Width = width;
+        Height = placedHeight;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -154,6 +172,75 @@ public partial class PopupWindow : Window
     }
 
     private void OnSettingsClicked(object sender, RoutedEventArgs e) => _app.OpenSettings();
+
+    public static readonly DependencyProperty AnimatedOffsetProperty =
+        DependencyProperty.RegisterAttached(
+            "AnimatedOffset",
+            typeof(double),
+            typeof(PopupWindow),
+            new FrameworkPropertyMetadata(0.0, OnAnimatedOffsetChanged));
+
+    private static void OnAnimatedOffsetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ScrollViewer sv)
+        {
+            sv.ScrollToHorizontalOffset((double)e.NewValue);
+        }
+    }
+
+    private double _targetHorizontalOffset;
+    private bool _isScrollingAnimated;
+
+    private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (ItemsList == null) return;
+        var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
+        if (scrollViewer != null)
+        {
+            if (!_isScrollingAnimated)
+            {
+                _targetHorizontalOffset = scrollViewer.HorizontalOffset;
+            }
+
+            // 1 card width (250) + margin (10) = 260 DIPs per wheel notch
+            var deltaCards = e.Delta / 120.0;
+            _targetHorizontalOffset = Math.Clamp(
+                _targetHorizontalOffset - (deltaCards * 260.0),
+                0,
+                scrollViewer.ScrollableWidth);
+
+            var anim = new DoubleAnimation
+            {
+                From = scrollViewer.HorizontalOffset,
+                To = _targetHorizontalOffset,
+                Duration = TimeSpan.FromMilliseconds(200),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+
+            anim.Completed += (_, _) => _isScrollingAnimated = false;
+            _isScrollingAnimated = true;
+            scrollViewer.BeginAnimation(AnimatedOffsetProperty, anim);
+            e.Handled = true;
+        }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typed)
+            {
+                return typed;
+            }
+            var found = FindVisualChild<T>(child);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
 
     private void OnItemDoubleClicked(object sender, MouseButtonEventArgs e)
     {
@@ -386,7 +473,7 @@ public partial class PopupWindow : Window
             return;
         }
         var text = TextInputDialog.Prompt(
-            isTitle ? "Edit title" : "Edit item",
+            isTitle ? "Editar título" : "Editar conteúdo",
             isTitle ? item.Title ?? "" : item.Content,
             multiline: !isTitle);
         if (text is null)
@@ -405,26 +492,181 @@ public partial class PopupWindow : Window
         RefreshView();
     }
 
+    private void OnCardPinButtonClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ClipboardItem item })
+        {
+            _app.Store.SetPinned(item.Id, !item.Pinned);
+            _model.Refresh();
+            RefreshView();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCardDeleteButtonClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ClipboardItem item })
+        {
+            _app.Store.Delete(item.Id);
+            _model.Refresh();
+            RefreshView();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCardMenuButtonClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is ClipboardItem item)
+        {
+            ShowCardContextMenu(item, element);
+            e.Handled = true;
+        }
+    }
+
+    private void OnCardMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is ClipboardItem item)
+        {
+            ShowCardContextMenu(item, element);
+            e.Handled = true;
+        }
+    }
+
     private void ShowActionsMenu()
     {
-        if (_model.SelectedItem is not { } item)
+        if (_model.SelectedItem is { } item)
         {
-            return;
+            ShowCardContextMenu(item, ItemsList);
         }
-        var applicable = _app.Executor.Applicable(_app.Actions, item);
+    }
+
+    private void ShowCardContextMenu(ClipboardItem item, FrameworkElement target)
+    {
         var menu = new ContextMenu();
-        if (applicable.Count == 0)
+
+        var pasteItem = new MenuItem { Header = "Colar", InputGestureText = "Enter" };
+        pasteItem.Click += (_, _) =>
         {
-            menu.Items.Add(new MenuItem { Header = "No actions apply", IsEnabled = false });
-        }
-        foreach (var action in applicable)
+            var req = new ActivationRequest(item.Id, RunDefaultAction: false);
+            _isActivating = true;
+            _ = _app.ActivateAsync(req, shiftHeld: false);
+        };
+        menu.Items.Add(pasteItem);
+
+        var copyItem = new MenuItem { Header = "Copiar", InputGestureText = "Shift+Enter" };
+        copyItem.Click += (_, _) =>
         {
-            var captured = action;
-            var menuEntry = new MenuItem { Header = captured.Name };
-            menuEntry.Click += (_, _) => _ = _app.RunActionAsync(captured, item);
-            menu.Items.Add(menuEntry);
+            var req = new ActivationRequest(item.Id, RunDefaultAction: false);
+            _ = _app.ActivateAsync(req, shiftHeld: true);
+        };
+        menu.Items.Add(copyItem);
+
+        var pinItem = new MenuItem
+        {
+            Header = item.Pinned ? "Desafixar" : "Fixar",
+            InputGestureText = "Alt+P"
+        };
+        pinItem.Click += (_, _) =>
+        {
+            _app.Store.SetPinned(item.Id, !item.Pinned);
+            _model.Refresh();
+            RefreshView();
+        };
+        menu.Items.Add(pinItem);
+
+        menu.Items.Add(new Separator());
+
+        var applicable = _app.Executor.Applicable(_app.Actions, item);
+        if (applicable.Count > 0)
+        {
+            var actionsSubmenu = new MenuItem { Header = "Ações" };
+            foreach (var action in applicable)
+            {
+                var captured = action;
+                var actionEntry = new MenuItem { Header = captured.Name };
+                actionEntry.Click += (_, _) => _ = _app.RunActionAsync(captured, item);
+                actionsSubmenu.Items.Add(actionEntry);
+            }
+            menu.Items.Add(actionsSubmenu);
         }
-        menu.PlacementTarget = ItemsList;
+
+        var qrPayload = QrActions.Payload(item.Kind, item.Content);
+        if (qrPayload is not null)
+        {
+            var qrItem = new MenuItem { Header = "Gerar código QR", InputGestureText = "Ctrl+Q" };
+            qrItem.Click += (_, _) => _app.ShowQr(qrPayload);
+            menu.Items.Add(qrItem);
+        }
+
+        var tagsSubmenu = new MenuItem { Header = "Tags" };
+        var noneTag = new MenuItem { Header = "Nenhuma tag" };
+        noneTag.Click += (_, _) =>
+        {
+            _app.Store.SetTag(item.Id, null);
+            _model.Refresh();
+            RefreshView();
+        };
+        tagsSubmenu.Items.Add(noneTag);
+
+        for (int i = 0; i < ItemTags.All.Count; i++)
+        {
+            var tagHex = ItemTags.All[i];
+            var tagSlot = i + 1;
+            var tagItem = new MenuItem
+            {
+                Header = $"Tag {tagSlot} ({tagHex})",
+                IsChecked = string.Equals(item.Tag, tagHex, StringComparison.OrdinalIgnoreCase)
+            };
+            tagItem.Click += (_, _) =>
+            {
+                _app.Store.SetTag(item.Id, tagHex);
+                _model.Refresh();
+                RefreshView();
+            };
+            tagsSubmenu.Items.Add(tagItem);
+        }
+        menu.Items.Add(tagsSubmenu);
+
+        menu.Items.Add(new Separator());
+
+        var editTitleItem = new MenuItem { Header = "Editar título...", InputGestureText = "F2" };
+        editTitleItem.Click += (_, _) =>
+        {
+            var text = TextInputDialog.Prompt("Editar título", item.Title ?? "", multiline: false);
+            if (text is not null)
+            {
+                _app.Store.SetTitle(item.Id, string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+                _model.Refresh();
+                RefreshView();
+            }
+        };
+        menu.Items.Add(editTitleItem);
+
+        var editContentItem = new MenuItem { Header = "Editar conteúdo...", InputGestureText = "Ctrl+E" };
+        editContentItem.Click += (_, _) =>
+        {
+            var text = TextInputDialog.Prompt("Editar conteúdo", item.Content, multiline: true);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                _app.Store.TryUpdateContent(item.Id, item.Kind, text);
+                _model.Refresh();
+                RefreshView();
+            }
+        };
+        menu.Items.Add(editContentItem);
+
+        menu.Items.Add(new Separator());
+
+        var deleteItem = new MenuItem { Header = "Excluir", InputGestureText = "Delete" };
+        deleteItem.Click += (_, _) =>
+        {
+            _app.Store.Delete(item.Id);
+            _model.Refresh();
+            RefreshView();
+        };
+        menu.Items.Add(deleteItem);
+
+        menu.PlacementTarget = target;
         menu.IsOpen = true;
     }
 

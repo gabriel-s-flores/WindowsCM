@@ -80,7 +80,7 @@ public sealed class TrayControllerTests
     [Fact]
     public void Menu_Clear_KeepsPinsAndTagsByLabel()
     {
-        Assert.Contains("keep pins", TrayMenu.LabelFor(TrayMenuItem.Clear), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("manter fixados", TrayMenu.LabelFor(TrayMenuItem.Clear), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

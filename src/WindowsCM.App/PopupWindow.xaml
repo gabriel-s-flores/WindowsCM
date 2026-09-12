@@ -6,72 +6,272 @@
         xmlns:local="clr-namespace:WindowsCM.App"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
-        Width="380" MaxHeight="520" SizeToContent="Height"
+        Height="320" MaxHeight="340"
+        FontFamily="Segoe UI Variable Text, Segoe UI Emoji, Segoe UI, sans-serif"
         Deactivated="OnDeactivated" PreviewKeyDown="OnPreviewKeyDown" Loaded="OnLoaded">
   <Window.Resources>
     <local:TagBrushConverter x:Key="TagBrush" />
     <local:TitleLineConverter x:Key="TitleLine" />
     <local:KindLabelConverter x:Key="KindLabel" />
+    <local:KindIconConverter x:Key="KindIcon" />
+    <local:PreviewTextConverter x:Key="PreviewText" />
     <local:ImageThumbConverter x:Key="ImageThumb" />
+    <local:ImagePreviewVisibilityConverter x:Key="ImagePreviewVisibility" />
+    <local:CodePreviewVisibilityConverter x:Key="CodePreviewVisibility" />
+    <local:TextPreviewVisibilityConverter x:Key="TextPreviewVisibility" />
     <local:PinnedVisibilityConverter x:Key="PinnedVisibility" />
+    <local:RelativeTimeConverter x:Key="RelativeTime" />
+    <local:CharacterPreviewVisibilityConverter x:Key="CharacterPreviewVisibility" />
+    <local:CharacterCodeConverter x:Key="CharacterCode" />
+    <local:CardPinIconConverter x:Key="CardPinIcon" />
+    <local:CardPinBrushConverter x:Key="CardPinBrush" />
+
+    <Style x:Key="FluentIconButton" TargetType="Button">
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#E0E0E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="btnBorder" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="btnBorder" Property="Background" Value="#383838" />
+                <Setter TargetName="btnBorder" Property="BorderBrush" Value="#4F4F4F" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="btnBorder" Property="Background" Value="#252525" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="CardActionButton" TargetType="Button">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#8E8E93" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="btnBorder" Background="{TemplateBinding Background}"
+                    CornerRadius="4">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="btnBorder" Property="Background" Value="#444444" />
+                <Setter Property="Foreground" Value="White" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="btnBorder" Property="Background" Value="#252525" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
-  <Border Background="#36363A" CornerRadius="8" BorderBrush="#48484E"
-          BorderThickness="1" Padding="8">
-    <DockPanel>
-      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-        <TextBox x:Name="SearchBox" Width="190" Margin="0,0,6,0"
-                 ToolTip="Search (live)"
-                 TextChanged="OnSearchChanged" />
-        <Button x:Name="PinsButton" Content="Pinned" Margin="0,0,6,0"
-                ToolTip="Show only pins (Alt+P)" Click="OnPinsClicked" />
-        <Button x:Name="IncognitoButton" Content="Incognito" Margin="0,0,6,0"
-                ToolTip="Pause capture" Click="OnIncognitoClicked" />
-        <Button Content="Clear" Margin="0,0,6,0"
-                ToolTip="Clear history (keeps pins and tags)" Click="OnClearClicked" />
-        <Button Content="Settings" ToolTip="Open settings"
-                Click="OnSettingsClicked" />
-      </StackPanel>
+  <Border Background="#202020" CornerRadius="8" BorderBrush="#383838"
+          BorderThickness="1" Padding="12" HorizontalAlignment="Stretch">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="20" ShadowDepth="2" Opacity="0.45" Color="Black" />
+    </Border.Effect>
+    <DockPanel LastChildFill="True">
+      <!-- Header with search and action buttons -->
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12" LastChildFill="True">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <Button x:Name="PinsButton" Content="&#xE718;" Style="{StaticResource FluentIconButton}"
+                  Margin="0,0,6,0" ToolTip="Mostrar apenas fixados (Alt+P)" Click="OnPinsClicked" />
+          <Button x:Name="IncognitoButton" Content="&#xE727;" Style="{StaticResource FluentIconButton}"
+                  Margin="0,0,6,0" ToolTip="Modo anônimo / Pausar captura (Ctrl+Shift+Alt+V)" Click="OnIncognitoClicked" />
+          <Button Content="&#xE74D;" Style="{StaticResource FluentIconButton}"
+                  Margin="0,0,6,0" ToolTip="Limpar histórico (mantém fixados e tags)" Click="OnClearClicked" />
+          <Button Content="&#xE713;" Style="{StaticResource FluentIconButton}"
+                  ToolTip="Configurações" Click="OnSettingsClicked" />
+        </StackPanel>
+
+        <Border Background="#2B2B2B" BorderBrush="#383838" BorderThickness="1"
+                CornerRadius="6" Height="32" Width="320" HorizontalAlignment="Left" Padding="8,0">
+          <Grid VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="&#xE721;"
+                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="13" Foreground="#888888" VerticalAlignment="Center"
+                       Margin="0,0,8,0" />
+            <TextBox x:Name="SearchBox" Grid.Column="1" Background="Transparent"
+                     BorderThickness="0" Foreground="White" FontSize="13"
+                     VerticalAlignment="Center" CaretBrush="White"
+                     ToolTip="Pesquisar no histórico em tempo real"
+                     TextChanged="OnSearchChanged" />
+          </Grid>
+        </Border>
+      </DockPanel>
+
+      <!-- Horizontal Cards List -->
       <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
-               SelectionMode="Single" MaxHeight="420"
-               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               SelectionMode="Single"
+               HorizontalAlignment="Stretch"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto"
+               ScrollViewer.VerticalScrollBarVisibility="Disabled"
+               VirtualizingPanel.ScrollUnit="Pixel"
+               PreviewMouseWheel="OnItemsListPreviewMouseWheel"
                PreviewMouseLeftButtonUp="OnItemClicked"
                MouseDoubleClick="OnItemDoubleClicked">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <Border x:Name="CardBorder" Width="250" Height="240"
+                          Background="#2B2B2B" CornerRadius="8"
+                          BorderBrush="#383838" BorderThickness="1"
+                          Padding="10,8"
+                          MouseRightButtonUp="OnCardMouseRightButtonUp">
+                    <ContentPresenter />
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="CardBorder" Property="Background" Value="#333333" />
+                      <Setter TargetName="CardBorder" Property="BorderBrush" Value="#4A4A4A" />
+                    </Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                      <Setter TargetName="CardBorder" Property="BorderBrush" Value="#0078D4" />
+                      <Setter TargetName="CardBorder" Property="BorderThickness" Value="2" />
+                      <Setter TargetName="CardBorder" Property="Background" Value="#303030" />
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
           </Style>
         </ListBox.ItemContainerStyle>
         <ListBox.ItemTemplate>
           <DataTemplate DataType="{x:Type core:ClipboardItem}">
-            <Border Background="#47474C" CornerRadius="6" Padding="8,6">
-              <DockPanel>
-                <Rectangle DockPanel.Dock="Left" Width="4" Margin="0,0,8,0"
+            <DockPanel LastChildFill="True">
+              <!-- Top: Card Header with Quick Actions -->
+              <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
+                <Rectangle DockPanel.Dock="Left" Width="3" Height="14" RadiusX="1.5" RadiusY="1.5"
+                           Margin="0,0,6,0" VerticalAlignment="Center"
                            Fill="{Binding Tag, Converter={StaticResource TagBrush}}" />
-                <TextBlock DockPanel.Dock="Right" Text="Pinned" Foreground="#ED5B00"
-                           FontSize="11" Margin="8,0,0,0"
-                           Visibility="{Binding Pinned, Converter={StaticResource PinnedVisibility}}" />
-                <StackPanel>
-                  <TextBlock Text="{Binding Converter={StaticResource TitleLine}}"
-                             Foreground="White" FontSize="13"
-                             TextTrimming="CharacterEllipsis" MaxHeight="40" />
-                  <TextBlock Text="{Binding Kind, Converter={StaticResource KindLabel}}"
-                             Foreground="#AEAEB2" FontSize="11" />
-                  <Image Source="{Binding Content, Converter={StaticResource ImageThumb}}"
-                         MaxHeight="64" Stretch="Uniform" Margin="0,4,0,0">
-                    <Image.Style>
-                      <Style TargetType="Image">
-                        <Style.Triggers>
-                          <Trigger Property="Source" Value="{x:Null}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                          </Trigger>
-                        </Style.Triggers>
-                      </Style>
-                    </Image.Style>
-                  </Image>
+                <TextBlock DockPanel.Dock="Left" Text="{Binding Converter={StaticResource KindIcon}}"
+                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                           FontSize="12" Foreground="#A0A0A0" VerticalAlignment="Center"
+                           Margin="0,0,6,0" />
+
+                <!-- Right Side: Relative time + Quick Actions (Pin, Menu, Delete) -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding CapturedAt, Converter={StaticResource RelativeTime}}"
+                             Foreground="#777777" FontSize="10" VerticalAlignment="Center"
+                             Margin="0,0,4,0" />
+                  <Button Content="{Binding Pinned, Converter={StaticResource CardPinIcon}}"
+                          Foreground="{Binding Pinned, Converter={StaticResource CardPinBrush}}"
+                          Style="{StaticResource CardActionButton}"
+                          ToolTip="Fixar / Desafixar (Alt+P)"
+                          Click="OnCardPinButtonClicked" />
+                  <Button Content="&#xE712;"
+                          Style="{StaticResource CardActionButton}"
+                          ToolTip="Mais opções"
+                          Click="OnCardMenuButtonClicked" />
+                  <Button Content="&#xE74D;"
+                          Style="{StaticResource CardActionButton}"
+                          ToolTip="Excluir (Delete)"
+                          Click="OnCardDeleteButtonClicked" />
                 </StackPanel>
+
+                <!-- Title text -->
+                <TextBlock Text="{Binding Converter={StaticResource TitleLine}}"
+                           Foreground="White" FontSize="12" FontWeight="SemiBold"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </DockPanel>
-            </Border>
+
+              <!-- Bottom: Card Subtitle / Type -->
+              <TextBlock DockPanel.Dock="Bottom" Text="{Binding Converter={StaticResource KindLabel}}"
+                         Foreground="#8E8E93" FontSize="11" Margin="0,4,0,0"
+                         TextTrimming="CharacterEllipsis" />
+
+              <!-- Center: Card Body Preview -->
+              <Grid VerticalAlignment="Stretch">
+                <!-- Case 1: Image Preview (Direct image or local image file) -->
+                <Border Visibility="{Binding Converter={StaticResource ImagePreviewVisibility}}"
+                        Background="#1A1A1A" CornerRadius="6" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                  <Image Source="{Binding Converter={StaticResource ImageThumb}}"
+                         Stretch="Uniform" MaxHeight="145" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Case 2: Code Preview (Dark editor style, Cascadia Code, multiline) -->
+                <Border Visibility="{Binding Converter={StaticResource CodePreviewVisibility}}"
+                        Background="#181818" BorderBrush="#282828" BorderThickness="1"
+                        CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                  <TextBlock Text="{Binding Converter={StaticResource PreviewText}}"
+                             FontFamily="Cascadia Code, Consolas, Courier New, Segoe UI Emoji"
+                             FontSize="11" Foreground="#DCDCDC" TextWrapping="NoWrap"
+                             LineHeight="16" LineStackingStrategy="BlockLineHeight"
+                             MaxHeight="145" TextTrimming="CharacterEllipsis" />
+                </Border>
+
+                <!-- Case 3: Character / Emoji Preview (Prominent centered color emoji) -->
+                <Border Visibility="{Binding Converter={StaticResource CharacterPreviewVisibility}}"
+                        Background="#1C1C1C" BorderBrush="#2A2A2A" BorderThickness="1"
+                        CornerRadius="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                  <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Content}"
+                                 FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, Segoe UI Symbol"
+                                 FontSize="54" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Converter={StaticResource CharacterCode}}"
+                                 FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                 Foreground="#777777" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+
+                <!-- Case 4: Text / File / Other Preview (Wrapped text with color emoji support) -->
+                <Border Visibility="{Binding Converter={StaticResource TextPreviewVisibility}}"
+                        Background="#232323" BorderBrush="#2E2E2E" BorderThickness="1"
+                        CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                  <TextBlock Text="{Binding Converter={StaticResource PreviewText}}"
+                             FontFamily="Segoe UI Variable Text, Segoe UI Emoji, Segoe UI, sans-serif"
+                             FontSize="12" Foreground="#E0E0E0" TextWrapping="Wrap"
+                             LineHeight="17" LineStackingStrategy="BlockLineHeight"
+                             MaxHeight="145" TextTrimming="CharacterEllipsis" />
+                </Border>
+              </Grid>
+            </DockPanel>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>
