@@ -154,6 +154,14 @@ public static class ItemDisplayFormatter
             case ItemKind.Code:
             {
                 var lang = ExtractLanguageFromMetadata(item.MetadataJson);
+                if (string.IsNullOrEmpty(lang))
+                {
+                    var detected = Previews.CodeSyntaxTokenizer.DetectLanguage(item.Content);
+                    if (detected != "Código")
+                    {
+                        lang = detected;
+                    }
+                }
                 return !string.IsNullOrEmpty(lang) ? $"Código ({lang})" : "Código";
             }
 

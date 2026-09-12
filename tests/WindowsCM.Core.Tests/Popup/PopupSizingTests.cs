@@ -18,8 +18,8 @@ public sealed class PopupSizingTests
     [Fact]
     public void MaxHeight_MatchesXamlWindow()
     {
-        // PopupWindow.xaml MaxHeight="320".
-        Assert.Equal(320, PopupSizing.MaxHeight);
+        // PopupWindow.xaml MaxHeight="348" (ticket 29: scrollbar clearance).
+        Assert.Equal(348, PopupSizing.MaxHeight);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public sealed class PopupSizingTests
     [Fact]
     public void ClampHeight_ClampsAtMax()
     {
-        Assert.Equal(320, PopupSizing.ClampHeight(900));
+        Assert.Equal(348, PopupSizing.ClampHeight(900));
     }
 
     [Fact]

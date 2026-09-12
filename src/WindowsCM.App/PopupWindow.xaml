@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:WindowsCM.App"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
-        Height="320" MaxHeight="340"
+        Height="348" MaxHeight="360"
         FontFamily="Segoe UI Variable Text, Segoe UI Emoji, Segoe UI, sans-serif"
         Deactivated="OnDeactivated" PreviewKeyDown="OnPreviewKeyDown" Loaded="OnLoaded">
   <Window.Resources>
@@ -18,6 +18,12 @@
     <local:ImageThumbConverter x:Key="ImageThumb" />
     <local:ImagePreviewVisibilityConverter x:Key="ImagePreviewVisibility" />
     <local:CodePreviewVisibilityConverter x:Key="CodePreviewVisibility" />
+    <local:FilePreviewVisibilityConverter x:Key="FilePreviewVisibility" />
+    <local:FileIconConverter x:Key="FileIcon" />
+    <local:FileDisplayNameConverter x:Key="FileDisplayName" />
+    <local:FileDetailsSummaryConverter x:Key="FileDetailsSummary" />
+    <local:FileDirectorySummaryConverter x:Key="FileDirectorySummary" />
+    <local:FileListSummaryConverter x:Key="FileListSummary" />
     <local:TextPreviewVisibilityConverter x:Key="TextPreviewVisibility" />
     <local:PinnedVisibilityConverter x:Key="PinnedVisibility" />
     <local:RelativeTimeConverter x:Key="RelativeTime" />
@@ -26,11 +32,107 @@
     <local:CardPinIconConverter x:Key="CardPinIcon" />
     <local:CardPinBrushConverter x:Key="CardPinBrush" />
 
+    <!-- Fluent Horizontal ScrollBar Style -->
+    <Style x:Key="FluentHorizontalScrollBarThumb" TargetType="{x:Type Thumb}">
+      <Setter Property="OverridesDefaultStyle" Value="True" />
+      <Setter Property="IsTabStop" Value="False" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type Thumb}">
+            <Border x:Name="thumbBorder"
+                    Background="{DynamicResource ScrollBarThumbBrush}"
+                    CornerRadius="3"
+                    Height="6"
+                    VerticalAlignment="Center" />
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="thumbBorder" Property="Background" Value="{DynamicResource ScrollBarThumbHoverBrush}" />
+                <Setter TargetName="thumbBorder" Property="Height" Value="8" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ScrollBar}">
+      <Setter Property="SnapsToDevicePixels" Value="True" />
+      <Setter Property="OverridesDefaultStyle" Value="True" />
+      <Style.Triggers>
+        <Trigger Property="Orientation" Value="Horizontal">
+          <Setter Property="Height" Value="10" />
+          <Setter Property="MinHeight" Value="10" />
+          <Setter Property="Template">
+            <Setter.Value>
+              <ControlTemplate TargetType="{x:Type ScrollBar}">
+                <Grid Background="Transparent">
+                  <Track x:Name="PART_Track" IsDirectionReversed="False">
+                    <Track.Thumb>
+                      <Thumb Style="{StaticResource FluentHorizontalScrollBarThumb}" />
+                    </Track.Thumb>
+                  </Track>
+                </Grid>
+              </ControlTemplate>
+            </Setter.Value>
+          </Setter>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Fluent ContextMenu Styles -->
+    <Style TargetType="{x:Type ContextMenu}">
+      <Setter Property="Background" Value="{DynamicResource MenuBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MenuBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource MenuItemForegroundBrush}" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, sans-serif" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type ContextMenu}">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8"
+                    Padding="{TemplateBinding Padding}">
+              <Border.Effect>
+                <DropShadowEffect BlurRadius="16" ShadowDepth="2"
+                                  Opacity="{DynamicResource PopupShadowOpacity}"
+                                  Color="{DynamicResource PopupShadowColor}" />
+              </Border.Effect>
+              <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type MenuItem}">
+      <Setter Property="Foreground" Value="{DynamicResource MenuItemForegroundBrush}" />
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style TargetType="{x:Type Separator}">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Margin" Value="4,3" />
+      <Setter Property="Background" Value="{DynamicResource MenuSeparatorBrush}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type Separator}">
+            <Rectangle Height="{TemplateBinding Height}" Fill="{TemplateBinding Background}" Margin="{TemplateBinding Margin}" />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <Style x:Key="FluentIconButton" TargetType="Button">
       <Setter Property="Width" Value="32" />
       <Setter Property="Height" Value="32" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#E0E0E0" />
+      <Setter Property="Foreground" Value="{DynamicResource IconButtonForegroundBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
@@ -47,11 +149,11 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="btnBorder" Property="Background" Value="#383838" />
-                <Setter TargetName="btnBorder" Property="BorderBrush" Value="#4F4F4F" />
+                <Setter TargetName="btnBorder" Property="Background" Value="{DynamicResource IconButtonHoverBackgroundBrush}" />
+                <Setter TargetName="btnBorder" Property="BorderBrush" Value="{DynamicResource IconButtonHoverBorderBrush}" />
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="btnBorder" Property="Background" Value="#252525" />
+                <Setter TargetName="btnBorder" Property="Background" Value="{DynamicResource IconButtonPressedBackgroundBrush}" />
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -63,7 +165,7 @@
       <Setter Property="Width" Value="22" />
       <Setter Property="Height" Value="22" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#8E8E93" />
+      <Setter Property="Foreground" Value="{DynamicResource CardButtonForegroundBrush}" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
       <Setter Property="FontSize" Value="10" />
@@ -78,11 +180,11 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="btnBorder" Property="Background" Value="#444444" />
-                <Setter Property="Foreground" Value="White" />
+                <Setter TargetName="btnBorder" Property="Background" Value="{DynamicResource CardButtonHoverBackgroundBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource CardButtonHoverForegroundBrush}" />
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="btnBorder" Property="Background" Value="#252525" />
+                <Setter TargetName="btnBorder" Property="Background" Value="{DynamicResource CardButtonPressedBackgroundBrush}" />
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -90,10 +192,13 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Border Background="#202020" CornerRadius="8" BorderBrush="#383838"
+  <Border Background="{DynamicResource PopupBackgroundBrush}" CornerRadius="8"
+          BorderBrush="{DynamicResource PopupBorderBrush}"
           BorderThickness="1" Padding="12" HorizontalAlignment="Stretch">
     <Border.Effect>
-      <DropShadowEffect BlurRadius="20" ShadowDepth="2" Opacity="0.45" Color="Black" />
+      <DropShadowEffect BlurRadius="20" ShadowDepth="2"
+                        Opacity="{DynamicResource PopupShadowOpacity}"
+                        Color="{DynamicResource PopupShadowColor}" />
     </Border.Effect>
     <DockPanel LastChildFill="True">
       <!-- Header with search and action buttons -->
@@ -109,7 +214,8 @@
                   ToolTip="Configurações" Click="OnSettingsClicked" />
         </StackPanel>
 
-        <Border Background="#2B2B2B" BorderBrush="#383838" BorderThickness="1"
+        <Border Background="{DynamicResource SearchBackgroundBrush}"
+                BorderBrush="{DynamicResource SearchBorderBrush}" BorderThickness="1"
                 CornerRadius="6" Height="32" Width="320" HorizontalAlignment="Left" Padding="8,0">
           <Grid VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
@@ -118,11 +224,11 @@
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="&#xE721;"
                        FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                       FontSize="13" Foreground="#888888" VerticalAlignment="Center"
+                       FontSize="13" Foreground="{DynamicResource SearchIconBrush}" VerticalAlignment="Center"
                        Margin="0,0,8,0" />
             <TextBox x:Name="SearchBox" Grid.Column="1" Background="Transparent"
-                     BorderThickness="0" Foreground="White" FontSize="13"
-                     VerticalAlignment="Center" CaretBrush="White"
+                     BorderThickness="0" Foreground="{DynamicResource SearchForegroundBrush}" FontSize="13"
+                     VerticalAlignment="Center" CaretBrush="{DynamicResource SearchCaretBrush}"
                      ToolTip="Pesquisar no histórico em tempo real"
                      TextChanged="OnSearchChanged" />
           </Grid>
@@ -149,26 +255,26 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="Margin" Value="0,0,10,8" />
             <Setter Property="Template">
               <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
                   <Border x:Name="CardBorder" Width="250" Height="240"
-                          Background="#2B2B2B" CornerRadius="8"
-                          BorderBrush="#383838" BorderThickness="1"
+                          Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8"
+                          BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                           Padding="10,8"
                           MouseRightButtonUp="OnCardMouseRightButtonUp">
                     <ContentPresenter />
                   </Border>
                   <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                      <Setter TargetName="CardBorder" Property="Background" Value="#333333" />
-                      <Setter TargetName="CardBorder" Property="BorderBrush" Value="#4A4A4A" />
+                      <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource CardHoverBackgroundBrush}" />
+                      <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource CardHoverBorderBrush}" />
                     </Trigger>
                     <Trigger Property="IsSelected" Value="True">
-                      <Setter TargetName="CardBorder" Property="BorderBrush" Value="#0078D4" />
+                      <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource CardSelectedBorderBrush}" />
                       <Setter TargetName="CardBorder" Property="BorderThickness" Value="2" />
-                      <Setter TargetName="CardBorder" Property="Background" Value="#303030" />
+                      <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource CardSelectedBackgroundBrush}" />
                     </Trigger>
                   </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -186,13 +292,13 @@
                            Fill="{Binding Tag, Converter={StaticResource TagBrush}}" />
                 <TextBlock DockPanel.Dock="Left" Text="{Binding Converter={StaticResource KindIcon}}"
                            FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="12" Foreground="#A0A0A0" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource CardIconBrush}" VerticalAlignment="Center"
                            Margin="0,0,6,0" />
 
                 <!-- Right Side: Relative time + Quick Actions (Pin, Menu, Delete) -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                   <TextBlock Text="{Binding CapturedAt, Converter={StaticResource RelativeTime}}"
-                             Foreground="#777777" FontSize="10" VerticalAlignment="Center"
+                             Foreground="{DynamicResource CardTimeBrush}" FontSize="10" VerticalAlignment="Center"
                              Margin="0,0,4,0" />
                   <Button Content="{Binding Pinned, Converter={StaticResource CardPinIcon}}"
                           Foreground="{Binding Pinned, Converter={StaticResource CardPinBrush}}"
@@ -211,41 +317,43 @@
 
                 <!-- Title text -->
                 <TextBlock Text="{Binding Converter={StaticResource TitleLine}}"
-                           Foreground="White" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource CardTitleBrush}" FontSize="12" FontWeight="SemiBold"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </DockPanel>
 
               <!-- Bottom: Card Subtitle / Type -->
               <TextBlock DockPanel.Dock="Bottom" Text="{Binding Converter={StaticResource KindLabel}}"
-                         Foreground="#8E8E93" FontSize="11" Margin="0,4,0,0"
+                         Foreground="{DynamicResource CardSubtitleBrush}" FontSize="11" Margin="0,4,0,0"
                          TextTrimming="CharacterEllipsis" />
 
               <!-- Center: Card Body Preview -->
               <Grid VerticalAlignment="Stretch">
                 <!-- Case 1: Image Preview (Direct image or local image file) -->
                 <Border Visibility="{Binding Converter={StaticResource ImagePreviewVisibility}}"
-                        Background="#1A1A1A" CornerRadius="6" HorizontalAlignment="Stretch"
+                        Background="{DynamicResource PreviewImageBackgroundBrush}" CornerRadius="6" HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch">
                   <Image Source="{Binding Converter={StaticResource ImageThumb}}"
                          Stretch="Uniform" MaxHeight="145" HorizontalAlignment="Center"
                          VerticalAlignment="Center" />
                 </Border>
 
-                <!-- Case 2: Code Preview (Dark editor style, Cascadia Code, multiline) -->
+                <!-- Case 2: Code Preview (Dark editor style or clean light code box with syntax highlighting) -->
                 <Border Visibility="{Binding Converter={StaticResource CodePreviewVisibility}}"
-                        Background="#181818" BorderBrush="#282828" BorderThickness="1"
+                        Background="{DynamicResource PreviewCodeBackgroundBrush}"
+                        BorderBrush="{DynamicResource PreviewCodeBorderBrush}" BorderThickness="1"
                         CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch">
-                  <TextBlock Text="{Binding Converter={StaticResource PreviewText}}"
+                  <TextBlock local:SyntaxHighlightHelper.CodeContent="{Binding Content}"
                              FontFamily="Cascadia Code, Consolas, Courier New, Segoe UI Emoji"
-                             FontSize="11" Foreground="#DCDCDC" TextWrapping="NoWrap"
+                             FontSize="11" Foreground="{DynamicResource PreviewCodeForegroundBrush}" TextWrapping="NoWrap"
                              LineHeight="16" LineStackingStrategy="BlockLineHeight"
                              MaxHeight="145" TextTrimming="CharacterEllipsis" />
                 </Border>
 
                 <!-- Case 3: Character / Emoji Preview (Prominent centered color emoji) -->
                 <Border Visibility="{Binding Converter={StaticResource CharacterPreviewVisibility}}"
-                        Background="#1C1C1C" BorderBrush="#2A2A2A" BorderThickness="1"
+                        Background="{DynamicResource PreviewCharBackgroundBrush}"
+                        BorderBrush="{DynamicResource PreviewCharBorderBrush}" BorderThickness="1"
                         CornerRadius="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                   <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -254,19 +362,61 @@
                                  FontSize="54" HorizontalAlignment="Center" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding Converter={StaticResource CharacterCode}}"
                                  FontFamily="Cascadia Code, Consolas" FontSize="11"
-                                 Foreground="#777777" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                 Foreground="{DynamicResource PreviewCharTextBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
                     </StackPanel>
                   </Grid>
                 </Border>
 
-                <!-- Case 4: Text / File / Other Preview (Wrapped text with color emoji support) -->
+                <!-- Case 4: File / Files Preview (Windows System Icon + File details) -->
+                <Border Visibility="{Binding Converter={StaticResource FilePreviewVisibility}}"
+                        Background="{DynamicResource PreviewFileBackgroundBrush}"
+                        BorderBrush="{DynamicResource PreviewFileBorderBrush}" BorderThickness="1"
+                        CornerRadius="6" Padding="10,8" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                  <Grid VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="190">
+                      <!-- Windows System Icon (Large 32x32 / 48x48) -->
+                      <Image Source="{Binding Converter={StaticResource FileIcon}}"
+                             Width="40" Height="40" HorizontalAlignment="Center"
+                             RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,6" />
+
+                      <!-- Clean File Name or File Count -->
+                      <TextBlock Text="{Binding Converter={StaticResource FileDisplayName}}"
+                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                 FontSize="12" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource CardTitleBrush}"
+                                 TextAlignment="Center" HorizontalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" MaxWidth="180" />
+
+                      <!-- File Details (Type + Size or Count) -->
+                      <TextBlock Text="{Binding Converter={StaticResource FileDetailsSummary}}"
+                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                 FontSize="11"
+                                 Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
+                                 TextAlignment="Center" HorizontalAlignment="Center"
+                                 Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="180" />
+
+                      <!-- Optional Multi-file list preview or Directory indicator -->
+                      <TextBlock Text="{Binding Converter={StaticResource FileListSummary}}"
+                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                 FontSize="10"
+                                 Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
+                                 TextAlignment="Center" HorizontalAlignment="Center"
+                                 Margin="0,4,0,0" LineHeight="14" LineStackingStrategy="BlockLineHeight"
+                                 TextTrimming="CharacterEllipsis" MaxWidth="180" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+
+                <!-- Case 5: Text / Other Preview (Wrapped text with color emoji support) -->
                 <Border Visibility="{Binding Converter={StaticResource TextPreviewVisibility}}"
-                        Background="#232323" BorderBrush="#2E2E2E" BorderThickness="1"
+                        Background="{DynamicResource PreviewTextBackgroundBrush}"
+                        BorderBrush="{DynamicResource PreviewTextBorderBrush}" BorderThickness="1"
                         CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch">
                   <TextBlock Text="{Binding Converter={StaticResource PreviewText}}"
                              FontFamily="Segoe UI Variable Text, Segoe UI Emoji, Segoe UI, sans-serif"
-                             FontSize="12" Foreground="#E0E0E0" TextWrapping="Wrap"
+                             FontSize="12" Foreground="{DynamicResource PreviewTextForegroundBrush}" TextWrapping="Wrap"
                              LineHeight="17" LineStackingStrategy="BlockLineHeight"
                              MaxHeight="145" TextTrimming="CharacterEllipsis" />
                 </Border>

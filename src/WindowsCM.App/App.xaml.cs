@@ -47,6 +47,7 @@ public partial class App : System.Windows.Application
     private long _lastFeedbackId = -1;
     private DateTime _lastFeedbackAt;
     private SettingsWindow? _settingsWindow;
+    private Win32WindowsThemeDetector? _themeDetector;
 
     internal AppSettings Settings => _settings;
     internal IHistoryStore Store => _store ?? throw new InvalidOperationException("Services not built.");
@@ -209,7 +210,25 @@ public partial class App : System.Windows.Application
             _store, () => _settings.History.EndOfSession);
         _disposables.Add(janitor);
 
+        _themeDetector = new Win32WindowsThemeDetector();
+        _disposables.Add(_themeDetector);
+        _themeDetector.ThemeChanged += (_, scheme) => dispatcher.Invoke(() => UpdateTheme(scheme));
+        UpdateTheme(_themeDetector.DetectSystemScheme());
+
         WatchActionsFile();
+    }
+
+    private void UpdateTheme(ColorScheme systemScheme)
+    {
+        if (_popup is null)
+        {
+            return;
+        }
+        var effectiveScheme = _settings.Theme.Scheme == ColorScheme.System
+            ? systemScheme
+            : _settings.Theme.Scheme;
+        var isLight = effectiveScheme == ColorScheme.Light;
+        _popup.ApplyTheme(isLight);
     }
 
     private void OnHotkey(HotkeySlot slot)
@@ -419,6 +438,7 @@ public partial class App : System.Windows.Application
             _pasteOptions.PasteDelayMs = fresh.PasteDelayMs;
             _pasteOptions.SwapCopyPaste = fresh.SwapCopyPaste;
         }
+        UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
         _settingsWindow = null;
     }
 

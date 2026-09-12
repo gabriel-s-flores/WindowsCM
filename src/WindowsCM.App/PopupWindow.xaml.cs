@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -25,24 +26,46 @@ public partial class PopupWindow : Window
     private readonly App _app;
     private bool _syncingSelection;
     private bool _isActivating;
+    private long _lastShowTimestamp;
+    private long _lastHideTimestamp;
+    private bool _isLightTheme;
+    private bool _isContextMenuOpen;
+    private bool _isDialogOpen;
+    private readonly SmoothScrollController _scrollController = new();
+    private bool _isRenderingHooked;
+    private long _lastRenderTicks;
+
+    public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
+    public bool IsLightTheme => _isLightTheme;
 
     public PopupWindow(PopupViewModel model, App app)
     {
         _model = model;
         _app = app;
         InitializeComponent();
+        ApplyTheme(isLight: false);
         ItemsList.SelectionChanged += OnListSelectionChanged;
+    }
+
+    public void ApplyTheme(bool isLight)
+    {
+        _isLightTheme = isLight;
+        var themeDict = PopupThemeBrushes.CreateThemeDictionary(isLight);
+        Resources.MergedDictionaries.Clear();
+        Resources.MergedDictionaries.Add(themeDict);
+        UpdateToggleButtons();
     }
 
     public void ShowAtCursor(bool incognito)
     {
         _isActivating = false;
+        _lastShowTimestamp = Environment.TickCount64;
         SizeToContent = SizeToContent.Manual;
-        _model.Show(incognito);
-        if (!_app.Settings.Behavior.RememberSearch)
+        if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
         {
             _model.SetSearch("");
         }
+        _model.Show(incognito);
         SearchBox.Text = _model.SearchText;
         RefreshView();
         // Show before measuring: a never-shown Window lays out to zero, so
@@ -60,6 +83,8 @@ public partial class PopupWindow : Window
         {
             Opacity = 1;
         }
+        var handle = new WindowInteropHelper(this).EnsureHandle();
+        SetForegroundWindow(handle);
         Activate();
         ItemsList.Focus();
     }
@@ -67,6 +92,8 @@ public partial class PopupWindow : Window
     public new void Hide()
     {
         _isActivating = false;
+        _lastHideTimestamp = Environment.TickCount64;
+        StopSmoothScroll();
         base.Hide();
         if (!_app.Settings.Behavior.RememberSearch)
         {
@@ -142,7 +169,15 @@ public partial class PopupWindow : Window
     {
     }
 
-    private void OnDeactivated(object? sender, EventArgs e) => Hide();
+    private void OnDeactivated(object? sender, EventArgs e)
+    {
+        var elapsed = Environment.TickCount64 - _lastShowTimestamp;
+        if (!PopupDeactivationPolicy.ShouldHide(IsVisible, elapsed, _isContextMenuOpen, _isDialogOpen))
+        {
+            return;
+        }
+        Hide();
+    }
 
     private void OnSearchChanged(object sender, TextChangedEventArgs e)
     {
@@ -173,54 +208,72 @@ public partial class PopupWindow : Window
 
     private void OnSettingsClicked(object sender, RoutedEventArgs e) => _app.OpenSettings();
 
-    public static readonly DependencyProperty AnimatedOffsetProperty =
-        DependencyProperty.RegisterAttached(
-            "AnimatedOffset",
-            typeof(double),
-            typeof(PopupWindow),
-            new FrameworkPropertyMetadata(0.0, OnAnimatedOffsetChanged));
-
-    private static void OnAnimatedOffsetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is ScrollViewer sv)
-        {
-            sv.ScrollToHorizontalOffset((double)e.NewValue);
-        }
-    }
-
-    private double _targetHorizontalOffset;
-    private bool _isScrollingAnimated;
-
     private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (ItemsList == null) return;
         var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
         if (scrollViewer != null)
         {
-            if (!_isScrollingAnimated)
+            if (!_scrollController.IsAnimating)
             {
-                _targetHorizontalOffset = scrollViewer.HorizontalOffset;
+                _scrollController.SetImmediate(scrollViewer.HorizontalOffset, scrollViewer.ScrollableWidth);
             }
 
             // 1 card width (250) + margin (10) = 260 DIPs per wheel notch
             var deltaCards = e.Delta / 120.0;
-            _targetHorizontalOffset = Math.Clamp(
-                _targetHorizontalOffset - (deltaCards * 260.0),
-                0,
-                scrollViewer.ScrollableWidth);
+            _scrollController.AddDelta(-deltaCards * 260.0, scrollViewer.ScrollableWidth);
 
-            var anim = new DoubleAnimation
-            {
-                From = scrollViewer.HorizontalOffset,
-                To = _targetHorizontalOffset,
-                Duration = TimeSpan.FromMilliseconds(200),
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-
-            anim.Completed += (_, _) => _isScrollingAnimated = false;
-            _isScrollingAnimated = true;
-            scrollViewer.BeginAnimation(AnimatedOffsetProperty, anim);
+            StartSmoothScroll();
             e.Handled = true;
+        }
+    }
+
+    private void StartSmoothScroll()
+    {
+        if (!_isRenderingHooked)
+        {
+            _lastRenderTicks = Stopwatch.GetTimestamp();
+            CompositionTarget.Rendering += OnRenderFrame;
+            _isRenderingHooked = true;
+        }
+    }
+
+    private void StopSmoothScroll()
+    {
+        if (_isRenderingHooked)
+        {
+            CompositionTarget.Rendering -= OnRenderFrame;
+            _isRenderingHooked = false;
+        }
+    }
+
+    private void OnRenderFrame(object? sender, EventArgs e)
+    {
+        if (ItemsList == null)
+        {
+            StopSmoothScroll();
+            return;
+        }
+
+        var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
+        if (scrollViewer == null)
+        {
+            StopSmoothScroll();
+            return;
+        }
+
+        var nowTicks = Stopwatch.GetTimestamp();
+        var dt = (double)(nowTicks - _lastRenderTicks) / Stopwatch.Frequency;
+        _lastRenderTicks = nowTicks;
+
+        if (dt > 0.05) dt = 0.05;
+
+        var keepAnimating = _scrollController.Tick(dt);
+        scrollViewer.ScrollToHorizontalOffset(_scrollController.CurrentOffset);
+
+        if (!keepAnimating)
+        {
+            StopSmoothScroll();
         }
     }
 
@@ -262,8 +315,9 @@ public partial class PopupWindow : Window
         {
             return;
         }
+        var isInteractive = FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
         var index = RowIndexAt(e.OriginalSource as DependencyObject);
-        if (!PopupClickPolicy.ShouldActivate(IsVisible, index))
+        if (!PopupClickPolicy.ShouldActivate(IsVisible, index, isInteractive))
         {
             return;
         }
@@ -472,24 +526,36 @@ public partial class PopupWindow : Window
         {
             return;
         }
-        var text = TextInputDialog.Prompt(
-            isTitle ? "Editar título" : "Editar conteúdo",
-            isTitle ? item.Title ?? "" : item.Content,
-            multiline: !isTitle);
-        if (text is null)
+        _isDialogOpen = true;
+        try
         {
-            return;
+            var text = TextInputDialog.Prompt(
+                isTitle ? "Editar título" : "Editar conteúdo",
+                isTitle ? item.Title ?? "" : item.Content,
+                multiline: !isTitle);
+            if (text is null)
+            {
+                return;
+            }
+            if (isTitle)
+            {
+                _app.Store.SetTitle(item.Id, string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+            }
+            else if (!string.IsNullOrWhiteSpace(text))
+            {
+                _app.Store.TryUpdateContent(item.Id, item.Kind, text);
+            }
+            _model.Refresh();
+            RefreshView();
         }
-        if (isTitle)
+        finally
         {
-            _app.Store.SetTitle(item.Id, string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+            _isDialogOpen = false;
+            if (!IsActive && !_isActivating)
+            {
+                Hide();
+            }
         }
-        else if (!string.IsNullOrWhiteSpace(text))
-        {
-            _app.Store.TryUpdateContent(item.Id, item.Kind, text);
-        }
-        _model.Refresh();
-        RefreshView();
     }
 
     private void OnCardPinButtonClicked(object sender, RoutedEventArgs e)
@@ -543,6 +609,16 @@ public partial class PopupWindow : Window
     private void ShowCardContextMenu(ClipboardItem item, FrameworkElement target)
     {
         var menu = new ContextMenu();
+        _isContextMenuOpen = true;
+
+        menu.Closed += (_, _) =>
+        {
+            _isContextMenuOpen = false;
+            if (!IsActive && !_isActivating && !_isDialogOpen)
+            {
+                Hide();
+            }
+        };
 
         var pasteItem = new MenuItem { Header = "Colar", InputGestureText = "Enter" };
         pasteItem.Click += (_, _) =>
@@ -594,7 +670,18 @@ public partial class PopupWindow : Window
         if (qrPayload is not null)
         {
             var qrItem = new MenuItem { Header = "Gerar código QR", InputGestureText = "Ctrl+Q" };
-            qrItem.Click += (_, _) => _app.ShowQr(qrPayload);
+            qrItem.Click += (_, _) =>
+            {
+                _isDialogOpen = true;
+                try
+                {
+                    _app.ShowQr(qrPayload);
+                }
+                finally
+                {
+                    _isDialogOpen = false;
+                }
+            };
             menu.Items.Add(qrItem);
         }
 
@@ -632,12 +719,24 @@ public partial class PopupWindow : Window
         var editTitleItem = new MenuItem { Header = "Editar título...", InputGestureText = "F2" };
         editTitleItem.Click += (_, _) =>
         {
-            var text = TextInputDialog.Prompt("Editar título", item.Title ?? "", multiline: false);
-            if (text is not null)
+            _isDialogOpen = true;
+            try
             {
-                _app.Store.SetTitle(item.Id, string.IsNullOrWhiteSpace(text) ? null : text.Trim());
-                _model.Refresh();
-                RefreshView();
+                var text = TextInputDialog.Prompt("Editar título", item.Title ?? "", multiline: false);
+                if (text is not null)
+                {
+                    _app.Store.SetTitle(item.Id, string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+                    _model.Refresh();
+                    RefreshView();
+                }
+            }
+            finally
+            {
+                _isDialogOpen = false;
+                if (!IsActive && !_isActivating)
+                {
+                    Hide();
+                }
             }
         };
         menu.Items.Add(editTitleItem);
@@ -645,12 +744,24 @@ public partial class PopupWindow : Window
         var editContentItem = new MenuItem { Header = "Editar conteúdo...", InputGestureText = "Ctrl+E" };
         editContentItem.Click += (_, _) =>
         {
-            var text = TextInputDialog.Prompt("Editar conteúdo", item.Content, multiline: true);
-            if (!string.IsNullOrWhiteSpace(text))
+            _isDialogOpen = true;
+            try
             {
-                _app.Store.TryUpdateContent(item.Id, item.Kind, text);
-                _model.Refresh();
-                RefreshView();
+                var text = TextInputDialog.Prompt("Editar conteúdo", item.Content, multiline: true);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    _app.Store.TryUpdateContent(item.Id, item.Kind, text);
+                    _model.Refresh();
+                    RefreshView();
+                }
+            }
+            finally
+            {
+                _isDialogOpen = false;
+                if (!IsActive && !_isActivating)
+                {
+                    Hide();
+                }
             }
         };
         menu.Items.Add(editContentItem);
@@ -667,6 +778,14 @@ public partial class PopupWindow : Window
         menu.Items.Add(deleteItem);
 
         menu.PlacementTarget = target;
+        if (target is System.Windows.Controls.Button)
+        {
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        }
+        else
+        {
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        }
         menu.IsOpen = true;
     }
 
@@ -705,4 +824,8 @@ public partial class PopupWindow : Window
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out System.Drawing.Point point);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 }

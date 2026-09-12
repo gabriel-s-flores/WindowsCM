@@ -75,9 +75,10 @@ public static class PopupPlacement
     public static double ToDips(double pixels, double fromDeviceScale) => pixels * fromDeviceScale;
 }
 
-// Ticket 21, 26 & 27: popup size on Windows 11. The horizontal card strip
+// Ticket 21, 26, 27 & 29: popup size on Windows 11. The horizontal card strip
 // fills the width of the display working area (with comfortable side margins)
-// in parity with Copyous horizontal layout; height is clamped to the window max (320px).
+// in parity with Copyous horizontal layout; height is clamped to the window max (348px)
+// ensuring ample clearance for cards and horizontal scrollbar without clipping.
 public static class PopupSizing
 {
     public const double DefaultHorizontalMargin = 20;
@@ -87,8 +88,8 @@ public static class PopupSizing
     // Baseline fallback width
     public const double FixedWidth = 880;
 
-    // PopupWindow.xaml MaxHeight="320" parity.
-    public const double MaxHeight = 320;
+    // PopupWindow.xaml MaxHeight="348" parity (240 card + 44 header + 24 padding + 40 scrollbar/breathing room).
+    public const double MaxHeight = 348;
 
     public static double ClampHeight(double measuredHeight) => Math.Min(measuredHeight, MaxHeight);
 }

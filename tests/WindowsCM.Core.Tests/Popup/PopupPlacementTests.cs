@@ -161,4 +161,24 @@ public sealed class PopupPlacementTests
 
         Assert.Equal(PopupSizing.MinWidth, width);
     }
+
+    [Fact]
+    public void PopupSizing_MaxHeight_ProvidesScrollbarClearance()
+    {
+        // Ticket 29: 240px card + 44px header + 24px padding + 40px scrollbar and breathing room = 348px
+        Assert.Equal(348, PopupSizing.MaxHeight);
+        Assert.Equal(348, PopupSizing.ClampHeight(400));
+        Assert.Equal(300, PopupSizing.ClampHeight(300));
+    }
+
+    [Fact]
+    public void PlaceHorizontalFill_WithMaxHeight_ClampsToWorkAreaBottom()
+    {
+        var (left, top, width) = PopupPlacement.PlaceHorizontalFill(1000, PopupSizing.MaxHeight, Area1080p, margin: 20);
+
+        Assert.Equal(20, left);
+        Assert.Equal(1880, width);
+        // 1032 - 348 = 684
+        Assert.Equal(684, top);
+    }
 }

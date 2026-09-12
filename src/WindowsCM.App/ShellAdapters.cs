@@ -147,7 +147,7 @@ public sealed class ShellPopup(PopupWindow window, Dispatcher dispatcher) : ITra
         {
             window.Hide();
         }
-        else
+        else if (!window.WasRecentlyHidden)
         {
             window.ShowAtCursor(incognito: false);
         }

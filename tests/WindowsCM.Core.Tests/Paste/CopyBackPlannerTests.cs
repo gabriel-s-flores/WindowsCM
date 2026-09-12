@@ -88,6 +88,7 @@ public sealed class CopyBackPlannerTests
         var planned = CopyBackPlanner.Plan(Item(ItemKind.Files, content), _ => null);
 
         Assert.NotNull(planned);
+        Assert.Null(planned.Text);
         Assert.Equal([@"C:\a.txt", @"C:\b.txt"], planned.FileLocalPaths);
     }
 

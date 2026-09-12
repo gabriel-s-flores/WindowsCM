@@ -17,6 +17,6 @@ namespace WindowsCM.Core.Popup;
 //   (no injection, no hide) while keeping every diagnostic visible.
 public static class PopupClickPolicy
 {
-    public static bool ShouldActivate(bool isVisible, int? clickedIndex) =>
-        isVisible && clickedIndex.HasValue && clickedIndex.Value >= 0;
+    public static bool ShouldActivate(bool isVisible, int? clickedIndex, bool isInteractiveControl = false) =>
+        isVisible && !isInteractiveControl && clickedIndex.HasValue && clickedIndex.Value >= 0;
 }

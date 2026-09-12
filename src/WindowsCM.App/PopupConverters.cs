@@ -2,11 +2,14 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
+using WindowsCM.Core.Previews;
 
 namespace WindowsCM.App;
 
@@ -203,7 +206,7 @@ internal sealed class CodePreviewVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Visibility converter for general text preview box (when not code, character or image).
+// Visibility converter for general text preview box (when not code, character, image or file).
 internal sealed class TextPreviewVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -212,6 +215,9 @@ internal sealed class TextPreviewVisibilityConverter : IValueConverter
         {
             if (item.Kind == ItemKind.Code) return Visibility.Collapsed;
             if (item.Kind == ItemKind.Character) return Visibility.Collapsed;
+            if (item.Kind == ItemKind.Image) return Visibility.Collapsed;
+            if (item.Kind == ItemKind.File) return Visibility.Collapsed;
+            if (item.Kind == ItemKind.Files) return Visibility.Collapsed;
             if (ItemDisplayFormatter.TryGetLocalImagePath(item) != null) return Visibility.Collapsed;
             return Visibility.Visible;
         }
@@ -322,4 +328,195 @@ internal sealed class CardPinBrushConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
+}
+
+// Visibility converter for file / files preview box (when not an image).
+internal sealed class FilePreviewVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ClipboardItem item)
+        {
+            if (item.Kind == ItemKind.Files) return Visibility.Visible;
+            if (item.Kind == ItemKind.File && ItemDisplayFormatter.TryGetLocalImagePath(item) == null)
+            {
+                return Visibility.Visible;
+            }
+        }
+        return Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// System icon converter for File / Files items.
+internal sealed class FileIconConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var isLarge = parameter is not "small";
+        if (value is ClipboardItem item)
+        {
+            var firstPath = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            return FileIconService.GetFileIcon(firstPath, isLarge);
+        }
+        if (value is string path)
+        {
+            return FileIconService.GetFileIcon(path, isLarge);
+        }
+        return null;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// Clean file name or multiple file count.
+internal sealed class FileDisplayNameConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ClipboardItem item)
+        {
+            var details = FileDisplayHelper.GetFileDetails(item);
+            return details?.FileName ?? "Arquivo";
+        }
+        return "";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// Subtitle/details for the file preview: e.g. "Documento PDF • 2,4 MB"
+internal sealed class FileDetailsSummaryConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ClipboardItem item)
+        {
+            var details = FileDisplayHelper.GetFileDetails(item);
+            if (details == null) return "";
+            if (details.IsMultiple)
+            {
+                return $"{details.FileCount} arquivos selecionados";
+            }
+            if (!string.IsNullOrEmpty(details.FormattedSize))
+            {
+                return $"{details.TypeLabel} • {details.FormattedSize}";
+            }
+            return details.TypeLabel;
+        }
+        return "";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// Directory path indicator: e.g. "📁 C:\Users\gabri\Documents"
+internal sealed class FileDirectorySummaryConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ClipboardItem item)
+        {
+            var details = FileDisplayHelper.GetFileDetails(item);
+            if (!string.IsNullOrEmpty(details?.DirectoryPath))
+            {
+                return "📁 " + details.DirectoryPath;
+            }
+        }
+        return "";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// Multi-file list preview (up to 3 files + count remaining)
+internal sealed class FileListSummaryConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ClipboardItem item)
+        {
+            var details = FileDisplayHelper.GetFileDetails(item);
+            if (details is { IsMultiple: true })
+            {
+                var take = details.Items.Take(3).Select(f => $"• {f.FileName}").ToList();
+                if (details.Items.Count > 3)
+                {
+                    take.Add($"• + {details.Items.Count - 3} outros arquivos...");
+                }
+                return string.Join("\n", take);
+            }
+        }
+        return "";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// Attached behavior to render highlighted code tokens in TextBlock Inlines.
+public static class SyntaxHighlightHelper
+{
+    public static readonly DependencyProperty CodeContentProperty =
+        DependencyProperty.RegisterAttached(
+            "CodeContent",
+            typeof(string),
+            typeof(SyntaxHighlightHelper),
+            new PropertyMetadata(null, OnCodeContentChanged));
+
+    public static string? GetCodeContent(DependencyObject obj) =>
+        (string?)obj.GetValue(CodeContentProperty);
+
+    public static void SetCodeContent(DependencyObject obj, string? value) =>
+        obj.SetValue(CodeContentProperty, value);
+
+    private static void OnCodeContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not TextBlock tb)
+        {
+            return;
+        }
+
+        tb.Inlines.Clear();
+        var rawCode = e.NewValue as string;
+        if (string.IsNullOrEmpty(rawCode))
+        {
+            return;
+        }
+
+        var tokens = CodeSyntaxTokenizer.Tokenize(rawCode, 8);
+        foreach (var token in tokens)
+        {
+            var run = new Run(token.Text);
+            var brushKey = token.Kind switch
+            {
+                CodeSyntaxTokenKind.Keyword => "CodeKeywordBrush",
+                CodeSyntaxTokenKind.Type => "CodeTypeBrush",
+                CodeSyntaxTokenKind.String => "CodeStringBrush",
+                CodeSyntaxTokenKind.Comment => "CodeCommentBrush",
+                CodeSyntaxTokenKind.Number => "CodeNumberBrush",
+                CodeSyntaxTokenKind.Operator => "CodeOperatorBrush",
+                _ => "PreviewCodeForegroundBrush"
+            };
+
+            run.SetResourceReference(TextElement.ForegroundProperty, brushKey);
+
+            if (token.Kind == CodeSyntaxTokenKind.Keyword)
+            {
+                run.FontWeight = FontWeights.SemiBold;
+            }
+            else if (token.Kind == CodeSyntaxTokenKind.Comment)
+            {
+                run.FontStyle = FontStyles.Italic;
+            }
+
+            tb.Inlines.Add(run);
+        }
+    }
 }

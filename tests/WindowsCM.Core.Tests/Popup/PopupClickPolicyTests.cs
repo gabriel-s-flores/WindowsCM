@@ -45,4 +45,15 @@ public sealed class PopupClickPolicyTests
         Assert.False(PopupClickPolicy.ShouldActivate(isVisible: true, clickedIndex: negativeIndex));
         Assert.False(PopupClickPolicy.ShouldActivate(isVisible: false, clickedIndex: negativeIndex));
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(5)]
+    public void ShouldActivate_WhenInteractiveControl_ReturnsFalse(int index)
+    {
+        // Ticket 29: Clicks on Pin button, Menu button, Delete button or other interactive
+        // controls inside the card must not trigger item activation/paste.
+        Assert.False(PopupClickPolicy.ShouldActivate(isVisible: true, clickedIndex: index, isInteractiveControl: true));
+    }
 }

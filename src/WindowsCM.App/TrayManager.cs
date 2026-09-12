@@ -21,7 +21,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
     private readonly Dispatcher _dispatcher;
     private readonly NotifyIcon _icon;
     private ToolStripMenuItem? _incognitoItem;
-    private readonly System.Windows.Forms.Timer _clickTimer;
     private readonly DispatcherTimer _flashTimer;
     private int _flashTicksLeft;
     private bool _disposed;
@@ -39,7 +38,7 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             Visible = true,
         };
         _icon.MouseClick += OnMouseClick;
-        _icon.DoubleClick += (_, _) => SingleToggle();
+        _icon.DoubleClick += (_, _) => _dispatcher.Invoke(_controller.OnDoubleClick);
 
         var menu = new ContextMenuStrip();
         foreach (var item in TrayMenu.All)
@@ -68,12 +67,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         };
         _icon.ContextMenuStrip = menu;
 
-        _clickTimer = new System.Windows.Forms.Timer
-        {
-            Interval = SystemInformation.DoubleClickTime,
-        };
-        _clickTimer.Tick += (_, _) => SingleToggle();
-
         _flashTimer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher)
         {
             Interval = TimeSpan.FromMilliseconds(CopyFeedbackService.FlashIntervalMs),
@@ -85,16 +78,8 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
     {
         if (e.Button == MouseButtons.Left)
         {
-            // Deferred: cancelled below if a double-click follows.
-            _clickTimer.Stop();
-            _clickTimer.Start();
+            _dispatcher.Invoke(_controller.OnLeftClick);
         }
-    }
-
-    private void SingleToggle()
-    {
-        _clickTimer.Stop();
-        _dispatcher.Invoke(_controller.OnLeftClick);
     }
 
     public void ShowBalloon(string title, string text) =>
@@ -142,8 +127,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         }
         _disposed = true;
         _flashTimer.Stop();
-        _clickTimer.Stop();
-        _clickTimer.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
     }
