@@ -137,6 +137,25 @@ public sealed class HotkeyServiceTests
     }
 
     [Fact]
+    public void Remap_OtherError_AlsoRestoresOld()
+    {
+        var settings = new MemoryHotkeySettings();
+        var registrar = new FakeRegistrar();
+        var service = new HotkeyService(registrar, settings);
+        service.RegisterAll(Hwnd);
+        registrar.FailWith[HotkeyDefaults.IdOpen] = 5;
+        registrar.Registers.Clear();
+
+        var outcome = service.Remap(Hwnd, HotkeySlot.Open, HotkeyChord.Parse("Ctrl+Alt+O"));
+
+        Assert.False(outcome.Registered);
+        Assert.False(outcome.Occupied);
+        Assert.Equal(HotkeyDefaults.OpenGesture, settings.OpenGesture);
+        Assert.Equal(2, registrar.Registers.Count);
+        Assert.Equal((uint)'V', registrar.Registers[1].Vk);
+    }
+
+    [Fact]
     public void Remap_Reserved_NeverTouchesRegistrar()
     {
         var settings = new MemoryHotkeySettings();

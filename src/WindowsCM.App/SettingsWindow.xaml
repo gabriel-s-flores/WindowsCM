@@ -833,51 +833,87 @@
           <!-- Card: Abrir Histórico -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+              <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,10">
                 <TextBlock Text="{DynamicResource Loc_SettingsShortcutCompactTitle}" FontWeight="SemiBold" FontSize="14"
                            Foreground="{DynamicResource CardTitleBrush}" />
-                <TextBlock Text="{DynamicResource Loc_SettingsShortcutCompactSubtitle}"
+                <TextBlock Text="{DynamicResource Loc_SettingsShortcutCompactSubtitle}" TextWrapping="Wrap"
                            FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" />
               </StackPanel>
-              <TextBox x:Name="OpenGestureBox" Grid.Column="1" Style="{StaticResource FluentTextBox}"
+              <TextBox x:Name="OpenGestureBox" Grid.Row="1" Grid.Column="0" Style="{StaticResource FluentTextBox}"
                        VerticalAlignment="Center" Margin="0,0,8,0" />
-              <Button Grid.Column="2" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShortcutApplyButton}"
-                      VerticalAlignment="Center" Click="OnApplyOpenGesture" />
+              <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShortcutApplyButton}"
+                      VerticalAlignment="Center" Margin="0,0,8,0" Click="OnApplyOpenGesture" />
+              <Button x:Name="OpenRecordButton" Grid.Row="1" Grid.Column="2" Style="{StaticResource FluentButton}"
+                      MinWidth="160" VerticalAlignment="Center" Tag="Open"
+                      ToolTip="{DynamicResource Loc_SettingsShortcutRecordTooltip}" Click="OnRecordGestureClicked">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE765;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13"
+                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                  <TextBlock Text="{DynamicResource Loc_SettingsShortcutRecordButton}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
             </Grid>
           </Border>
 
           <!-- Card: Modo Anônimo -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+              <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,10">
                 <TextBlock Text="{DynamicResource Loc_SettingsShortcutIncognitoTitle}" FontWeight="SemiBold" FontSize="14"
                            Foreground="{DynamicResource CardTitleBrush}" />
-                <TextBlock Text="{DynamicResource Loc_SettingsShortcutIncognitoSubtitle}"
+                <TextBlock Text="{DynamicResource Loc_SettingsShortcutIncognitoSubtitle}" TextWrapping="Wrap"
                            FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" />
               </StackPanel>
-              <TextBox x:Name="IncognitoGestureBox" Grid.Column="1" Style="{StaticResource FluentTextBox}"
+              <TextBox x:Name="IncognitoGestureBox" Grid.Row="1" Grid.Column="0" Style="{StaticResource FluentTextBox}"
                        VerticalAlignment="Center" Margin="0,0,8,0" />
-              <Button Grid.Column="2" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShortcutApplyButton}"
-                      VerticalAlignment="Center" Click="OnApplyIncognitoGesture" />
+              <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShortcutApplyButton}"
+                      VerticalAlignment="Center" Margin="0,0,8,0" Click="OnApplyIncognitoGesture" />
+              <Button x:Name="IncognitoRecordButton" Grid.Row="1" Grid.Column="2" Style="{StaticResource FluentButton}"
+                      MinWidth="160" VerticalAlignment="Center" Tag="Incognito"
+                      ToolTip="{DynamicResource Loc_SettingsShortcutRecordTooltip}" Click="OnRecordGestureClicked">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE765;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13"
+                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                  <TextBlock Text="{DynamicResource Loc_SettingsShortcutRecordButton}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
             </Grid>
           </Border>
 
-          <!-- Status Box -->
-          <Border Background="{DynamicResource PreviewCodeBackgroundBrush}"
-                  BorderBrush="{DynamicResource PreviewCodeBorderBrush}"
-                  BorderThickness="1" CornerRadius="6" Padding="12,10">
-            <TextBlock x:Name="HotkeyStatus" TextWrapping="Wrap" FontSize="11"
-                       Foreground="{DynamicResource CardSubtitleBrush}" />
+          <!-- Status Box: info / listening / saved / not saved -->
+          <Border x:Name="HotkeyStatusBox" BorderThickness="1" CornerRadius="6" Padding="12,10"
+                  Background="{DynamicResource PreviewCodeBackgroundBrush}"
+                  BorderBrush="{DynamicResource PreviewCodeBorderBrush}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock x:Name="HotkeyStatusIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                         VerticalAlignment="Top" Margin="0,1,10,0" />
+              <StackPanel Grid.Column="1">
+                <TextBlock x:Name="HotkeyStatusTitle" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                <TextBlock x:Name="HotkeyStatus" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,0" />
+              </StackPanel>
+            </Grid>
           </Border>
         </StackPanel>
 

@@ -153,6 +153,17 @@ public static class PopupThemeBrushes
             dict["IncognitoBorderGlowBrush"] = Brush(0xFF, 0xFF, 0xFF);
             dict["IncognitoActiveButtonBrush"] = Brush(0xFF, 0xFF, 0x00);
             dict["IncognitoActiveButtonBorderBrush"] = Brush(0xFF, 0xFF, 0xFF);
+
+            // Settings feedback: listening / saved / not saved (High Contrast)
+            dict["StatusListeningBackgroundBrush"] = Brush(0x00, 0x00, 0x00);
+            dict["StatusListeningBorderBrush"] = Brush(0x00, 0xFF, 0xFF);
+            dict["StatusListeningForegroundBrush"] = Brush(0x00, 0xFF, 0xFF);
+            dict["StatusSuccessBackgroundBrush"] = Brush(0x00, 0x00, 0x00);
+            dict["StatusSuccessBorderBrush"] = Brush(0x55, 0xFF, 0x55);
+            dict["StatusSuccessForegroundBrush"] = Brush(0x55, 0xFF, 0x55);
+            dict["StatusErrorBackgroundBrush"] = Brush(0x00, 0x00, 0x00);
+            dict["StatusErrorBorderBrush"] = Brush(0xFF, 0xFF, 0x00);
+            dict["StatusErrorForegroundBrush"] = Brush(0xFF, 0xFF, 0x00);
         }
         else if (scheme == ColorScheme.Light)
         {
@@ -266,6 +277,17 @@ public static class PopupThemeBrushes
             dict["IncognitoBorderGlowBrush"] = Brush(0x87, 0x64, 0xB8);
             dict["IncognitoActiveButtonBrush"] = Brush(0x7C, 0x3A, 0xED);
             dict["IncognitoActiveButtonBorderBrush"] = Brush(0x93, 0x33, 0xEA);
+
+            // Settings feedback: listening / saved / not saved (Light)
+            dict["StatusListeningBackgroundBrush"] = Brush(0xEF, 0xF6, 0xFC);
+            dict["StatusListeningBorderBrush"] = Brush(0x00, 0x78, 0xD4);
+            dict["StatusListeningForegroundBrush"] = Brush(0x00, 0x5A, 0x9E);
+            dict["StatusSuccessBackgroundBrush"] = Brush(0xDF, 0xF6, 0xDD);
+            dict["StatusSuccessBorderBrush"] = Brush(0x6B, 0xB7, 0x00);
+            dict["StatusSuccessForegroundBrush"] = Brush(0x0E, 0x70, 0x0E);
+            dict["StatusErrorBackgroundBrush"] = Brush(0xFD, 0xE7, 0xE9);
+            dict["StatusErrorBorderBrush"] = Brush(0xE8, 0x11, 0x23);
+            dict["StatusErrorForegroundBrush"] = Brush(0xC4, 0x2B, 0x1C);
         }
         else
         {
@@ -378,6 +400,17 @@ public static class PopupThemeBrushes
             dict["IncognitoBorderGlowBrush"] = Brush(0x93, 0x33, 0xEA);
             dict["IncognitoActiveButtonBrush"] = Brush(0x87, 0x64, 0xB8);
             dict["IncognitoActiveButtonBorderBrush"] = Brush(0xA8, 0x55, 0xF7);
+
+            // Settings feedback: listening / saved / not saved (Dark)
+            dict["StatusListeningBackgroundBrush"] = Brush(0x10, 0x2A, 0x40);
+            dict["StatusListeningBorderBrush"] = Brush(0x00, 0x78, 0xD4);
+            dict["StatusListeningForegroundBrush"] = Brush(0x60, 0xCD, 0xFF);
+            dict["StatusSuccessBackgroundBrush"] = Brush(0x13, 0x2E, 0x17);
+            dict["StatusSuccessBorderBrush"] = Brush(0x3F, 0x9A, 0x4A);
+            dict["StatusSuccessForegroundBrush"] = Brush(0x6C, 0xCB, 0x5F);
+            dict["StatusErrorBackgroundBrush"] = Brush(0x44, 0x27, 0x26);
+            dict["StatusErrorBorderBrush"] = Brush(0xC4, 0x2B, 0x1C);
+            dict["StatusErrorForegroundBrush"] = Brush(0xFF, 0x99, 0xA4);
         }
 
         return dict;

@@ -8,6 +8,11 @@ using System.Windows.Media.Animation;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
 using Orientation = System.Windows.Controls.Orientation;
+using Control = System.Windows.Controls.Control;
+using Key = System.Windows.Input.Key;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using KeyInterop = System.Windows.Input.KeyInterop;
+using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Hotkeys;
 using WindowsCM.Core.Lifecycle;
@@ -33,6 +38,18 @@ public partial class SettingsWindow : Window
     private ColorScheme _currentScheme;
     private bool _loading = true;
     private Button? _activeNavBtn;
+    private readonly HotkeyRecorder _recorder = new(KeyCodes.Layout);
+    private HotkeySlot _recordingSlot;
+    private Button? _recordingButton;
+    private object? _recordButtonContent;
+
+    private enum HotkeyStatusKind
+    {
+        Info,
+        Listening,
+        Success,
+        Error,
+    }
 
     public SettingsWindow(
         AppSettings settings,
@@ -100,7 +117,7 @@ public partial class SettingsWindow : Window
         // Shortcuts
         OpenGestureBox.Text = settings.Shortcuts.OpenGesture;
         IncognitoGestureBox.Text = settings.Shortcuts.IncognitoGesture;
-        HotkeyStatus.Text = LocalizationManager.Strings.SettingsShortcutStatusInfo;
+        ShowHotkeyInfo();
 
         // Layout & Placement
         LargeOrientationCombo.SelectedIndex = _settings.Dialog.Orientation == DialogOrientation.Vertical ? 1 : 0;
@@ -163,7 +180,8 @@ public partial class SettingsWindow : Window
             _ => strings.SettingsThemeStatusFluent,
         };
         HistoryLimitValueText.Text = strings.SettingsHistoryLimitBadge(_settings.History.MaxItems);
-        HotkeyStatus.Text = strings.SettingsShortcutStatusInfo;
+        StopRecording();
+        ShowHotkeyInfo();
         UpdateDiagnosticsTexts();
         PopulateUnifiedColorControls();
         UpdateMockPreview();
@@ -1432,37 +1450,270 @@ public partial class SettingsWindow : Window
     }
 
     // --- SHORTCUTS ---
+    // Two ways to change a global chord: type it and click Apply, or click
+    // Record, press the combination and release every key. Both end in
+    // Remap, and the status box always says whether it was saved.
 
     private void OnApplyOpenGesture(object sender, RoutedEventArgs e) =>
-        Remap(HotkeySlot.Open, OpenGestureBox.Text);
+        ApplyTypedGesture(HotkeySlot.Open, OpenGestureBox.Text);
 
     private void OnApplyIncognitoGesture(object sender, RoutedEventArgs e) =>
-        Remap(HotkeySlot.Incognito, IncognitoGestureBox.Text);
+        ApplyTypedGesture(HotkeySlot.Incognito, IncognitoGestureBox.Text);
 
-    private void Remap(HotkeySlot slot, string gesture)
+    private void ApplyTypedGesture(HotkeySlot slot, string gesture)
+    {
+        StopRecording();
+        if (!HotkeyChord.TryParse(gesture, out var chord) || chord is null)
+        {
+            ShowNotSaved(slot, LocalizationManager.Strings.SettingsShortcutErrorUnrecognized(gesture.Trim()));
+            return;
+        }
+        Remap(slot, chord);
+    }
+
+    private void Remap(HotkeySlot slot, HotkeyChord chord)
     {
         var strings = LocalizationManager.Strings;
         if (_hotkeys is null || _hotkeyHwnd == IntPtr.Zero)
         {
-            HotkeyStatus.Text = strings.SettingsShortcutStatusUnavailable;
+            ShowHotkeyStatus(HotkeyStatusKind.Error, strings.SettingsShortcutStatusNotSavedTitle,
+                strings.SettingsShortcutStatusUnavailable);
             return;
         }
-        var error = ShortcutSettings.ValidateGlobalGesture(gesture);
-        if (error is not null)
+        if (chord.FindProblem() is HotkeyProblem problem)
         {
-            HotkeyStatus.Text = error;
+            ShowNotSaved(slot, ProblemText(problem));
             return;
         }
-        var outcome = _hotkeys.Remap(_hotkeyHwnd, slot, HotkeyChord.Parse(gesture));
-        HotkeyStatus.Text = outcome.Registered
-            ? strings.SettingsShortcutStatusSuccess(gesture)
-            : outcome.Diagnostics ?? strings.SettingsShortcutStatusFailed;
-        if (outcome.Registered)
+        var outcome = _hotkeys.Remap(_hotkeyHwnd, slot, chord);
+        if (!outcome.Registered)
         {
-            OpenGestureBox.Text = _settings.Shortcuts.OpenGesture;
-            IncognitoGestureBox.Text = _settings.Shortcuts.IncognitoGesture;
+            ShowNotSaved(slot, outcome.Occupied
+                ? strings.SettingsShortcutErrorOccupied(chord.ToString())
+                : strings.SettingsShortcutStatusFailed);
+            return;
+        }
+        OpenGestureBox.Text = _settings.Shortcuts.OpenGesture;
+        IncognitoGestureBox.Text = _settings.Shortcuts.IncognitoGesture;
+        ShowHotkeyStatus(HotkeyStatusKind.Success, strings.SettingsShortcutStatusSavedTitle,
+            strings.SettingsShortcutStatusSavedBody(SlotName(slot), chord.ToString()));
+    }
+
+    private void OnRecordGestureClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || !Enum.TryParse<HotkeySlot>(button.Tag as string, out var slot))
+        {
+            return;
+        }
+        if (_recordingButton == button)
+        {
+            // Second click on the same button cancels.
+            CancelRecording();
+            return;
+        }
+        StartRecording(slot, button);
+    }
+
+    private void StartRecording(HotkeySlot slot, Button button)
+    {
+        var strings = LocalizationManager.Strings;
+        StopRecording();
+        if (_hotkeys is null || _hotkeyHwnd == IntPtr.Zero)
+        {
+            ShowHotkeyStatus(HotkeyStatusKind.Error, strings.SettingsShortcutStatusNotSavedTitle,
+                strings.SettingsShortcutStatusUnavailable);
+            return;
+        }
+        // Free the active chords so pressing one reaches this window
+        // instead of opening the popup; StopRecording registers them again.
+        _hotkeys.UnregisterAll(_hotkeyHwnd);
+        _recorder.Start();
+        _recordingSlot = slot;
+        _recordingButton = button;
+        _recordButtonContent = button.Content;
+        button.SetResourceReference(Control.BackgroundProperty, "StatusListeningBackgroundBrush");
+        button.SetResourceReference(Control.BorderBrushProperty, "StatusListeningBorderBrush");
+        ShowRecordingPreview(string.Empty);
+        button.Focus();
+        ShowHotkeyStatus(HotkeyStatusKind.Listening, strings.SettingsShortcutStatusListeningTitle(SlotName(slot)),
+            strings.SettingsShortcutStatusListeningBody);
+    }
+
+    private void ShowRecordingPreview(string preview)
+    {
+        if (_recordingButton is null)
+        {
+            return;
+        }
+        var text = new TextBlock
+        {
+            Text = preview.Length == 0 ? LocalizationManager.Strings.SettingsShortcutRecordListening : preview,
+            FontWeight = FontWeights.SemiBold,
+        };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "StatusListeningForegroundBrush");
+        _recordingButton.Content = text;
+    }
+
+    // Restores the Record button and re-registers the global chords.
+    private void StopRecording()
+    {
+        if (_recordingButton is null)
+        {
+            return;
+        }
+        _recorder.Stop();
+        _recordingButton.Content = _recordButtonContent;
+        _recordingButton.ClearValue(Control.BackgroundProperty);
+        _recordingButton.ClearValue(Control.BorderBrushProperty);
+        _recordingButton = null;
+        _recordButtonContent = null;
+        if (_hotkeys is not null && _hotkeyHwnd != IntPtr.Zero)
+        {
+            _hotkeys.RegisterAll(_hotkeyHwnd);
         }
     }
+
+    private void CancelRecording()
+    {
+        if (_recordingButton is null)
+        {
+            return;
+        }
+        StopRecording();
+        ShowHotkeyStatus(HotkeyStatusKind.Info, LocalizationManager.Strings.SettingsShortcutStatusCanceledTitle,
+            LocalizationManager.Strings.SettingsShortcutStatusKeepsPrevious(ActiveGesture(_recordingSlot)));
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (_recordingButton is null)
+        {
+            base.OnPreviewKeyDown(e);
+            return;
+        }
+        // Every key belongs to the recorder: no Tab focus moves, no Space/Enter clicks.
+        e.Handled = true;
+        OnRecordStep(_recorder.KeyDown(VirtualKeyOf(e)));
+    }
+
+    protected override void OnPreviewKeyUp(KeyEventArgs e)
+    {
+        if (_recordingButton is null)
+        {
+            base.OnPreviewKeyUp(e);
+            return;
+        }
+        e.Handled = true;
+        OnRecordStep(_recorder.KeyUp(VirtualKeyOf(e)));
+    }
+
+    protected override void OnPreviewMouseDown(MouseButtonEventArgs e)
+    {
+        // Clicking anywhere but the Record button being used cancels it.
+        if (_recordingButton is Button button
+            && !(e.OriginalSource is Visual source && (source == button || button.IsAncestorOf(source))))
+        {
+            CancelRecording();
+        }
+        base.OnPreviewMouseDown(e);
+    }
+
+    protected override void OnDeactivated(EventArgs e)
+    {
+        CancelRecording();
+        base.OnDeactivated(e);
+    }
+
+    private void OnRecordStep(HotkeyRecordStep step)
+    {
+        var strings = LocalizationManager.Strings;
+        var slot = _recordingSlot;
+        switch (step.Status)
+        {
+            case HotkeyRecordStatus.Listening:
+                ShowRecordingPreview(step.Preview);
+                break;
+            case HotkeyRecordStatus.ModifiersOnly:
+                ShowRecordingPreview(string.Empty);
+                ShowHotkeyStatus(HotkeyStatusKind.Listening, strings.SettingsShortcutStatusListeningTitle(SlotName(slot)),
+                    strings.SettingsShortcutStatusModifiersOnly(step.Preview));
+                break;
+            case HotkeyRecordStatus.Canceled:
+                CancelRecording();
+                break;
+            case HotkeyRecordStatus.Unsupported:
+                StopRecording();
+                ShowNotSaved(slot, strings.SettingsShortcutErrorUnsupportedKey);
+                break;
+            case HotkeyRecordStatus.Captured when step.Chord is not null:
+                StopRecording();
+                Remap(slot, step.Chord);
+                break;
+        }
+    }
+
+    private static uint VirtualKeyOf(KeyEventArgs e)
+    {
+        var key = e.Key switch
+        {
+            Key.System => e.SystemKey,
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.DeadCharProcessed => e.DeadCharProcessedKey,
+            _ => e.Key,
+        };
+        return (uint)KeyInterop.VirtualKeyFromKey(key);
+    }
+
+    private void ShowHotkeyInfo() =>
+        ShowHotkeyStatus(HotkeyStatusKind.Info, LocalizationManager.Strings.SettingsShortcutStatusInfoTitle,
+            LocalizationManager.Strings.SettingsShortcutStatusInfo);
+
+    private void ShowNotSaved(HotkeySlot slot, string reason)
+    {
+        var strings = LocalizationManager.Strings;
+        var body = _hotkeys is null ? reason : $"{reason} {strings.SettingsShortcutStatusKeepsPrevious(ActiveGesture(slot))}";
+        ShowHotkeyStatus(HotkeyStatusKind.Error, strings.SettingsShortcutStatusNotSavedTitle, body);
+    }
+
+    private void ShowHotkeyStatus(HotkeyStatusKind kind, string title, string body)
+    {
+        var (background, border, accent, glyph) = kind switch
+        {
+            HotkeyStatusKind.Listening => ("StatusListeningBackgroundBrush", "StatusListeningBorderBrush", "StatusListeningForegroundBrush", "\uE765"),
+            HotkeyStatusKind.Success => ("StatusSuccessBackgroundBrush", "StatusSuccessBorderBrush", "StatusSuccessForegroundBrush", "\uE73E"),
+            HotkeyStatusKind.Error => ("StatusErrorBackgroundBrush", "StatusErrorBorderBrush", "StatusErrorForegroundBrush", "\uE783"),
+            _ => ("PreviewCodeBackgroundBrush", "PreviewCodeBorderBrush", "CardTitleBrush", "\uE946"),
+        };
+        HotkeyStatusBox.SetResourceReference(Border.BackgroundProperty, background);
+        HotkeyStatusBox.SetResourceReference(Border.BorderBrushProperty, border);
+        HotkeyStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, accent);
+        HotkeyStatusTitle.SetResourceReference(TextBlock.ForegroundProperty, accent);
+        HotkeyStatus.SetResourceReference(TextBlock.ForegroundProperty,
+            kind == HotkeyStatusKind.Info ? "CardSubtitleBrush" : "CardTitleBrush");
+        HotkeyStatusIcon.Text = glyph;
+        HotkeyStatusTitle.Text = title;
+        HotkeyStatus.Text = body;
+    }
+
+    private string ActiveGesture(HotkeySlot slot)
+    {
+        if (_hotkeys is not null)
+        {
+            return (slot == HotkeySlot.Incognito ? _hotkeys.IncognitoChord : _hotkeys.OpenChord).ToString();
+        }
+        return slot == HotkeySlot.Incognito ? _settings.Shortcuts.IncognitoGesture : _settings.Shortcuts.OpenGesture;
+    }
+
+    private static string SlotName(HotkeySlot slot) => slot == HotkeySlot.Incognito
+        ? LocalizationManager.Strings.SettingsShortcutIncognitoTitle
+        : LocalizationManager.Strings.SettingsShortcutCompactTitle;
+
+    private static string ProblemText(HotkeyProblem problem) => problem switch
+    {
+        HotkeyProblem.WinKeyReserved => LocalizationManager.Strings.SettingsShortcutErrorWinKeyReserved,
+        HotkeyProblem.F12Reserved => LocalizationManager.Strings.SettingsShortcutErrorF12Reserved,
+        _ => LocalizationManager.Strings.SettingsShortcutErrorNeedsModifier,
+    };
 
     // --- FOLDERS ---
 
@@ -1489,6 +1740,8 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        // Never leave the global chords unregistered behind a closed window.
+        StopRecording();
         base.OnClosed(e);
         _onClosed();
     }

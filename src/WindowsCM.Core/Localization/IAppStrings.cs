@@ -321,10 +321,27 @@ public interface IAppStrings
     string SettingsShortcutIncognitoTitle { get; }
     string SettingsShortcutIncognitoSubtitle { get; }
     string SettingsShortcutApplyButton { get; }
+    string SettingsShortcutRecordButton { get; }
+    string SettingsShortcutRecordListening { get; }
+    string SettingsShortcutRecordTooltip { get; }
+    string SettingsShortcutStatusInfoTitle { get; }
     string SettingsShortcutStatusInfo { get; }
     string SettingsShortcutStatusUnavailable { get; }
-    string SettingsShortcutStatusSuccess(string gesture);
     string SettingsShortcutStatusFailed { get; }
+    string SettingsShortcutStatusListeningTitle(string shortcutName);
+    string SettingsShortcutStatusListeningBody { get; }
+    string SettingsShortcutStatusModifiersOnly(string modifiers);
+    string SettingsShortcutStatusCanceledTitle { get; }
+    string SettingsShortcutStatusSavedTitle { get; }
+    string SettingsShortcutStatusSavedBody(string shortcutName, string gesture);
+    string SettingsShortcutStatusNotSavedTitle { get; }
+    string SettingsShortcutStatusKeepsPrevious(string gesture);
+    string SettingsShortcutErrorUnrecognized(string gesture);
+    string SettingsShortcutErrorWinKeyReserved { get; }
+    string SettingsShortcutErrorF12Reserved { get; }
+    string SettingsShortcutErrorNeedsModifier { get; }
+    string SettingsShortcutErrorOccupied(string gesture);
+    string SettingsShortcutErrorUnsupportedKey { get; }
 
     // Settings Panel 5: About
     string SettingsSectionAboutTitle { get; }

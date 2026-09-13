@@ -84,6 +84,18 @@ public sealed class InstallerScriptTests
     }
 
     [Fact]
+    public void ShipsOnlyTheExe_SoPublishMustBundleNativeLibraries()
+    {
+        var iss = Script();
+        var csproj = RepoFiles.Read(Path.Combine("src", "WindowsCM.App", "WindowsCM.App.csproj"));
+
+        // The installer copies publish\WindowsCM.exe alone; native DLLs
+        // left beside it by the publish would be missing after install.
+        Assert.Contains("Source: \"publish\\{#AppExe}\"", iss);
+        Assert.Contains("<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>", csproj);
+    }
+
+    [Fact]
     public void Setup_UsesCustomAppIcon()
     {
         var iss = Script();

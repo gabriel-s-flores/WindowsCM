@@ -27,6 +27,9 @@ gitignored; only `installer/WindowsCM.iss` is tracked).
 
 - [ ] `dotnet publish <wpf-app> -c Release -r win-x64 --self-contained true
       /p:PublishSingleFile=true -o installer/publish` succeeds
+- [ ] `installer/publish/` holds no `*.dll` (natives bundled via
+      `IncludeNativeLibrariesForSelfExtract`) — the installer ships only
+      the exe, so a stray DLL there means the installed app won't start
 - [ ] Same for `-r win-arm64`
 - [ ] Portable zip (single exe + `LICENSE`) runs standalone from a
       non-`PATH` folder with no install, creates history on copy
