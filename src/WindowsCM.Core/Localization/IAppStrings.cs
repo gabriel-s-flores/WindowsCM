@@ -392,4 +392,33 @@ public interface IAppStrings
     string CliHelpText { get; }
     string ErrorSidDetermination { get; }
     string ErrorForwardFailed { get; }
+
+    // First-run welcome guide
+    string WelcomeWindowTitle { get; }
+    string WelcomeHeaderTitle { get; }
+    string WelcomeHeaderSubtitle { get; }
+    string WelcomeTrayTitle { get; }
+    string WelcomeTrayBody { get; }
+    string WelcomeTrayClicks { get; }
+    string WelcomeShortcutsTitle { get; }
+    string WelcomeShortcutOpenDescription { get; }
+    string WelcomeShortcutIncognitoDescription { get; }
+    string WelcomeShortcutsHint { get; }
+    string WelcomeFeaturesTitle { get; }
+    string WelcomeFeatureCardsTitle { get; }
+    string WelcomeFeatureCardsBody { get; }
+    string WelcomeFeaturePasteTitle { get; }
+    string WelcomeFeaturePasteBody { get; }
+    string WelcomeFeaturePinTitle { get; }
+    string WelcomeFeaturePinBody { get; }
+    string WelcomeFeatureIncognitoTitle { get; }
+    string WelcomeFeatureIncognitoBody { get; }
+    string WelcomeFeatureMobileTitle { get; }
+    string WelcomeFeatureMobileBody { get; }
+    string WelcomeFeatureCustomizeTitle { get; }
+    string WelcomeFeatureCustomizeBody { get; }
+    string WelcomeAutostartCheck { get; }
+    string WelcomeOpenSettingsButton { get; }
+    string WelcomeCloseButton { get; }
+    string SettingsShowWelcomeButton { get; }
 }

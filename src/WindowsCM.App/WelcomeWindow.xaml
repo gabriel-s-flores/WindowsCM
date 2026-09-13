@@ -1,0 +1,269 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<Window x:Class="WindowsCM.App.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource Loc_WelcomeWindowTitle}"
+        Icon="pack://application:,,,/Assets/app.ico"
+        Width="640" Height="760" MinWidth="500" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+        Background="{DynamicResource PopupBackgroundBrush}"
+        Foreground="{DynamicResource CardTitleBrush}">
+
+  <Window.Resources>
+    <Style x:Key="WelcomeButton" TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource CardTitleBrush}" />
+      <Setter Property="Padding" Value="16,8" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="border" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="border" Property="Background" Value="{DynamicResource IconButtonHoverBackgroundBrush}" />
+                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource IconButtonHoverBorderBrush}" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="border" Property="Background" Value="{DynamicResource IconButtonPressedBackgroundBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="WelcomePrimaryButton" TargetType="Button" BasedOn="{StaticResource WelcomeButton}">
+      <Setter Property="Background" Value="#0078D4" />
+      <Setter Property="BorderBrush" Value="#0067B8" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="border" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="border" Property="Background" Value="#1084D9" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="border" Property="Background" Value="#006CBE" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Section heading -->
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource CardTitleBrush}" />
+      <Setter Property="Margin" Value="0,24,0,10" />
+    </Style>
+
+    <!-- Keyboard key badge (shows the user's current chord) -->
+    <Style x:Key="KeyCap" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardHoverBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1,1,1,2" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="MinWidth" Value="150" />
+      <Setter Property="Margin" Value="0,0,14,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Feature tile -->
+    <Style x:Key="FeatureCard" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="0,0,10,10" />
+    </Style>
+    <Style x:Key="FeatureIcon" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="Foreground" Value="{DynamicResource StatusListeningForegroundBrush}" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+    <Style x:Key="FeatureTitle" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource CardTitleBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="FeatureBody" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource CardSubtitleBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Focusable="False">
+      <StackPanel Margin="32,28,22,12">
+
+        <!-- Header -->
+        <Grid Margin="0,0,10,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Image Source="pack://application:,,,/Assets/app.png" Width="56" Height="56"
+                 RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center" Margin="0,0,16,0" />
+          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock Text="{DynamicResource Loc_WelcomeHeaderTitle}" FontSize="24" FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{DynamicResource Loc_WelcomeHeaderSubtitle}" FontSize="13" TextWrapping="Wrap"
+                       Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,4,0,0" />
+          </StackPanel>
+        </Grid>
+
+        <!-- Tray callout: the one thing every new user needs to know -->
+        <Border Background="{DynamicResource StatusListeningBackgroundBrush}"
+                BorderBrush="{DynamicResource StatusListeningBorderBrush}" BorderThickness="1"
+                CornerRadius="10" Padding="18,16" Margin="0,24,10,0">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- Mimics the taskbar overflow button (^) the text refers to -->
+            <Border Width="40" Height="40" CornerRadius="8" VerticalAlignment="Top" Margin="0,2,16,0"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    BorderBrush="{DynamicResource StatusListeningBorderBrush}" BorderThickness="1">
+              <TextBlock Text="&#xE70E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                         Foreground="{DynamicResource StatusListeningForegroundBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="{DynamicResource Loc_WelcomeTrayTitle}" FontSize="15" FontWeight="SemiBold"
+                         TextWrapping="Wrap" Foreground="{DynamicResource StatusListeningForegroundBrush}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeTrayBody}" FontSize="12.5" TextWrapping="Wrap"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,6,0,0" LineHeight="19" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeTrayClicks}" FontSize="12.5" TextWrapping="Wrap"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,8,0,0" LineHeight="19" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Shortcuts (filled with the user's current chords) -->
+        <TextBlock Text="{DynamicResource Loc_WelcomeShortcutsTitle}" Style="{StaticResource SectionTitle}" />
+        <Grid Margin="0,0,10,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Border Style="{StaticResource KeyCap}" Margin="0,0,14,8">
+            <TextBlock x:Name="OpenGestureText" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="13"
+                       FontWeight="SemiBold" HorizontalAlignment="Center" />
+          </Border>
+          <TextBlock Grid.Column="1" Text="{DynamicResource Loc_WelcomeShortcutOpenDescription}" FontSize="12.5"
+                     TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,0,8" />
+          <Border Grid.Row="1" Style="{StaticResource KeyCap}">
+            <TextBlock x:Name="IncognitoGestureText" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="13"
+                       FontWeight="SemiBold" HorizontalAlignment="Center" />
+          </Border>
+          <TextBlock Grid.Row="1" Grid.Column="1" Text="{DynamicResource Loc_WelcomeShortcutIncognitoDescription}"
+                     FontSize="12.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </Grid>
+        <TextBlock Text="{DynamicResource Loc_WelcomeShortcutsHint}" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,10,10,0" />
+
+        <!-- Feature tour -->
+        <TextBlock Text="{DynamicResource Loc_WelcomeFeaturesTitle}" Style="{StaticResource SectionTitle}" />
+        <UniformGrid Columns="2">
+          <Border Style="{StaticResource FeatureCard}">
+            <StackPanel>
+              <TextBlock Text="&#xE8A9;" Style="{StaticResource FeatureIcon}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureCardsTitle}" Style="{StaticResource FeatureTitle}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureCardsBody}" Style="{StaticResource FeatureBody}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource FeatureCard}">
+            <StackPanel>
+              <TextBlock Text="&#xE721;" Style="{StaticResource FeatureIcon}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeaturePasteTitle}" Style="{StaticResource FeatureTitle}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeaturePasteBody}" Style="{StaticResource FeatureBody}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource FeatureCard}">
+            <StackPanel>
+              <TextBlock Text="&#xE718;" Style="{StaticResource FeatureIcon}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeaturePinTitle}" Style="{StaticResource FeatureTitle}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeaturePinBody}" Style="{StaticResource FeatureBody}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource FeatureCard}">
+            <StackPanel>
+              <TextBlock Text="&#xE72E;" Style="{StaticResource FeatureIcon}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureIncognitoTitle}" Style="{StaticResource FeatureTitle}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureIncognitoBody}" Style="{StaticResource FeatureBody}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource FeatureCard}">
+            <StackPanel>
+              <TextBlock Text="&#xE8EA;" Style="{StaticResource FeatureIcon}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureMobileTitle}" Style="{StaticResource FeatureTitle}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureMobileBody}" Style="{StaticResource FeatureBody}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource FeatureCard}">
+            <StackPanel>
+              <TextBlock Text="&#xE790;" Style="{StaticResource FeatureIcon}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureCustomizeTitle}" Style="{StaticResource FeatureTitle}" />
+              <TextBlock Text="{DynamicResource Loc_WelcomeFeatureCustomizeBody}" Style="{StaticResource FeatureBody}" />
+            </StackPanel>
+          </Border>
+        </UniformGrid>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Footer -->
+    <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}"
+            BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="32,14">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <CheckBox x:Name="AutostartCheck" VerticalAlignment="Center" Margin="0,0,16,0"
+                  Foreground="{DynamicResource CardTitleBrush}" Checked="OnAutostartChanged" Unchecked="OnAutostartChanged">
+          <TextBlock Text="{DynamicResource Loc_WelcomeAutostartCheck}" TextWrapping="Wrap" FontSize="12.5" />
+        </CheckBox>
+        <Button Grid.Column="1" Style="{StaticResource WelcomeButton}" Content="{DynamicResource Loc_WelcomeOpenSettingsButton}"
+                Margin="0,0,10,0" Click="OnOpenSettingsClicked" />
+        <Button Grid.Column="2" Style="{StaticResource WelcomePrimaryButton}" Content="{DynamicResource Loc_WelcomeCloseButton}"
+                MinWidth="110" IsDefault="True" IsCancel="True" Click="OnCloseClicked" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

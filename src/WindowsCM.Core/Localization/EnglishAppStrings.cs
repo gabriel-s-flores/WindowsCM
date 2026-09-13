@@ -401,4 +401,33 @@ public sealed class EnglishAppStrings : IAppStrings
         "--help     displays this help";
     public string ErrorSidDetermination => "Could not determine current user SID; exiting.";
     public string ErrorForwardFailed => "WindowsCM is not running and the command could not be delivered.";
+
+    // First-run welcome guide
+    public string WelcomeWindowTitle => "Welcome to WindowsCM";
+    public string WelcomeHeaderTitle => "Welcome to WindowsCM";
+    public string WelcomeHeaderSubtitle => "Everything you copy, saved and one shortcut away.";
+    public string WelcomeTrayTitle => "WindowsCM lives in the system tray";
+    public string WelcomeTrayBody => "There is no main window: WindowsCM runs quietly next to the clock and saves everything you copy. Windows 11 hides new icons, so click the ^ arrow at the right end of the taskbar to find it, then drag it onto the taskbar to keep it always visible.";
+    public string WelcomeTrayClicks => "Left-click the icon to open your history. Right-click it for the compact menu, incognito mode, settings and exit.";
+    public string WelcomeShortcutsTitle => "Open it from anywhere";
+    public string WelcomeShortcutOpenDescription => "Opens the compact menu right under your mouse, with search.";
+    public string WelcomeShortcutIncognitoDescription => "Opens incognito mode: new copies stay in memory only.";
+    public string WelcomeShortcutsHint => "You can change these keys anytime in Settings > Global Shortcuts.";
+    public string WelcomeFeaturesTitle => "What you can do";
+    public string WelcomeFeatureCardsTitle => "Rich previews";
+    public string WelcomeFeatureCardsBody => "Text, code, links, images, files, colors and emoji become cards with previews, so you find things at a glance.";
+    public string WelcomeFeaturePasteTitle => "Search and paste";
+    public string WelcomeFeaturePasteBody => "Type to filter. Enter pastes into the app you were using; Shift+Enter only copies.";
+    public string WelcomeFeaturePinTitle => "Pins and categories";
+    public string WelcomeFeaturePinBody => "Pin what matters so it is never cleared, and color files by category.";
+    public string WelcomeFeatureIncognitoTitle => "Incognito mode";
+    public string WelcomeFeatureIncognitoBody => "Copies made in incognito never touch the disk and vanish as soon as you leave it.";
+    public string WelcomeFeatureMobileTitle => "Phone ↔ PC";
+    public string WelcomeFeatureMobileBody => "Send items to your phone, or from your phone to the PC, with a QR code over your Wi-Fi. No account needed.";
+    public string WelcomeFeatureCustomizeTitle => "Make it yours";
+    public string WelcomeFeatureCustomizeBody => "Themes, layout, item colors, shortcuts and language are all in Settings.";
+    public string WelcomeAutostartCheck => "Start WindowsCM when I sign in to Windows";
+    public string WelcomeOpenSettingsButton => "Open Settings";
+    public string WelcomeCloseButton => "Got it";
+    public string SettingsShowWelcomeButton => "Show welcome guide";
 }

@@ -399,4 +399,33 @@ public sealed class PortugueseAppStrings : IAppStrings
         "--help     exibe esta ajuda";
     public string ErrorSidDetermination => "Não foi possível determinar o SID do usuário atual; encerrando.";
     public string ErrorForwardFailed => "O WindowsCM não está em execução e o comando não pôde ser entregue.";
+
+    // Guia de boas-vindas (primeira execução)
+    public string WelcomeWindowTitle => "Bem-vindo ao WindowsCM";
+    public string WelcomeHeaderTitle => "Bem-vindo ao WindowsCM";
+    public string WelcomeHeaderSubtitle => "Tudo o que você copia, salvo e a um atalho de distância.";
+    public string WelcomeTrayTitle => "O WindowsCM fica na bandeja do sistema";
+    public string WelcomeTrayBody => "Não há uma janela principal: o WindowsCM roda discretamente ao lado do relógio e salva tudo o que você copia. O Windows 11 esconde ícones novos, então clique na seta ^ no canto direito da barra de tarefas para encontrá-lo e arraste-o para a barra para deixá-lo sempre visível.";
+    public string WelcomeTrayClicks => "Clique com o botão esquerdo no ícone para abrir seu histórico. Clique com o botão direito para o menu compacto, o modo anônimo, as configurações e sair.";
+    public string WelcomeShortcutsTitle => "Abra de qualquer lugar";
+    public string WelcomeShortcutOpenDescription => "Abre o menu compacto logo abaixo do mouse, com busca.";
+    public string WelcomeShortcutIncognitoDescription => "Abre o modo anônimo: novas cópias ficam apenas na memória.";
+    public string WelcomeShortcutsHint => "Você pode trocar essas teclas quando quiser em Configurações > Atalhos Globais.";
+    public string WelcomeFeaturesTitle => "O que você pode fazer";
+    public string WelcomeFeatureCardsTitle => "Prévias completas";
+    public string WelcomeFeatureCardsBody => "Textos, códigos, links, imagens, arquivos, cores e emojis viram cartões com prévia, para você achar tudo num relance.";
+    public string WelcomeFeaturePasteTitle => "Busque e cole";
+    public string WelcomeFeaturePasteBody => "Digite para filtrar. Enter cola no aplicativo que você estava usando; Shift+Enter apenas copia.";
+    public string WelcomeFeaturePinTitle => "Fixados e categorias";
+    public string WelcomeFeaturePinBody => "Fixe o que importa para nunca ser apagado e dê cores aos arquivos por categoria.";
+    public string WelcomeFeatureIncognitoTitle => "Modo anônimo";
+    public string WelcomeFeatureIncognitoBody => "Cópias feitas no modo anônimo nunca vão para o disco e somem assim que você sai dele.";
+    public string WelcomeFeatureMobileTitle => "Celular ↔ PC";
+    public string WelcomeFeatureMobileBody => "Envie itens para o celular, ou do celular para o PC, com um código QR pela sua rede Wi-Fi. Sem precisar de conta.";
+    public string WelcomeFeatureCustomizeTitle => "Do seu jeito";
+    public string WelcomeFeatureCustomizeBody => "Temas, layout, cores dos itens, atalhos e idioma estão todos nas Configurações.";
+    public string WelcomeAutostartCheck => "Iniciar o WindowsCM ao entrar no Windows";
+    public string WelcomeOpenSettingsButton => "Abrir Configurações";
+    public string WelcomeCloseButton => "Entendi";
+    public string SettingsShowWelcomeButton => "Mostrar guia de boas-vindas";
 }

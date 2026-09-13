@@ -941,6 +941,8 @@
                          Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,6" />
               <TextBlock x:Name="TrayGuidanceText" TextWrapping="Wrap" FontSize="12"
                          Foreground="{DynamicResource CardSubtitleBrush}" />
+              <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShowWelcomeButton}"
+                      HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnShowWelcomeClicked" />
             </StackPanel>
           </Border>
 

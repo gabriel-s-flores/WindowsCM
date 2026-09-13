@@ -27,8 +27,10 @@ public sealed class AppSettings
     public PasteSettings Paste { get; set; } = new();
     public ItemColorSettings ItemColors { get; set; } = new();
     public FileCategorySettings FileCategories { get; set; } = new();
+    public OnboardingSettings Onboarding { get; set; } = new();
 
-    public static AppSettings Default() => new();
+    // A brand-new profile: the only state that shows the welcome guide.
+    public static AppSettings Default() => new() { Onboarding = new() { WelcomeShown = false } };
 
     public void ClampAll()
     {
@@ -54,6 +56,7 @@ public sealed class AppSettings
         Paste ??= new();
         ItemColors ??= new();
         FileCategories ??= new();
+        Onboarding ??= new();
         if (!Enum.IsDefined(typeof(AppLanguage), Language))
         {
             Language = AppLanguage.System;
