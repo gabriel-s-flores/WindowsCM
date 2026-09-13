@@ -324,10 +324,27 @@ public sealed class PortugueseAppStrings : IAppStrings
     public string SettingsShortcutIncognitoTitle => "Histórico Anônimo (Privado)";
     public string SettingsShortcutIncognitoSubtitle => "Abre o menu compacto sob o cursor em modo anônimo, suspendendo gravações persistentes (Padrão: Ctrl+Shift+Alt+V).";
     public string SettingsShortcutApplyButton => "Aplicar";
-    public string SettingsShortcutStatusInfo => "Padrões recomendados: Ctrl+Shift+V para menu compacto sob o mouse e Ctrl+Shift+Alt+V para anônimo. Combinações com a tecla Windows são reservadas pelo sistema.";
+    public string SettingsShortcutRecordButton => "Gravar";
+    public string SettingsShortcutRecordListening => "Pressione as teclas…";
+    public string SettingsShortcutRecordTooltip => "Clique, pressione a nova combinação e solte todas as teclas para salvá-la.";
+    public string SettingsShortcutStatusInfoTitle => "Como alterar um atalho";
+    public string SettingsShortcutStatusInfo => "Clique em Gravar e pressione a nova combinação (ex.: Ctrl+Shift+V ou Ctrl+Alt+Ç), depois solte as teclas para salvá-la. Você também pode digitá-la no campo e clicar em Aplicar. Qualquer tecla do seu teclado funciona; combinações com a tecla Windows são reservadas pelo sistema.";
     public string SettingsShortcutStatusUnavailable => "Atalhos indisponíveis nesta sessão.";
-    public string SettingsShortcutStatusSuccess(string gesture) => $"Atalho registrado com sucesso: {gesture}.";
     public string SettingsShortcutStatusFailed => "Falha ao remapear atalho.";
+    public string SettingsShortcutStatusListeningTitle(string shortcutName) => $"Aguardando novo atalho: {shortcutName}";
+    public string SettingsShortcutStatusListeningBody => "Segure Ctrl, Shift ou Alt e pressione uma tecla, depois solte tudo para salvar. Pressione Esc para cancelar.";
+    public string SettingsShortcutStatusModifiersOnly(string modifiers) => $"{modifiers} sozinho não é um atalho. Segure e pressione também uma letra, número ou símbolo.";
+    public string SettingsShortcutStatusCanceledTitle => "Gravação cancelada";
+    public string SettingsShortcutStatusSavedTitle => "Atalho salvo";
+    public string SettingsShortcutStatusSavedBody(string shortcutName, string gesture) => $"{shortcutName} agora abre com {gesture}.";
+    public string SettingsShortcutStatusNotSavedTitle => "Atalho não salvo";
+    public string SettingsShortcutStatusKeepsPrevious(string gesture) => $"{gesture} continua sendo o atalho ativo.";
+    public string SettingsShortcutErrorUnrecognized(string gesture) => $"\"{gesture}\" não é uma combinação válida. Digite como Ctrl+Shift+V (qualquer tecla do seu teclado funciona, ex.: Ctrl+Alt+Ç) ou use Gravar.";
+    public string SettingsShortcutErrorWinKeyReserved => "Combinações com a tecla Windows são reservadas pelo sistema.";
+    public string SettingsShortcutErrorF12Reserved => "F12 é reservada pelo Windows para depuradores.";
+    public string SettingsShortcutErrorNeedsModifier => "Adicione pelo menos um modificador (Ctrl, Shift ou Alt). Uma tecla sozinha bloquearia a digitação normal.";
+    public string SettingsShortcutErrorOccupied(string gesture) => $"{gesture} já está em uso por outro aplicativo. Feche esse aplicativo ou escolha outra combinação.";
+    public string SettingsShortcutErrorUnsupportedKey => "Essa tecla não pode ser usada em um atalho global. Tente uma letra, número, símbolo ou F1–F24.";
 
     // Settings Panel 5: About
     public string SettingsSectionAboutTitle => "Sobre o WindowsCM";

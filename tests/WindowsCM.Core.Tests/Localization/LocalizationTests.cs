@@ -360,11 +360,38 @@ public class LocalizationTests
         Assert.Equal("Failed to delete some files.", en.SettingsClearCacheDefaultError);
         Assert.Equal("Falha na exclusão de alguns arquivos.", pt.SettingsClearCacheDefaultError);
 
-        Assert.Equal("Shortcut registered successfully: Ctrl+V.", en.SettingsShortcutStatusSuccess("Ctrl+V"));
-        Assert.Equal("Atalho registrado com sucesso: Ctrl+V.", pt.SettingsShortcutStatusSuccess("Ctrl+V"));
+        Assert.Equal("Open history now opens with Ctrl+Ç.", en.SettingsShortcutStatusSavedBody("Open history", "Ctrl+Ç"));
+        Assert.Equal("Abrir histórico agora abre com Ctrl+Ç.", pt.SettingsShortcutStatusSavedBody("Abrir histórico", "Ctrl+Ç"));
+
+        Assert.Equal("Ctrl+Shift+V is still the active shortcut.", en.SettingsShortcutStatusKeepsPrevious("Ctrl+Shift+V"));
+        Assert.Equal("Ctrl+Shift+V continua sendo o atalho ativo.", pt.SettingsShortcutStatusKeepsPrevious("Ctrl+Shift+V"));
 
         Assert.Equal("Failed to remap shortcut.", en.SettingsShortcutStatusFailed);
         Assert.Equal("Falha ao remapear atalho.", pt.SettingsShortcutStatusFailed);
+    }
+
+    [Fact]
+    public void ShortcutRecorderFeedback_Parity()
+    {
+        foreach (IAppStrings strings in new IAppStrings[] { new EnglishAppStrings(), new PortugueseAppStrings() })
+        {
+            Assert.Contains("Menu", strings.SettingsShortcutStatusListeningTitle("Menu"));
+            Assert.Contains("Ctrl+Shift", strings.SettingsShortcutStatusModifiersOnly("Ctrl+Shift"));
+            Assert.Contains("Menu", strings.SettingsShortcutStatusSavedBody("Menu", "Ctrl+Ç"));
+            Assert.Contains("Ctrl+Ç", strings.SettingsShortcutStatusSavedBody("Menu", "Ctrl+Ç"));
+            Assert.Contains("Ctrl+Shift+V", strings.SettingsShortcutStatusKeepsPrevious("Ctrl+Shift+V"));
+            Assert.Contains("Ctrl+Nope", strings.SettingsShortcutErrorUnrecognized("Ctrl+Nope"));
+            Assert.Contains("Ctrl+Ш", strings.SettingsShortcutErrorOccupied("Ctrl+Ш"));
+        }
+
+        var en = new EnglishAppStrings();
+        var pt = new PortugueseAppStrings();
+        Assert.Equal("Shortcut saved", en.SettingsShortcutStatusSavedTitle);
+        Assert.Equal("Atalho salvo", pt.SettingsShortcutStatusSavedTitle);
+        Assert.Equal("Shortcut not saved", en.SettingsShortcutStatusNotSavedTitle);
+        Assert.Equal("Atalho não salvo", pt.SettingsShortcutStatusNotSavedTitle);
+        Assert.Equal("Record", en.SettingsShortcutRecordButton);
+        Assert.Equal("Gravar", pt.SettingsShortcutRecordButton);
     }
 
     [Fact]

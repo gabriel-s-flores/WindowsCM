@@ -13,6 +13,11 @@
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Single-file publish leaves native libs (e_sqlite3, wpfgfx_cor3,
+         PresentationNative_cor3, ...) beside the exe unless bundled. The
+         installer ships only WindowsCM.exe, so without this the installed
+         app dies silently at startup. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

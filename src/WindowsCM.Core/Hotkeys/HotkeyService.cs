@@ -42,8 +42,9 @@ public sealed class HotkeyService
     }
 
     // Live remap: validate first (no Win/F12/bare keys), then
-    // unregister-before-reregister. When the new chord is occupied the old
-    // one is restored best-effort and the settings stay untouched.
+    // unregister-before-reregister. When the new chord fails (occupied or
+    // any other Win32 error) the old one is restored best-effort and the
+    // settings stay untouched.
     public HotkeyOutcome Remap(IntPtr hwnd, HotkeySlot slot, HotkeyChord chord)
     {
         var invalid = chord.Validate();
@@ -70,11 +71,8 @@ public sealed class HotkeyService
             _settings.Save();
             return outcome;
         }
-        if (outcome.Occupied)
-        {
-            // Best-effort restore so a failed remap never leaves the slot dead.
-            TryRegister(hwnd, id, current, slot);
-        }
+        // Best-effort restore so a failed remap never leaves the slot dead.
+        TryRegister(hwnd, id, current, slot);
         return outcome;
     }
 

@@ -322,10 +322,27 @@ public sealed class EnglishAppStrings : IAppStrings
     public string SettingsShortcutIncognitoTitle => "Incognito History (Private)";
     public string SettingsShortcutIncognitoSubtitle => "Opens the compact menu under cursor in incognito mode, suspending persistent saves (Default: Ctrl+Shift+Alt+V).";
     public string SettingsShortcutApplyButton => "Apply";
-    public string SettingsShortcutStatusInfo => "Recommended defaults: Ctrl+Shift+V for compact menu under mouse and Ctrl+Shift+Alt+V for incognito. Windows key combinations are reserved by the system.";
+    public string SettingsShortcutRecordButton => "Record";
+    public string SettingsShortcutRecordListening => "Press keys…";
+    public string SettingsShortcutRecordTooltip => "Click, press the new combination, then release all keys to save it.";
+    public string SettingsShortcutStatusInfoTitle => "How to change a shortcut";
+    public string SettingsShortcutStatusInfo => "Click Record and press the new combination (e.g. Ctrl+Shift+V or Ctrl+Alt+Ç), then release the keys to save it. You can also type it in the box and click Apply. Any key on your keyboard works; Windows key combinations are reserved by the system.";
     public string SettingsShortcutStatusUnavailable => "Shortcuts unavailable in this session.";
-    public string SettingsShortcutStatusSuccess(string gesture) => $"Shortcut registered successfully: {gesture}.";
     public string SettingsShortcutStatusFailed => "Failed to remap shortcut.";
+    public string SettingsShortcutStatusListeningTitle(string shortcutName) => $"Listening for a new shortcut: {shortcutName}";
+    public string SettingsShortcutStatusListeningBody => "Hold Ctrl, Shift or Alt and press a key, then release everything to save. Press Esc to cancel.";
+    public string SettingsShortcutStatusModifiersOnly(string modifiers) => $"{modifiers} alone isn't a shortcut. Hold it and also press a letter, number or symbol.";
+    public string SettingsShortcutStatusCanceledTitle => "Recording canceled";
+    public string SettingsShortcutStatusSavedTitle => "Shortcut saved";
+    public string SettingsShortcutStatusSavedBody(string shortcutName, string gesture) => $"{shortcutName} now opens with {gesture}.";
+    public string SettingsShortcutStatusNotSavedTitle => "Shortcut not saved";
+    public string SettingsShortcutStatusKeepsPrevious(string gesture) => $"{gesture} is still the active shortcut.";
+    public string SettingsShortcutErrorUnrecognized(string gesture) => $"\"{gesture}\" isn't a valid combination. Type it like Ctrl+Shift+V (any key on your keyboard works, e.g. Ctrl+Alt+Ç) or use Record.";
+    public string SettingsShortcutErrorWinKeyReserved => "Combinations with the Windows key are reserved by the system.";
+    public string SettingsShortcutErrorF12Reserved => "F12 is reserved by Windows for debuggers.";
+    public string SettingsShortcutErrorNeedsModifier => "Add at least one modifier (Ctrl, Shift or Alt). A single key would block normal typing.";
+    public string SettingsShortcutErrorOccupied(string gesture) => $"{gesture} is already used by another app. Close that app or pick another combination.";
+    public string SettingsShortcutErrorUnsupportedKey => "That key can't be used in a global shortcut. Try a letter, number, symbol or F1–F24.";
 
     // Settings Panel 5: About
     public string SettingsSectionAboutTitle => "About WindowsCM";

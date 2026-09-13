@@ -77,6 +77,12 @@ if (Test-Path $InstallerPublishDir) {
 }
 dotnet publish src/WindowsCM.App/WindowsCM.App.csproj -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true -o $InstallerPublishDir
 
+# O instalador copia apenas WindowsCM.exe; DLL solta no staging = app instalado nao abre
+$strayDlls = Get-ChildItem -Path $InstallerPublishDir -Filter *.dll
+if ($strayDlls) {
+    throw "DLLs nativas fora do exe single-file ($($strayDlls.Name -join ', ')). Verifique IncludeNativeLibrariesForSelfExtract no csproj."
+}
+
 $IssFile = Join-Path $RepoRoot "installer\WindowsCM.iss"
 Write-Host "==> Compilando instalador Inno Setup para $DistDir..." -ForegroundColor Cyan
 & $isccPath /O"$DistDir" $IssFile
