@@ -3,10 +3,26 @@
 
 param(
     [string]$Configuration = "Release",
-    [string]$Runtime = "win-x64"
+    [string]$Runtime = "win-x64",
+    # Versao do release (ex.: 1.0.3). Vazio = versao do csproj/.iss (builds locais).
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# $ErrorActionPreference nao cobre comandos nativos: checar o codigo de saida.
+function Assert-LastExit([string]$Step) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Step falhou (codigo $LASTEXITCODE)."
+    }
+}
+
+$PublishVersionArgs = @()
+$IsccVersionArgs = @()
+if ($Version) {
+    $PublishVersionArgs = @("-p:Version=$Version")
+    $IsccVersionArgs = @("/DAppVersion=$Version")
+}
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 Write-Host "==> Iniciando compilacao e empacotamento do WindowsCM ($Configuration - $Runtime)..." -ForegroundColor Cyan
@@ -43,7 +59,8 @@ Write-Host "==> Publicando versao portatil em $PortableDir..." -ForegroundColor 
 if (Test-Path $PortableDir) {
     Remove-Item $PortableDir -Recurse -Force
 }
-dotnet publish src/WindowsCM.App/WindowsCM.App.csproj -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true -o $PortableDir
+dotnet publish src/WindowsCM.App/WindowsCM.App.csproj -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true -o $PortableDir @PublishVersionArgs
+Assert-LastExit "dotnet publish (portatil)"
 
 # Copiar LICENSE para a pasta portatil
 Copy-Item (Join-Path $RepoRoot "LICENSE") (Join-Path $PortableDir "LICENSE") -Force
@@ -75,7 +92,8 @@ Write-Host "==> Publicando arquivos para staging do instalador em $InstallerPubl
 if (Test-Path $InstallerPublishDir) {
     Remove-Item $InstallerPublishDir -Recurse -Force
 }
-dotnet publish src/WindowsCM.App/WindowsCM.App.csproj -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true -o $InstallerPublishDir
+dotnet publish src/WindowsCM.App/WindowsCM.App.csproj -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true -o $InstallerPublishDir @PublishVersionArgs
+Assert-LastExit "dotnet publish (instalador)"
 
 # O instalador copia apenas WindowsCM.exe; DLL solta no staging = app instalado nao abre
 $strayDlls = Get-ChildItem -Path $InstallerPublishDir -Filter *.dll
@@ -85,7 +103,8 @@ if ($strayDlls) {
 
 $IssFile = Join-Path $RepoRoot "installer\WindowsCM.iss"
 Write-Host "==> Compilando instalador Inno Setup para $DistDir..." -ForegroundColor Cyan
-& $isccPath /O"$DistDir" $IssFile
+& $isccPath /O"$DistDir" @IsccVersionArgs $IssFile
+Assert-LastExit "Inno Setup (ISCC)"
 
 # 5. Resumo final
 Write-Host "`n==> Compilacao concluida com sucesso! Artefatos disponiveis em dist/:" -ForegroundColor Green

@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Every push to main and every PR: build the whole solution (Core, tests
+# and the WPF app) and run the test suite on Windows.
+# Pushes to main that pass: cut the next version, build the installer and
+# the portable zip with scripts/build-dist.ps1, and publish a GitHub Release.
+#
+# Versioning: the next release bumps the patch of the latest vX.Y.Z tag
+# (v1.0.0 -> v1.0.1). To start a new minor/major line, raise <Version> in
+# src/WindowsCM.App/WindowsCM.App.csproj (e.g. 1.1.0): when it is ahead of
+# the latest tag it is used as-is.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore WindowsCM.sln
+
+      - name: Build
+        run: dotnet build WindowsCM.sln -c Release --no-restore
+
+      - name: Test
+        run: >
+          dotnet test WindowsCM.sln -c Release --no-build
+          --logger "trx;LogFileName=results.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore
+
+  release:
+    name: Release
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    # One release at a time, in push order, so two quick pushes never
+    # compute the same version.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags are needed to find the latest version
+
+      - name: Compute next version
+        id: version
+        shell: pwsh
+        run: |
+          $released = git tag --points-at HEAD --list 'v*'
+          if ($released) {
+            Write-Host "This commit is already released as $released; skipping."
+            "skip=true" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $csproj = Get-Content src/WindowsCM.App/WindowsCM.App.csproj -Raw
+          if ($csproj -notmatch '<Version>(\d+\.\d+\.\d+)</Version>') {
+            throw "No <Version>x.y.z</Version> in WindowsCM.App.csproj"
+          }
+          $base = [version]$Matches[1]
+
+          $latest = git tag --list 'v*' |
+            ForEach-Object { $v = $null; if ([version]::TryParse($_.Substring(1), [ref]$v)) { $v } } |
+            Sort-Object -Descending | Select-Object -First 1
+          # No tags yet: the csproj version is treated as already shipped.
+          if (-not $latest) { $latest = $base }
+
+          $next = if ($base -gt $latest) { $base } else {
+            [version]::new($latest.Major, $latest.Minor, $latest.Build + 1)
+          }
+          Write-Host "Latest release: v$latest -> releasing v$next"
+          "skip=false" >> $env:GITHUB_OUTPUT
+          "version=$next" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v6
+        if: steps.version.outputs.skip == 'false'
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Set up Inno Setup
+        if: steps.version.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          # Pinned, signature-checked, and unpacked in portable mode (no
+          # uninstaller or registry entries) into the runner's temp folder.
+          $ProgressPreference = 'SilentlyContinue'
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $installer
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne 'Valid') { throw "Inno Setup installer signature is $($signature.Status)" }
+          $dir = Join-Path $env:RUNNER_TEMP 'innosetup'
+          $setupArgs = '/PORTABLE=1', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$dir`""
+          Start-Process -FilePath $installer -ArgumentList $setupArgs -Wait
+          if (-not (Test-Path (Join-Path $dir 'ISCC.exe'))) { throw 'ISCC.exe was not installed' }
+          $dir >> $env:GITHUB_PATH
+
+      - name: Build installer and portable
+        if: steps.version.outputs.skip == 'false'
+        shell: pwsh
+        run: ./scripts/build-dist.ps1 -Version '${{ steps.version.outputs.version }}'
+
+      - name: Collect release assets
+        if: steps.version.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $v = '${{ steps.version.outputs.version }}'
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          Copy-Item "dist/WindowsCM-Setup-$v.exe" release/
+          Copy-Item dist/WindowsCM-portable.zip "release/WindowsCM-portable-$v.zip"
+          Get-ChildItem release -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content release/SHA256SUMS.txt -Encoding ascii
+          Get-ChildItem release | Format-Table Name, Length
+
+      - name: Publish GitHub release
+        if: steps.version.outputs.skip == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = '${{ steps.version.outputs.version }}'
+          gh release create "v$v" (Get-ChildItem release -File).FullName `
+            --target $env:GITHUB_SHA `
+            --title "WindowsCM $v" `
+            --generate-notes
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
