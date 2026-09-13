@@ -89,6 +89,12 @@ public static class PopupThemeBrushes
             dict["CardTimeBrush"] = Brush(0xFF, 0xFF, 0x00);
             dict["CardIconBrush"] = Brush(0xFF, 0xFF, 0xFF);
 
+            // Dialog text & accent (QrWindow, MobileTransferWindow)
+            dict["TextBrush"] = Brush(0xFF, 0xFF, 0xFF);
+            dict["SecondaryTextBrush"] = Brush(0x00, 0xFF, 0xFF);
+            dict["CardAccentBrush"] = Brush(0xFF, 0xFF, 0x00);
+            dict["CardAccentForegroundBrush"] = Brush(0x00, 0x00, 0x00);
+
             dict["CardButtonForegroundBrush"] = Brush(0xFF, 0xFF, 0xFF);
             dict["CardButtonHoverBackgroundBrush"] = Brush(0x22, 0x22, 0x22);
             dict["CardButtonHoverForegroundBrush"] = Brush(0x00, 0xFF, 0xFF);
@@ -199,6 +205,12 @@ public static class PopupThemeBrushes
             dict["CardSubtitleBrush"] = Brush(0x5F, 0x5F, 0x64);
             dict["CardTimeBrush"] = Brush(0x70, 0x70, 0x70);
             dict["CardIconBrush"] = Brush(0x50, 0x50, 0x50);
+
+            // Dialog text & accent (QrWindow, MobileTransferWindow)
+            dict["TextBrush"] = Brush(0x1C, 0x1C, 0x1C);
+            dict["SecondaryTextBrush"] = Brush(0x5F, 0x5F, 0x64);
+            dict["CardAccentBrush"] = Brush(0x00, 0x78, 0xD4);
+            dict["CardAccentForegroundBrush"] = Brush(0xFF, 0xFF, 0xFF);
 
             dict["CardButtonForegroundBrush"] = Brush(0x5F, 0x5F, 0x64);
             dict["CardButtonHoverBackgroundBrush"] = Brush(0xE0, 0xE0, 0xE0);
@@ -311,6 +323,12 @@ public static class PopupThemeBrushes
             dict["CardSubtitleBrush"] = Brush(0x8E, 0x8E, 0x93);
             dict["CardTimeBrush"] = Brush(0x77, 0x77, 0x77);
             dict["CardIconBrush"] = Brush(0xA0, 0xA0, 0xA0);
+
+            // Dialog text & accent (QrWindow, MobileTransferWindow)
+            dict["TextBrush"] = Brush(0xFF, 0xFF, 0xFF);
+            dict["SecondaryTextBrush"] = Brush(0xC5, 0xC5, 0xC5);
+            dict["CardAccentBrush"] = Brush(0x00, 0x78, 0xD4);
+            dict["CardAccentForegroundBrush"] = Brush(0xFF, 0xFF, 0xFF);
 
             dict["CardButtonForegroundBrush"] = Brush(0x8E, 0x8E, 0x93);
             dict["CardButtonHoverBackgroundBrush"] = Brush(0x44, 0x44, 0x44);
