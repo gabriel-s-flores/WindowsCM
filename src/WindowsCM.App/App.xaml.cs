@@ -188,6 +188,8 @@ public partial class App : System.Windows.Application
         _compactPopup = new CompactPopupWindow(_popupModel, this);
         _hotkeyWindow = new HotkeyWindow(OnHotkey);
         var hwnd = _hotkeyWindow.EnsureHandle();
+        // Before the first parse: gestures may use layout keys (Ç, Cyrillic, ...).
+        KeyCodes.Layout = new Win32KeyboardLayout();
         _hotkeySettings = new SettingsHotkeySettings(_settings, _settingsPath);
         _hotkeys = new HotkeyService(new Win32HotkeyRegistrar(), _hotkeySettings);
         var registration = _hotkeys.RegisterAll(hwnd);
