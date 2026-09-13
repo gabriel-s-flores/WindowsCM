@@ -38,6 +38,7 @@ public sealed class PasteInjectionException : Exception
 public interface IForegroundWindow
 {
     IntPtr GetCurrent();
+    bool RestoreForeground(IntPtr hwnd);
 }
 
 // Integrity probe behind the elevated-target diagnostics. SendInput fails

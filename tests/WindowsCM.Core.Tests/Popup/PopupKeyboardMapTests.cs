@@ -88,14 +88,10 @@ public sealed class PopupKeyboardMapTests
     }
 
     [Fact]
-    public void CtrlBackquote_CyclesTag_ShiftReverses()
+    public void CtrlBackquote_Retired_ReturnsNull()
     {
-        Assert.Equal(
-            PopupAction.CycleTagNext,
-            Resolve(PopupKey.Oem3, PopupModifiers.Ctrl)!.Action);
-        Assert.Equal(
-            PopupAction.CycleTagPrevious,
-            Resolve(PopupKey.Oem3, PopupModifiers.Ctrl | PopupModifiers.Shift)!.Action);
+        Assert.Null(Resolve(PopupKey.Oem3, PopupModifiers.Ctrl));
+        Assert.Null(Resolve(PopupKey.Oem3, PopupModifiers.Ctrl | PopupModifiers.Shift));
     }
 
     [Fact]
@@ -136,12 +132,9 @@ public sealed class PopupKeyboardMapTests
     }
 
     [Fact]
-    public void CtrlShiftDigits_ApplyTagSlot()
+    public void CtrlShiftDigits_Retired_ReturnsNull()
     {
-        var result = Resolve(PopupKey.D3, PopupModifiers.Ctrl | PopupModifiers.Shift);
-
-        Assert.Equal(PopupAction.ApplyTagSlot, result!.Action);
-        Assert.Equal(3, result.Slot);
+        Assert.Null(Resolve(PopupKey.D3, PopupModifiers.Ctrl | PopupModifiers.Shift));
     }
 
     [Fact]

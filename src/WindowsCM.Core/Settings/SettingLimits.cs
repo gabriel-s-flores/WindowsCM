@@ -7,8 +7,8 @@ namespace WindowsCM.Core.Settings;
 public static class SettingLimits
 {
     public const int HistoryLengthMin = 10;
-    public const int HistoryLengthMax = 500;
-    public const int HistoryLengthDefault = 50;
+    public const int HistoryLengthMax = 100;
+    public const int HistoryLengthDefault = 100;
 
     public const int HistoryTimeMin = 0;
     public const int HistoryTimeMax = 1440;

@@ -161,4 +161,24 @@ public sealed class HotkeyServiceTests
 
         Assert.Equal(HotkeyDefaults.Open, service.OpenChord);
     }
+
+    [Fact]
+    public void Remap_IncognitoSlot_PersistsAndRegisters()
+    {
+        var settings = new MemoryHotkeySettings();
+        var registrar = new FakeRegistrar();
+        var service = new HotkeyService(registrar, settings);
+        service.RegisterAll(Hwnd);
+        registrar.Registers.Clear();
+        registrar.Unregisters.Clear();
+
+        var outcome = service.Remap(Hwnd, HotkeySlot.Incognito, HotkeyChord.Parse("Ctrl+Alt+I"));
+
+        Assert.True(outcome.Registered);
+        Assert.Equal("Ctrl+Alt+I", settings.IncognitoGesture);
+        Assert.Equal(1, settings.Saves);
+        Assert.Equal([HotkeyDefaults.IdIncognito], registrar.Unregisters);
+        var call = Assert.Single(registrar.Registers);
+        Assert.Equal((uint)'I', call.Vk);
+    }
 }

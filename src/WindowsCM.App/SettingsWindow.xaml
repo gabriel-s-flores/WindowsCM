@@ -2,61 +2,923 @@
 <Window x:Class="WindowsCM.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Configurações do WindowsCM" Width="560" Height="620"
-        WindowStartupLocation="CenterScreen">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel Margin="16">
-      <TextBlock Text="Atalhos de Teclado" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" />
-      <Grid Margin="0,0,0,4">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="150" />
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Abrir histórico"
-                   VerticalAlignment="Center" />
-        <TextBox x:Name="OpenGestureBox" Grid.Row="0" Grid.Column="1" Margin="0,2" />
-        <Button Grid.Row="0" Grid.Column="2" Content="Aplicar" Margin="6,2,0,2"
-                Padding="12,2" Click="OnApplyOpenGesture" />
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Histórico anônimo"
-                   VerticalAlignment="Center" />
-        <TextBox x:Name="IncognitoGestureBox" Grid.Row="1" Grid.Column="1" Margin="0,2" />
-        <Button Grid.Row="1" Grid.Column="2" Content="Aplicar" Margin="6,2,0,2"
-                Padding="12,2" Click="OnApplyIncognitoGesture" />
+        Title="{DynamicResource Loc_SettingsTitle}"
+        Icon="pack://application:,,,/Assets/app.ico"
+        Width="860" Height="660" MinWidth="800" MinHeight="540"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+        Background="{DynamicResource PopupBackgroundBrush}"
+        Foreground="{DynamicResource CardTitleBrush}">
+
+  <Window.Resources>
+    <!-- Fluent Card Style -->
+    <Style x:Key="SettingsCard" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,14" />
+      <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <!-- Fluent Modern Button Style -->
+    <Style x:Key="FluentButton" TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource CardTitleBrush}" />
+      <Setter Property="Padding" Value="14,6" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="border" Property="Background" Value="{DynamicResource IconButtonHoverBackgroundBrush}" />
+                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource IconButtonHoverBorderBrush}" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="border" Property="Background" Value="{DynamicResource IconButtonPressedBackgroundBrush}" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Fluent Accent / Action Button Style -->
+    <Style x:Key="FluentPrimaryButton" TargetType="Button" BasedOn="{StaticResource FluentButton}">
+      <Setter Property="Background" Value="#0078D4" />
+      <Setter Property="BorderBrush" Value="#0067B8" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="border" Property="Background" Value="#1084D9" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="border" Property="Background" Value="#006CBE" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Fluent TextBox Style -->
+    <Style x:Key="FluentTextBox" TargetType="TextBox">
+      <Setter Property="Background" Value="{DynamicResource SearchBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource SearchForegroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SearchBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CaretBrush" Value="{DynamicResource SearchCaretBrush}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="5"
+                    SnapsToDevicePixels="True">
+              <ScrollViewer x:Name="PART_ContentHost" Focusable="false"
+                            HorizontalScrollBarVisibility="Hidden"
+                            VerticalScrollBarVisibility="Hidden"
+                            Padding="{TemplateBinding Padding}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource CardHoverBorderBrush}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="border" Property="BorderBrush" Value="#0078D4" />
+                <Setter TargetName="border" Property="BorderThickness" Value="1.5" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Navigation Sidebar Button Style -->
+    <Style x:Key="NavButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource CardTitleBrush}" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="navBorder"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="6"
+                    Padding="{TemplateBinding Padding}"
+                    Margin="0,2">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="Center"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="navBorder" Property="Background" Value="{DynamicResource IconButtonHoverBackgroundBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <!-- Sidebar Navigation -->
+      <ColumnDefinition Width="220" />
+      <ColumnDefinition Width="1" />
+      <!-- Content Area -->
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <!-- SIDEBAR -->
+    <Border Grid.Column="0" Background="{DynamicResource PopupBackgroundBrush}" Padding="16,20,12,16">
+      <DockPanel LastChildFill="True">
+        <!-- App Branding -->
+        <StackPanel DockPanel.Dock="Top" Margin="4,0,0,24">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Border Width="30" Height="30" CornerRadius="6" Margin="0,0,10,0" ClipToBounds="True">
+              <Image Source="pack://application:,,,/Assets/app.png" Width="30" Height="30"
+                     RenderOptions.BitmapScalingMode="HighQuality" />
+            </Border>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="WindowsCM" FontWeight="SemiBold" FontSize="16" Foreground="{DynamicResource CardTitleBrush}" />
+              <TextBlock Text="{DynamicResource Loc_TraySettings}" FontSize="11" Foreground="{DynamicResource CardSubtitleBrush}" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Navigation Menu -->
+        <StackPanel DockPanel.Dock="Top">
+          <Button x:Name="NavBtnGeneral" Style="{StaticResource NavButton}" Click="OnNavGeneralClicked">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Width="24"
+                         FontWeight="Normal" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+                         Foreground="#0078D4" Margin="0,0,8,0" />
+              <TextBlock Text="{DynamicResource Loc_SettingsNavGeneral}" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="NavBtnLayout" Style="{StaticResource NavButton}" Click="OnNavLayoutClicked">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Width="24"
+                         FontWeight="Normal" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+                         Foreground="#8B5CF6" Margin="0,0,8,0" />
+              <TextBlock Text="{DynamicResource Loc_SettingsNavLayout}" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="NavBtnColors" Style="{StaticResource NavButton}" Click="OnNavColorsClicked">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Width="24"
+                         FontWeight="Normal" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+                         Foreground="#6366F1" Margin="0,0,8,0" />
+              <TextBlock Text="{DynamicResource Loc_SettingsNavColors}" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="NavBtnStorage" Style="{StaticResource NavButton}" Click="OnNavStorageClicked">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Width="24"
+                         FontWeight="Normal" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+                         Foreground="#D97706" Margin="0,0,8,0" />
+              <TextBlock Text="{DynamicResource Loc_SettingsNavStorage}" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="NavBtnShortcuts" Style="{StaticResource NavButton}" Click="OnNavShortcutsClicked">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE765;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Width="24"
+                         FontWeight="Normal" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+                         Foreground="#16A34A" Margin="0,0,8,0" />
+              <TextBlock Text="{DynamicResource Loc_SettingsNavShortcuts}" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="NavBtnAbout" Style="{StaticResource NavButton}" Click="OnNavAboutClicked">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Width="24"
+                         FontWeight="Normal" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+                         Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,8,0" />
+              <TextBlock Text="{DynamicResource Loc_SettingsNavAbout}" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <!-- Theme mode status indicator at bottom -->
+        <Border DockPanel.Dock="Bottom" Margin="4,0,0,0" Padding="10,8" CornerRadius="6"
+                Background="{DynamicResource IconButtonHoverBackgroundBrush}">
+          <TextBlock x:Name="ThemeStatusText" Text="{DynamicResource Loc_SettingsThemeStatusFluent}" FontSize="11"
+                     Foreground="{DynamicResource CardSubtitleBrush}" HorizontalAlignment="Center" />
+        </Border>
+      </DockPanel>
+    </Border>
+
+    <!-- Vertical separator line -->
+    <Rectangle Grid.Column="1" Fill="{DynamicResource CardBorderBrush}" />
+
+    <!-- MAIN CONTENT AREA -->
+    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="28,24,28,24">
+      <Grid>
+        <!-- 1. PAINEL GERAL & HISTÓRICO -->
+        <StackPanel x:Name="PanelGeneral" Visibility="Visible">
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionGeneralTitle}" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionGeneralSubtitle}"
+                     FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
+
+          <!-- Card: Tema e Aparência da Interface -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsThemeTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsThemeSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+              <ComboBox x:Name="ThemeSchemeCombo" Grid.Column="1" Width="260" VerticalAlignment="Center"
+                        SelectionChanged="OnThemeSchemeChanged">
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsThemeOptionSystem}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsThemeOptionDark}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsThemeOptionLight}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsThemeOptionHighContrast}" />
+              </ComboBox>
+            </Grid>
+          </Border>
+
+          <!-- Card: Idioma do Aplicativo -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsLanguageTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsLanguageSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+              <ComboBox x:Name="LanguageCombo" Grid.Column="1" Width="260" VerticalAlignment="Center"
+                        SelectionChanged="OnLanguageChanged">
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsLanguageSystem}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsLanguageEnglish}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsLanguagePortuguese}" />
+              </ComboBox>
+            </Grid>
+          </Border>
+
+          <!-- Card: Limite da Clipboard -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+
+              <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,16,8">
+                <TextBlock Text="{DynamicResource Loc_SettingsHistoryLimitTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsHistoryLimitSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+
+              <!-- Value Badge -->
+              <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource IconButtonHoverBackgroundBrush}"
+                      CornerRadius="6" Padding="12,4" VerticalAlignment="Center">
+                <TextBlock x:Name="HistoryLimitValueText" FontWeight="Bold" FontSize="13"
+                           Foreground="#0078D4" />
+              </Border>
+
+              <!-- Slider -->
+              <Slider x:Name="HistoryLimitSlider" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                      Minimum="10" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                      Margin="0,8,0,8" ValueChanged="OnHistoryLimitChanged" />
+
+              <!-- Quick Reset Recommendation -->
+              <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,4,0,0">
+                <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsHistoryLimitRestore}"
+                        Click="OnResetHistoryLimitClicked" Padding="10,4" FontSize="11" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <!-- Card: Inicialização Automática -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsAutostartTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsAutostartSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="AutostartCheck" Grid.Column="1" VerticalAlignment="Center"
+                        Checked="OnAutostartChanged" Unchecked="OnAutostartChanged" />
+            </Grid>
+          </Border>
+
+          <!-- Card: Encerramento de Sessão -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsEndOfSessionTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsEndOfSessionSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+              <ComboBox x:Name="EndOfSessionCombo" Grid.Column="1" Width="320" MinWidth="300" VerticalAlignment="Center"
+                        SelectionChanged="OnEndOfSessionChanged">
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsEndOfSessionClearAll}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsEndOfSessionKeepPinsTags}" />
+                <ComboBoxItem Content="{DynamicResource Loc_SettingsEndOfSessionKeepAll}" />
+              </ComboBox>
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- 2. PAINEL DE LAYOUT & POSICIONAMENTO -->
+        <StackPanel x:Name="PanelLayout" Visibility="Collapsed">
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionLayoutTitle}" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionLayoutSubtitle}"
+                     FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
+
+          <!-- Card: Interactive Visual Preview Frame with Mock Data and Animated Flow -->
+          <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,14">
+            <StackPanel>
+              <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutPreviewTitle}" FontWeight="SemiBold" FontSize="14"
+                             Foreground="{DynamicResource CardTitleBrush}" TextWrapping="Wrap" />
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutPreviewSubtitle}"
+                             FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Grid.Column="1" Background="{DynamicResource SearchBackgroundBrush}" CornerRadius="15"
+                        BorderBrush="{DynamicResource SearchBorderBrush}" BorderThickness="1" Padding="2"
+                        VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal">
+                    <Button x:Name="PreviewToggleLargeBtn" Content="{DynamicResource Loc_SettingsLayoutPreviewToggleLarge}" Click="OnPreviewToggleLargeClicked"
+                            Padding="10,4" BorderThickness="0" Background="#0078D4" Foreground="White" FontSize="11" FontWeight="SemiBold" Cursor="Hand">
+                      <Button.Resources>
+                        <Style TargetType="Border">
+                          <Setter Property="CornerRadius" Value="13" />
+                        </Style>
+                      </Button.Resources>
+                    </Button>
+                    <Button x:Name="PreviewToggleCompactBtn" Content="{DynamicResource Loc_SettingsLayoutPreviewToggleCompact}" Click="OnPreviewToggleCompactClicked"
+                            Padding="10,4" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource CardTitleBrush}" FontSize="11" FontWeight="Normal" Cursor="Hand">
+                      <Button.Resources>
+                        <Style TargetType="Border">
+                          <Setter Property="CornerRadius" Value="13" />
+                        </Style>
+                      </Button.Resources>
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <!-- Monitor Simulation Container (with sleek desktop frame) -->
+              <Border Background="#1E1E2E" CornerRadius="10" BorderBrush="#313244" BorderThickness="1.5" Height="150" ClipToBounds="True">
+                <Grid x:Name="MockScreenContainer">
+                  <!-- Simulated Desktop Background Wallpaper Gradient -->
+                  <Border>
+                    <Border.Background>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#0F172A" Offset="0.0" />
+                        <GradientStop Color="#1E1B4B" Offset="0.5" />
+                        <GradientStop Color="#311042" Offset="1.0" />
+                      </LinearGradientBrush>
+                    </Border.Background>
+                  </Border>
+
+                  <!-- Simulated Windows Taskbar / Wallpaper elements -->
+                  <Border Height="14" VerticalAlignment="Bottom" Background="#111827" Opacity="0.75" HorizontalAlignment="Stretch">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <Border Width="6" Height="6" Background="#38BDF8" CornerRadius="1" Margin="2,0" />
+                      <Border Width="6" Height="6" Background="#818CF8" CornerRadius="1" Margin="2,0" />
+                      <Border Width="6" Height="6" Background="#A78BFA" CornerRadius="1" Margin="2,0" />
+                    </StackPanel>
+                  </Border>
+
+                  <!-- Dynamic Mock WindowsCM Popup -->
+                  <Border x:Name="MockPopupWindow"
+                          Background="{DynamicResource PopupBackgroundBrush}"
+                          BorderBrush="#0078D4" BorderThickness="1.5" CornerRadius="8"
+                          Padding="6" Margin="8"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Bottom">
+                    <Border.Effect>
+                      <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.6" Color="#000000" />
+                    </Border.Effect>
+
+                    <DockPanel LastChildFill="True">
+                      <!-- Mini Header with Simulated Search & Flow Direction Badge -->
+                      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                        <Border DockPanel.Dock="Left" Height="14" Width="60" CornerRadius="7" Background="{DynamicResource SearchBackgroundBrush}" BorderBrush="{DynamicResource SearchBorderBrush}" BorderThickness="1" />
+                        <Border x:Name="MockFlowBadge" DockPanel.Dock="Right" CornerRadius="6" Background="#0078D4" Padding="6,1" VerticalAlignment="Center">
+                          <TextBlock x:Name="MockFlowBadgeText" Text="★ Mais Recente ➔ ➔ ➔" FontSize="9" FontWeight="Bold" Foreground="White" />
+                        </Border>
+                      </DockPanel>
+
+                      <!-- Mock Clipboard Items Strip/List with Mock Scrollbars -->
+                      <Grid>
+                        <!-- Horizontal Mock Scrollbar -->
+                        <Border x:Name="MockScrollBarH" Height="3" Background="#33FFFFFF" CornerRadius="1.5"
+                                VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="2,0,2,0" Visibility="Visible">
+                          <Border Width="36" Height="3" Background="#0078D4" CornerRadius="1.5" HorizontalAlignment="Left" Margin="8,0,0,0" />
+                        </Border>
+                        <!-- Vertical Mock Scrollbar -->
+                        <Border x:Name="MockScrollBarV" Width="3" Background="#33FFFFFF" CornerRadius="1.5"
+                                HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,2,0,2" Visibility="Collapsed">
+                          <Border Width="3" Height="24" Background="#0078D4" CornerRadius="1.5" VerticalAlignment="Top" Margin="0,6,0,0" />
+                        </Border>
+
+                        <ScrollViewer x:Name="MockItemsScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled" Margin="0,0,0,5">
+                          <StackPanel x:Name="MockItemsPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Mock Item 1: Code -->
+                            <Border x:Name="MockCard1" Width="100" Height="70" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" Padding="5">
+                              <StackPanel>
+                                <TextBlock Text="const app = express();" FontFamily="Consolas, monospace" FontSize="8" Foreground="#38BDF8" />
+                                <TextBlock Text="app.listen(3000);" FontFamily="Consolas, monospace" FontSize="8" Foreground="#94A3B8" Margin="0,2,0,0" />
+                              </StackPanel>
+                            </Border>
+
+                            <!-- Mock Item 2: Screenshot / Image -->
+                            <Border x:Name="MockCard2" Width="100" Height="70" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" Padding="4">
+                              <Grid>
+                                <Border CornerRadius="3" Background="#4F46E5" Opacity="0.4" />
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                  <TextBlock Text="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="#818CF8" HorizontalAlignment="Center" />
+                                  <TextBlock x:Name="MockCard2Title" Text="{DynamicResource Loc_SettingsLayoutMockImageTitle}" FontSize="7.5" FontWeight="SemiBold" Foreground="{DynamicResource CardTitleBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                </StackPanel>
+                              </Grid>
+                            </Border>
+
+                            <!-- Mock Item 3: Link -->
+                            <Border x:Name="MockCard3" Width="100" Height="70" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" Padding="5">
+                              <StackPanel>
+                                <TextBlock Text="&#xE71B; github.com/copyous" FontSize="8" FontWeight="SemiBold" Foreground="#3B82F6" />
+                                <TextBlock x:Name="MockCard3Desc" Text="{DynamicResource Loc_SettingsLayoutMockLinkDesc}" FontSize="7" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" />
+                              </StackPanel>
+                            </Border>
+
+                            <!-- Mock Item 4: Text -->
+                            <Border x:Name="MockCard4" Width="100" Height="70" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="5">
+                              <StackPanel>
+                                <TextBlock x:Name="MockCard4Title" Text="{DynamicResource Loc_SettingsLayoutMockNotesTitle}" FontSize="8" FontWeight="Medium" Foreground="{DynamicResource CardTitleBrush}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="MockCard4Desc" Text="{DynamicResource Loc_SettingsLayoutMockNotesDesc}" FontSize="7" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" />
+                              </StackPanel>
+                            </Border>
+                          </StackPanel>
+                        </ScrollViewer>
+                      </Grid>
+                    </DockPanel>
+                  </Border>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <!-- Card: Large Window Configuration (Área Principal) -->
+          <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,16">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsLayoutLargeTitle}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource CardTitleBrush}" />
+              <TextBlock Text="{DynamicResource Loc_SettingsLayoutLargeDesc}"
+                         FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,14" />
+
+              <!-- Setting: Large Orientation -->
+              <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutOrientation}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <ComboBox x:Name="LargeOrientationCombo" Grid.Column="1" Width="260" SelectionChanged="OnLargeOrientationChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutOrientationHorizontal}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutOrientationVertical}" />
+                </ComboBox>
+              </Grid>
+
+              <!-- Setting: Screen Position (Dock) -->
+              <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutPosition}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <!-- Horizontal position options -->
+                <ComboBox x:Name="LargeHorizontalPosCombo" Grid.Column="1" Width="260" SelectionChanged="OnLargeHorizontalPosChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPosBottom}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPosTop}" />
+                </ComboBox>
+                <!-- Vertical position options (Visible only when LargeOrientation is Vertical) -->
+                <ComboBox x:Name="LargeVerticalPosCombo" Grid.Column="1" Width="260" Visibility="Collapsed" SelectionChanged="OnLargeVerticalPosChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPosLeft}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPosRight}" />
+                </ComboBox>
+              </Grid>
+
+              <!-- Setting: Item Order (Flow) -->
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutItemOrder}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <!-- Horizontal flow options -->
+                <ComboBox x:Name="LargeHorizontalOrderCombo" Grid.Column="1" Width="260" SelectionChanged="OnLargeHorizontalOrderChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutOrderRecentLeft}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutOrderRecentRight}" />
+                </ComboBox>
+                <!-- Vertical flow options -->
+                <ComboBox x:Name="LargeVerticalOrderCombo" Grid.Column="1" Width="260" Visibility="Collapsed" SelectionChanged="OnLargeVerticalOrderChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutOrderRecentTop}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutOrderRecentBottom}" />
+                </ComboBox>
+              </Grid>
+
+              <!-- Setting: Scrollbar Position -->
+              <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutScrollbarPosition}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <!-- Horizontal scrollbar position options -->
+                <ComboBox x:Name="LargeHorizontalScrollbarPosCombo" Grid.Column="1" Width="260" SelectionChanged="OnLargeHorizontalScrollbarPosChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosBottom}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosTop}" />
+                </ComboBox>
+                <!-- Vertical scrollbar position options -->
+                <ComboBox x:Name="LargeVerticalScrollbarPosCombo" Grid.Column="1" Width="260" Visibility="Collapsed" SelectionChanged="OnLargeVerticalScrollbarPosChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosRight}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosLeft}" />
+                </ComboBox>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- Card: Compact Menu Configuration -->
+          <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsLayoutCompactTitle}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource CardTitleBrush}" />
+              <TextBlock Text="{DynamicResource Loc_SettingsLayoutCompactDesc}"
+                         FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,14" />
+
+              <!-- Setting: Compact Menu Format -->
+              <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutCompactOrientation}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <ComboBox x:Name="CompactOrientationCombo" Grid.Column="1" Width="260" SelectionChanged="OnCompactOrientationChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutCompactOrientationVertical}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutCompactOrientationHorizontal}" />
+                </ComboBox>
+              </Grid>
+
+              <!-- Setting: Compact Item Order -->
+              <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutCompactOrder}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <!-- Vertical Compact Order options -->
+                <ComboBox x:Name="CompactVerticalOrderCombo" Grid.Column="1" Width="260" SelectionChanged="OnCompactVerticalOrderChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutCompactOrderRecentTop}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutCompactOrderRecentBottom}" />
+                </ComboBox>
+                <!-- Horizontal Compact Order options -->
+                <ComboBox x:Name="CompactHorizontalOrderCombo" Grid.Column="1" Width="260" Visibility="Collapsed" SelectionChanged="OnCompactHorizontalOrderChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutCompactOrderRecentLeft}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutCompactOrderRecentRight}" />
+                </ComboBox>
+              </Grid>
+
+              <!-- Setting: Compact Scrollbar Position -->
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutScrollbarPosition}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <!-- Vertical Compact Scrollbar options -->
+                <ComboBox x:Name="CompactVerticalScrollbarPosCombo" Grid.Column="1" Width="260" SelectionChanged="OnCompactVerticalScrollbarPosChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosRight}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosLeft}" />
+                </ComboBox>
+                <!-- Horizontal Compact Scrollbar options -->
+                <ComboBox x:Name="CompactHorizontalScrollbarPosCombo" Grid.Column="1" Width="260" Visibility="Collapsed" SelectionChanged="OnCompactHorizontalScrollbarPosChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosBottom}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutScrollbarPosTop}" />
+                </ComboBox>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 3. PAINEL CORES E TIPOS DE ITENS (UNIFICADO) -->
+        <StackPanel x:Name="PanelColors" Visibility="Collapsed">
+          <Grid Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+              <TextBlock Text="{DynamicResource Loc_SettingsSectionColorsTitle}" FontSize="20" FontWeight="SemiBold"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
+              <TextBlock Text="{DynamicResource Loc_SettingsSectionColorsSubtitle}"
+                         FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button x:Name="AddCategoryBtn" Style="{StaticResource FluentPrimaryButton}"
+                      Content="{DynamicResource Loc_SettingsAddCategoryButton}" Click="OnAddCategoryClicked" Margin="0,0,8,0" />
+              <Button x:Name="ResetAllColorsBtn" Style="{StaticResource FluentButton}"
+                      Content="{DynamicResource Loc_SettingsResetAllColorsButton}" Click="OnResetAllColorsClicked" VerticalAlignment="Center"
+                      ToolTip="{DynamicResource Loc_SettingsResetAllColorsTooltip}" />
+            </StackPanel>
+          </Grid>
+
+          <!-- Card para Adicionar Nova Categoria (inicialmente oculto) -->
+          <Border x:Name="NewCategoryPanel" Style="{StaticResource SettingsCard}" Visibility="Collapsed"
+                  BorderBrush="#0078D4" BorderThickness="1.5">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsNewCategoryTitle}" FontWeight="SemiBold" FontSize="13"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,10" />
+              <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="1*" />
+                  <ColumnDefinition Width="100" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                  <TextBlock Text="{DynamicResource Loc_SettingsNewCategoryNameLabel}" FontSize="11" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,3" />
+                  <TextBox x:Name="NewCategoryNameBox" Style="{StaticResource FluentTextBox}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                  <TextBlock Text="{DynamicResource Loc_SettingsNewCategoryHexLabel}" FontSize="11" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,3" />
+                  <TextBox x:Name="NewCategoryHexBox" Style="{StaticResource FluentTextBox}" Text="#9B59B6" />
+                </StackPanel>
+                <Button Grid.Column="2" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsNewCategoryPickColor}"
+                        VerticalAlignment="Bottom" Click="OnPickNewCategoryColorClicked" />
+              </Grid>
+              <TextBlock Text="{DynamicResource Loc_SettingsNewCategoryExtLabel}" FontSize="11" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,3" />
+              <TextBox x:Name="NewCategoryExtensionsBox" Style="{StaticResource FluentTextBox}" Margin="0,0,0,10" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsNewCategoryCancel}" Margin="0,0,8,0" Click="OnCancelNewCategoryClicked" />
+                <Button Style="{StaticResource FluentPrimaryButton}" Content="{DynamicResource Loc_SettingsNewCategorySave}" Click="OnSaveNewCategoryClicked" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Lista Unificada de Tipos e Categorias -->
+          <StackPanel x:Name="FileCategoriesPanel" />
+        </StackPanel>
+
+        <!-- 3. PAINEL CACHE & PASTAS -->
+        <StackPanel x:Name="PanelStorage" Visibility="Collapsed">
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionStorageTitle}" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionStorageSubtitle}"
+                     FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
+
+          <!-- Card: Limpar Cache Diretamente -->
+          <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                  <TextBlock Text="{DynamicResource Loc_SettingsClearCacheTitle}" FontWeight="SemiBold" FontSize="14"
+                             Foreground="{DynamicResource CardTitleBrush}" />
+                  <TextBlock Text="{DynamicResource Loc_SettingsClearCacheSubtitle}"
+                             FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                </StackPanel>
+                <Button x:Name="ClearCacheBtn" Grid.Column="1" Style="{StaticResource FluentPrimaryButton}"
+                        Padding="16,8" VerticalAlignment="Center" Click="OnClearCacheClicked">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{DynamicResource Loc_SettingsClearCacheButton}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </Grid>
+
+              <!-- Live Feedback Message -->
+              <Border x:Name="ClearCacheFeedbackBorder" Visibility="Collapsed" Margin="0,12,0,0"
+                      Background="{DynamicResource IconButtonHoverBackgroundBrush}" CornerRadius="6" Padding="12,8">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             Foreground="#107C41" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" />
+                  <TextBlock x:Name="ClearCacheFeedbackText" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <!-- Card: Pastas de Dados -->
+          <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsStorageFoldersTitle}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource CardTitleBrush}" />
+              <TextBlock Text="{DynamicResource Loc_SettingsStorageFoldersSubtitle}"
+                         FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,12" />
+
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsOpenDataFolder}" Margin="0,0,8,0"
+                        Click="OnOpenData" />
+                <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsOpenConfigFolder}" Margin="0,0,8,0"
+                        Click="OnOpenConfig" />
+                <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsOpenCacheFolder}"
+                        Click="OnOpenCache" />
+              </StackPanel>
+
+              <Border Background="{DynamicResource PreviewCodeBackgroundBrush}"
+                      BorderBrush="{DynamicResource PreviewCodeBorderBrush}"
+                      BorderThickness="1" CornerRadius="6" Padding="12,10">
+                <TextBlock x:Name="PathsText" TextWrapping="Wrap" FontFamily="Consolas, monospace"
+                           FontSize="11" Foreground="{DynamicResource CardSubtitleBrush}" />
+              </Border>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 4. PAINEL ATALHOS -->
+        <StackPanel x:Name="PanelShortcuts" Visibility="Collapsed">
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionShortcutsTitle}" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionShortcutsSubtitle}"
+                     FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
+
+          <!-- Card: Abrir Histórico -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsShortcutCompactTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsShortcutCompactSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" />
+              </StackPanel>
+              <TextBox x:Name="OpenGestureBox" Grid.Column="1" Style="{StaticResource FluentTextBox}"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+              <Button Grid.Column="2" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShortcutApplyButton}"
+                      VerticalAlignment="Center" Click="OnApplyOpenGesture" />
+            </Grid>
+          </Border>
+
+          <!-- Card: Modo Anônimo -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsShortcutIncognitoTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsShortcutIncognitoSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,2,0,0" />
+              </StackPanel>
+              <TextBox x:Name="IncognitoGestureBox" Grid.Column="1" Style="{StaticResource FluentTextBox}"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+              <Button Grid.Column="2" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsShortcutApplyButton}"
+                      VerticalAlignment="Center" Click="OnApplyIncognitoGesture" />
+            </Grid>
+          </Border>
+
+          <!-- Status Box -->
+          <Border Background="{DynamicResource PreviewCodeBackgroundBrush}"
+                  BorderBrush="{DynamicResource PreviewCodeBorderBrush}"
+                  BorderThickness="1" CornerRadius="6" Padding="12,10">
+            <TextBlock x:Name="HotkeyStatus" TextWrapping="Wrap" FontSize="11"
+                       Foreground="{DynamicResource CardSubtitleBrush}" />
+          </Border>
+        </StackPanel>
+
+        <!-- 5. PAINEL SOBRE & SISTEMA -->
+        <StackPanel x:Name="PanelAbout" Visibility="Collapsed">
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionAboutTitle}" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
+          <TextBlock Text="{DynamicResource Loc_SettingsSectionAboutSubtitle}"
+                     FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
+
+          <!-- Card: Versão e Ambiente -->
+          <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsVersionTitle}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,8" />
+              <TextBlock x:Name="VersionsText" TextWrapping="Wrap" FontFamily="Consolas, monospace"
+                         FontSize="11" Foreground="{DynamicResource CardSubtitleBrush}" />
+            </StackPanel>
+          </Border>
+
+          <!-- Card: Bandeja do Windows -->
+          <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsTrayGuidanceTitle}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,6" />
+              <TextBlock x:Name="TrayGuidanceText" TextWrapping="Wrap" FontSize="12"
+                         Foreground="{DynamicResource CardSubtitleBrush}" />
+            </StackPanel>
+          </Border>
+
+          <!-- Card: Créditos -->
+          <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+              <TextBlock Text="{DynamicResource Loc_SettingsCreditsTitle}" FontWeight="SemiBold" FontSize="14"
+                         Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,6,8" />
+              <TextBlock x:Name="CreditsText" TextWrapping="Wrap" FontSize="11"
+                         Foreground="{DynamicResource CardSubtitleBrush}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
       </Grid>
-      <TextBlock x:Name="HotkeyStatus" TextWrapping="Wrap" Foreground="Gray"
-                 FontSize="11" Margin="0,0,0,16" />
-
-      <TextBlock Text="Inicialização" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" />
-      <CheckBox x:Name="AutostartCheck" Content="Iniciar o WindowsCM com o Windows (apenas na bandeja)"
-                Margin="0,0,0,16" Checked="OnAutostartChanged"
-                Unchecked="OnAutostartChanged" />
-
-      <TextBlock Text="Bandeja do Sistema" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" />
-      <TextBlock x:Name="TrayGuidanceText" TextWrapping="Wrap" Foreground="Gray"
-                 FontSize="11" Margin="0,0,0,16" />
-
-      <TextBlock Text="Pastas" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" />
-      <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-        <Button Content="Abrir pasta de dados" Margin="0,0,6,0" Padding="8,2"
-                Click="OnOpenData" />
-        <Button Content="Abrir pasta de configurações" Margin="0,0,6,0" Padding="8,2"
-                Click="OnOpenConfig" />
-        <Button Content="Abrir pasta de cache" Padding="8,2" Click="OnOpenCache" />
-      </StackPanel>
-      <TextBlock x:Name="PathsText" TextWrapping="Wrap" Foreground="Gray"
-                 FontSize="11" Margin="0,0,0,16" />
-
-      <TextBlock Text="Versões" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" />
-      <TextBlock x:Name="VersionsText" TextWrapping="Wrap" FontFamily="Consolas"
-                 FontSize="11" Margin="0,0,0,16" />
-
-      <TextBlock Text="Créditos" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" />
-      <TextBlock x:Name="CreditsText" TextWrapping="Wrap" FontSize="11" />
-    </StackPanel>
-  </ScrollViewer>
+    </ScrollViewer>
+  </Grid>
 </Window>

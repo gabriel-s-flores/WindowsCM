@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+using WindowsCM.Core.Settings;
+
 namespace WindowsCM.Core.Popup;
 
 // Cursor-first placement with per-monitor DPI clamping (research 03
@@ -70,6 +72,53 @@ public static class PopupPlacement
         return Math.Max(PopupSizing.MinWidth, available);
     }
 
+    public static (double Left, double Top, double Width, double Height) PlaceLargePopup(
+        DialogOrientation orientation,
+        LargeHorizontalPosition hPos,
+        LargeVerticalPosition vPos,
+        WorkArea area,
+        double verticalWidth = PopupSizing.DefaultVerticalWidth,
+        double horizontalHeight = PopupSizing.MaxHeight,
+        double margin = PopupSizing.DefaultHorizontalMargin)
+    {
+        if (orientation == DialogOrientation.Vertical)
+        {
+            var width = Math.Min(verticalWidth, Math.Max(0, (area.Right - area.Left) - (2 * margin)));
+            var height = Math.Max(0, (area.Bottom - area.Top) - (2 * margin));
+            var top = area.Top + margin;
+            var left = vPos == LargeVerticalPosition.Right
+                ? area.Right - width - margin
+                : area.Left + margin;
+            return (left, top, width, height);
+        }
+        else
+        {
+            var width = CalculateHorizontalFillWidth(area, margin);
+            var height = horizontalHeight;
+            var left = area.Left + margin;
+            var top = hPos == LargeHorizontalPosition.Top
+                ? area.Top + margin
+                : area.Bottom - height - margin;
+            return (left, top, width, height);
+        }
+    }
+
+    public static (double Left, double Top, double Width, double Height) PlaceCompactPopup(
+        DialogOrientation orientation,
+        double cursorX,
+        double cursorY,
+        WorkArea area,
+        double verticalWidth = 320,
+        double verticalHeight = 480,
+        double horizontalWidth = 540,
+        double horizontalHeight = 240)
+    {
+        var width = orientation == DialogOrientation.Horizontal ? horizontalWidth : verticalWidth;
+        var height = orientation == DialogOrientation.Horizontal ? horizontalHeight : verticalHeight;
+        var (left, top) = PlaceAtCursor(cursorX, cursorY, width, height, area);
+        return (left, top, width, height);
+    }
+
     // Physical pixels to DIPs at the point of positioning
     // (CompositionTarget.TransformFromDevice parity).
     public static double ToDips(double pixels, double fromDeviceScale) => pixels * fromDeviceScale;
@@ -87,6 +136,9 @@ public static class PopupSizing
 
     // Baseline fallback width
     public const double FixedWidth = 880;
+
+    // Default width for vertical large popup
+    public const double DefaultVerticalWidth = 380;
 
     // PopupWindow.xaml MaxHeight="348" parity (240 card + 44 header + 24 padding + 40 scrollbar/breathing room).
     public const double MaxHeight = 348;

@@ -2,14 +2,15 @@
 <Window x:Class="WindowsCM.App.TextInputDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="pack://application:,,,/Assets/app.ico"
         Width="420" SizeToContent="Height" MaxHeight="400"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
   <StackPanel Margin="12">
     <TextBox x:Name="InputBox" AcceptsReturn="True" MinLines="3" MaxLines="12"
              VerticalScrollBarVisibility="Auto" />
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-      <Button Content="OK" Width="75" Margin="0,0,6,0" IsDefault="True" Click="OnOk" />
-      <Button Content="Cancelar" Width="75" IsCancel="True" />
+      <Button Content="{DynamicResource Loc_DialogOk}" Width="75" Margin="0,0,6,0" IsDefault="True" Click="OnOk" />
+      <Button Content="{DynamicResource Loc_DialogCancel}" Width="75" IsCancel="True" />
     </StackPanel>
   </StackPanel>
 </Window>

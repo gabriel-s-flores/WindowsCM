@@ -25,7 +25,10 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
     private int _flashTicksLeft;
     private bool _disposed;
 
-    public TrayManager(TrayController controller, IIncognitoToggle incognito, Dispatcher dispatcher)
+    private readonly Dictionary<TrayMenuItem, ToolStripMenuItem> _menuItems = new();
+    private ToolStripMenuItem? _compactMenuItem;
+
+    public TrayManager(TrayController controller, IIncognitoToggle incognito, Dispatcher dispatcher, Action? onOpenCompact = null)
     {
         _controller = controller;
         _incognito = incognito;
@@ -43,26 +46,32 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         var menu = new ContextMenuStrip();
         foreach (var item in TrayMenu.All)
         {
-            if (item == TrayMenuItem.Incognito)
-            {
-                _incognitoItem = new ToolStripMenuItem(TrayMenu.LabelFor(item))
-                {
-                    CheckOnClick = true,
-                };
-                _incognitoItem.Click += (_, _) => _controller.OnMenu(item);
-                menu.Items.Add(_incognitoItem);
-                continue;
-            }
             var captured = item;
             var entry = new ToolStripMenuItem(TrayMenu.LabelFor(item));
             entry.Click += (_, _) => _controller.OnMenu(captured);
+            _menuItems[item] = entry;
             menu.Items.Add(entry);
+
+            if (item == TrayMenuItem.Incognito)
+            {
+                _incognitoItem = entry;
+            }
+
+            if (item == TrayMenuItem.Open && onOpenCompact is not null)
+            {
+                _compactMenuItem = new ToolStripMenuItem(WindowsCM.Core.Localization.LocalizationManager.Strings.TrayCompactMenu);
+                _compactMenuItem.Click += (_, _) => _dispatcher.Invoke(onOpenCompact);
+                menu.Items.Add(_compactMenuItem);
+            }
         }
         menu.Opening += (_, _) =>
         {
             if (_incognitoItem is not null)
             {
                 _incognitoItem.Checked = _incognito.IsIncognito;
+                _incognitoItem.Text = _incognito.IsIncognito
+                    ? WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIncognitoActive
+                    : WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIncognito;
             }
         };
         _icon.ContextMenuStrip = menu;
@@ -117,6 +126,53 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             _flashTimer.Stop();
             _icon.Icon = AppIcons.Base;
         }
+    }
+
+    public void UpdateIncognitoState(bool isIncognito)
+    {
+        _dispatcher.Invoke(() =>
+        {
+            if (_incognitoItem is not null)
+            {
+                _incognitoItem.Checked = isIncognito;
+                _incognitoItem.Text = isIncognito
+                    ? WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIncognitoActive
+                    : WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIncognito;
+            }
+            if (_icon is not null)
+            {
+                _icon.Text = isIncognito
+                    ? WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIconTooltipIncognito
+                    : WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIconTooltip;
+            }
+        });
+    }
+
+    public void UpdateLanguage()
+    {
+        _dispatcher.Invoke(() =>
+        {
+            foreach (var (key, item) in _menuItems)
+            {
+                item.Text = TrayMenu.LabelFor(key);
+            }
+            if (_compactMenuItem is not null)
+            {
+                _compactMenuItem.Text = WindowsCM.Core.Localization.LocalizationManager.Strings.TrayCompactMenu;
+            }
+            if (_incognitoItem is not null)
+            {
+                _incognitoItem.Text = _incognito.IsIncognito
+                    ? WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIncognitoActive
+                    : WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIncognito;
+            }
+            if (_icon is not null)
+            {
+                _icon.Text = _incognito.IsIncognito
+                    ? WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIconTooltipIncognito
+                    : WindowsCM.Core.Localization.LocalizationManager.Strings.TrayIconTooltip;
+            }
+        });
     }
 
     public void Dispose()

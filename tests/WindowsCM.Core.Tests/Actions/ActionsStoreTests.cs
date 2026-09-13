@@ -122,9 +122,9 @@ public sealed class ActionsStoreTests : IDisposable
     public void Restore_GroupsIntoSameNamedSubmenu()
     {
         var open = BuiltinActions.Default().Actions
-            .OfType<ActionSubmenu>().Single(s => s.Name == "Open");
+            .OfType<ActionSubmenu>().Single(s => s.Name == "Abrir");
         var user = new ActionConfig(
-            [new ActionSubmenu("Open",
+            [new ActionSubmenu("Abrir",
             [
                 new CommandAction("mine-open", "Mine", "myopen", null,
                     [ItemKind.File], ActionOutput.Ignore, [])
@@ -132,7 +132,7 @@ public sealed class ActionsStoreTests : IDisposable
             new Dictionary<ItemKind, string>());
 
         var restored = ActionsStore.Restore(user);
-        var merged = restored.Actions.OfType<ActionSubmenu>().Single(s => s.Name == "Open");
+        var merged = restored.Actions.OfType<ActionSubmenu>().Single(s => s.Name == "Abrir");
 
         Assert.Equal("mine-open", ((CommandAction)merged.Actions[0]).Id);
         Assert.Contains(merged.Actions.OfType<CommandAction>(),

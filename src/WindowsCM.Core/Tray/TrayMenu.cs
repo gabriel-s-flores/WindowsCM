@@ -1,8 +1,9 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+using WindowsCM.Core.Localization;
+
 namespace WindowsCM.Core.Tray;
 
-// The five tray menu items (research 03 §3.2, map Q4). Labels are English
-// in v1 per the spec; Clear keeps pins+tags (never wipe-all from the tray).
+// The five tray menu items (research 03 §3.2, map Q4).
+// Clear keeps pins+tags (never wipe-all from the tray).
 public enum TrayMenuItem
 {
     Open,
@@ -23,13 +24,32 @@ public static class TrayMenu
         TrayMenuItem.Exit,
     ];
 
-    public static string LabelFor(TrayMenuItem item) => item switch
+    public static string LabelFor(TrayMenuItem item, bool? isPortuguese = null)
     {
-        TrayMenuItem.Open => "Abrir",
-        TrayMenuItem.Incognito => "Modo anônimo",
-        TrayMenuItem.Clear => "Limpar histórico (manter fixados e tags)",
-        TrayMenuItem.Settings => "Configurações",
-        TrayMenuItem.Exit => "Sair",
-        _ => throw new ArgumentOutOfRangeException(nameof(item)),
-    };
+        var pt = isPortuguese ?? LocalizationManager.IsPortuguese;
+        if (pt)
+        {
+            return item switch
+            {
+                TrayMenuItem.Open => "Abrir",
+                TrayMenuItem.Incognito => "Modo anônimo",
+                TrayMenuItem.Clear => "Limpar histórico (manter fixados e tags)",
+                TrayMenuItem.Settings => "Configurações",
+                TrayMenuItem.Exit => "Sair",
+                _ => throw new ArgumentOutOfRangeException(nameof(item)),
+            };
+        }
+        else
+        {
+            return item switch
+            {
+                TrayMenuItem.Open => "Open",
+                TrayMenuItem.Incognito => "Incognito mode",
+                TrayMenuItem.Clear => "Clear history (keep pinned & tags)",
+                TrayMenuItem.Settings => "Settings",
+                TrayMenuItem.Exit => "Exit",
+                _ => throw new ArgumentOutOfRangeException(nameof(item)),
+            };
+        }
+    }
 }

@@ -22,7 +22,13 @@ public static class ActivationFeedbackPolicy
             _ => new ActivationFeedback(SignalCopy: false, BalloonText: outcome.Diagnostics),
         };
 
-    public static ActivationFeedback ForMissingItem(long itemId) => new(
-        SignalCopy: false,
-        BalloonText: $"Item {itemId} is no longer in history, so nothing was copied.");
+    public static ActivationFeedback ForMissingItem(long itemId, bool? isPortuguese = null)
+    {
+        var strings = (isPortuguese ?? Localization.LocalizationManager.IsPortuguese)
+            ? (Localization.IAppStrings)Localization.PortugueseAppStrings.Instance
+            : Localization.EnglishAppStrings.Instance;
+        return new(
+            SignalCopy: false,
+            BalloonText: strings.TrayMissingItemBalloon(itemId));
+    }
 }

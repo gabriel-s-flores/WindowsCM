@@ -85,16 +85,25 @@ public sealed class PasteOrchestrator
             return new PasteOutcome(PasteStatus.CopiedOnly, null, null);
         }
         await hideUi().ConfigureAwait(false);
+        if (capturedTarget != IntPtr.Zero)
+        {
+            _foreground.RestoreForeground(capturedTarget);
+        }
         await _delay.Delay(_options.PasteDelayMs, ct).ConfigureAwait(false);
-        // Foreground first: the captured handle may be stale (target closed
-        // or focus moved on), and a stale handle must report focus loss, not
-        // a wrong elevation verdict. Only the confirmed handle is probed.
+        // Foreground first: ensure target is restored and active.
         if (_foreground.GetCurrent() != capturedTarget)
         {
-            return new PasteOutcome(
-                PasteStatus.CopiedOnlyForegroundLost, null,
-                "The target window lost focus before pasting, so the item was only copied. " +
-                "If the target runs as administrator, relaunch WindowsCM elevated and try again.");
+            if (capturedTarget != IntPtr.Zero)
+            {
+                _foreground.RestoreForeground(capturedTarget);
+            }
+            if (_foreground.GetCurrent() != capturedTarget)
+            {
+                return new PasteOutcome(
+                    PasteStatus.CopiedOnlyForegroundLost, null,
+                    "The target window lost focus before pasting, so the item was only copied. " +
+                    "If the target runs as administrator, relaunch WindowsCM elevated and try again.");
+            }
         }
         // UIPI second: an elevated target swallows SendInput silently, so a
         // predicted refusal beats an injected-into-the-void paste.

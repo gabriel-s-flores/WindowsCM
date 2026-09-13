@@ -266,7 +266,7 @@ public sealed class ActionExecutorTests
     public async Task ColorAction_ConvertsThroughParser()
     {
         var hex = BuiltinActions.Default().Actions
-            .OfType<ActionSubmenu>().Single(s => s.Name == "Convert")
+            .OfType<ActionSubmenu>().Single(s => s.Name == "Converter")
             .Actions.OfType<ColorAction>().Single(a => a.Id == "hex");
 
         var result = await Subject().ExecuteAsync(hex, Item(ItemKind.Color, "red"));

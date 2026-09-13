@@ -142,18 +142,12 @@ public static class PopupKeyboardMap
                 return shift
                     ? new PopupKeyResult(PopupAction.CycleTypePrevious)
                     : new PopupKeyResult(PopupAction.CycleTypeNext);
-            case PopupKey.Oem3 when ctrl && !alt:
-                return shift
-                    ? new PopupKeyResult(PopupAction.CycleTagPrevious)
-                    : new PopupKeyResult(PopupAction.CycleTagNext);
             default:
                 break;
         }
-        if (ctrl && !alt && TryDigitSlot(ev.Key, out var slot))
+        if (ctrl && !alt && !shift && TryDigitSlot(ev.Key, out var slot))
         {
-            return shift
-                ? new PopupKeyResult(PopupAction.ApplyTagSlot, slot)
-                : new PopupKeyResult(PopupAction.JumpToSlot, slot);
+            return new PopupKeyResult(PopupAction.JumpToSlot, slot);
         }
         return null;
     }
@@ -201,18 +195,12 @@ public static class PopupKeyboardMap
                 return shift
                     ? new PopupKeyResult(PopupAction.CycleTypePrevious)
                     : new PopupKeyResult(PopupAction.CycleTypeNext);
-            case PopupKey.Oem3 when ctrl && !alt:
-                return shift
-                    ? new PopupKeyResult(PopupAction.CycleTagPrevious)
-                    : new PopupKeyResult(PopupAction.CycleTagNext);
             default:
                 break;
         }
-        if (ctrl && !alt && TryDigitSlot(ev.Key, out var slot))
+        if (ctrl && !alt && !shift && TryDigitSlot(ev.Key, out var slot))
         {
-            return shift
-                ? new PopupKeyResult(PopupAction.ApplyTagSlot, slot)
-                : new PopupKeyResult(PopupAction.JumpToSlot, slot);
+            return new PopupKeyResult(PopupAction.JumpToSlot, slot);
         }
         return null;
     }

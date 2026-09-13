@@ -32,7 +32,7 @@ public sealed class ActionMatcherTests
     public void Test_PatternGuards_FollowCopyousDefaults()
     {
         var rgb = BuiltinActions.Default().Actions
-            .OfType<ActionSubmenu>().Single(s => s.Name == "Convert")
+            .OfType<ActionSubmenu>().Single(s => s.Name == "Converter")
             .Actions.OfType<ColorAction>().Single(a => a.Id == "rgb");
 
         Assert.False(ActionMatcher.Test(ItemKind.Color, "rgb(1 2 3)", rgb));

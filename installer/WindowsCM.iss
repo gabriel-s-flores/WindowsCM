@@ -46,6 +46,7 @@ DefaultGroupName={#AppName}
 PrivilegesRequired=lowest
 OutputDir=Output
 OutputBaseFilename={#AppName}-Setup-{#AppVersion}
+SetupIconFile=..\src\WindowsCM.App\Assets\app.ico
 Compression=lzma2
 SolidCompression=yes
 LicenseFile=..\LICENSE

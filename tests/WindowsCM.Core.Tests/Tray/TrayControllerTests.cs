@@ -112,6 +112,21 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public void MenuOpen_WhenIncognito_ShowsIncognito()
+    {
+        var subject = Subject();
+        _incognito.SetIncognito(true);
+        _incognito.Sets.Clear();
+
+        subject.OnMenu(TrayMenuItem.Open);
+
+        Assert.Equal([true], _popup.Shows);
+        Assert.Empty(_incognito.Sets);
+        Assert.True(_incognito.IsIncognito);
+    }
+
+
+    [Fact]
     public void MenuIncognito_SetsFlagThenShows()
     {
         Subject().OnMenu(TrayMenuItem.Incognito);
@@ -119,6 +134,19 @@ public sealed class TrayControllerTests
         Assert.Equal([true], _incognito.Sets);
         Assert.True(_incognito.IsIncognito);
         Assert.Equal([true], _popup.Shows);
+    }
+
+    [Fact]
+    public void MenuIncognito_WhenAlreadyIncognito_TogglesOff()
+    {
+        var subject = Subject();
+        _incognito.SetIncognito(true);
+        _incognito.Sets.Clear();
+
+        subject.OnMenu(TrayMenuItem.Incognito);
+
+        Assert.Equal([false], _incognito.Sets);
+        Assert.False(_incognito.IsIncognito);
     }
 
     [Fact]

@@ -131,19 +131,29 @@ public sealed class CaptureServiceTests : IDisposable
     }
 
     [Fact]
-    public void Capture_Incognito_SuspendsWithoutLeakAfterToggle()
+    public void Capture_Incognito_StoresInEphemeralSession_WipedCleanOnToggleOff()
     {
-        // Gated copies never touch suppression state: nothing incognito is
-        // stored (no leak), and re-copying after toggle-off lands (no loss).
         _capture.IsIncognito = true;
-        Assert.Null(_capture.Capture(TextPayload("secret"), null, _clock.UtcNow));
+        var incognitoItem = _capture.Capture(TextPayload("secret"), null, _clock.UtcNow);
+        Assert.NotNull(incognitoItem);
+        Assert.Equal("secret", incognitoItem.Content);
 
+        // Persistent store was NEVER touched! Zero leak!
+        Assert.Empty(_store.List());
+
+        // Now toggle off incognito
         _capture.IsIncognito = false;
-        Assert.NotNull(_capture.Capture(TextPayload("secret"), null, _clock.UtcNow));
-        Assert.Single(_store.List());
 
-        // A genuinely new copy after toggle still lands.
+        // Persistent store is still empty (no traces!)
+        Assert.Empty(_store.List());
+
+        // A new copy after toggle lands in the persistent store
         Assert.NotNull(_capture.Capture(TextPayload("hello"), null, _clock.UtcNow));
+        Assert.Single(_store.List());
+        Assert.Equal("hello", _store.List()[0].Content);
+
+        // Re-copying the secret after toggle-off now lands legitimately in persistent store
+        Assert.NotNull(_capture.Capture(TextPayload("secret"), null, _clock.UtcNow));
         Assert.Equal(2, _store.List().Count);
     }
 

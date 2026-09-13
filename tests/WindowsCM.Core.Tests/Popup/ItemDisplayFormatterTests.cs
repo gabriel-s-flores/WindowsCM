@@ -174,11 +174,32 @@ public sealed class ItemDisplayFormatterTests
     }
 
     [Fact]
+    public void GetTitle_MultipleEmojis_ReturnsEmoji()
+    {
+        var item = new ClipboardItem(ItemKind.Character, "🚀🎉❤️", false, null, DateTime.UtcNow, null, null);
+        Assert.Equal("Emoji", ItemDisplayFormatter.GetTitle(item));
+    }
+
+    [Fact]
     public void GetTypeLabel_EmojiCharacter_ReturnsEmojiWithCodePoint()
     {
         var item = new ClipboardItem(ItemKind.Character, "🚀", false, null, DateTime.UtcNow, null, null);
         var label = ItemDisplayFormatter.GetTypeLabel(item);
         Assert.Equal("Emoji • U+1F680", label);
+    }
+
+    [Fact]
+    public void GetTypeLabel_MultipleEmojis_ReturnsEmojiWithCount()
+    {
+        var item = new ClipboardItem(ItemKind.Character, "🚀🎉❤️", false, null, DateTime.UtcNow, null, null);
+        var label = ItemDisplayFormatter.GetTypeLabel(item);
+        Assert.Equal("Emoji • 3 emojis", label);
+    }
+
+    [Fact]
+    public void GetKindIconGlyph_MultipleEmojis_ReturnsEmojiSmileyGlyph()
+    {
+        Assert.Equal("\uED53", ItemDisplayFormatter.GetKindIconGlyph(ItemKind.Character, "🚀🎉"));
     }
 
     [Fact]
@@ -213,5 +234,28 @@ public sealed class ItemDisplayFormatterTests
     {
         Assert.Equal("U+1F680", ItemDisplayFormatter.GetUnicodeCodePoint("🚀"));
         Assert.Equal("U+0041", ItemDisplayFormatter.GetUnicodeCodePoint("A"));
+    }
+
+    [Fact]
+    public void GetTypeLabel_WithCustomCategory_UsesCustomCategoryName()
+    {
+        var cats = new WindowsCM.Core.Settings.FileCategorySettings();
+        cats.AddCategory("Modelos 3D", "#9B59B6", new[] { ".blend", ".obj" });
+
+        var item = new ClipboardItem(ItemKind.File, @"C:\Projects\robot.blend", false, null, DateTime.UtcNow, null, null);
+        var label = ItemDisplayFormatter.GetTypeLabel(item, cats);
+
+        Assert.Equal("Modelos 3D • BLEND", label);
+    }
+
+    [Fact]
+    public void GetKindIconGlyph_WithFileCategories_ReturnsSpecificIconForFileTypes()
+    {
+        var cats = new WindowsCM.Core.Settings.FileCategorySettings();
+
+        Assert.Equal("\uE714", ItemDisplayFormatter.GetKindIconGlyph(ItemKind.File, "video.mp4", cats)); // Video
+        Assert.Equal("\uEC4F", ItemDisplayFormatter.GetKindIconGlyph(ItemKind.File, "audio.mp3", cats)); // Audio
+        Assert.Equal("\uE8AD", ItemDisplayFormatter.GetKindIconGlyph(ItemKind.File, "slides.pptx", cats)); // Presentation
+        Assert.Equal("\uF0E3", ItemDisplayFormatter.GetKindIconGlyph(ItemKind.File, "data.xlsx", cats)); // Spreadsheet
     }
 }

@@ -28,7 +28,7 @@ public static partial class LinkMetadataParser
         var description = FirstContent(metas, "og:description")
             ?? FirstContent(metas, "twitter:description")
             ?? FirstContent(metas, "description");
-        var image = FirstImage(metas);
+        var image = FirstImage(metas, html);
         return new LinkMetadata(
             Clean(title),
             Clean(description),
@@ -72,9 +72,9 @@ public static partial class LinkMetadataParser
     }
 
     // og:image* (og:image, og:image:url, og:image:secure_url) first, then
-    // twitter:image, then a plain image meta (Copyous `image|og:image*`
-    // parity). First non-empty wins.
-    private static string? FirstImage(List<Dictionary<string, string>> metas)
+    // twitter:image, then a plain image/thumbnail meta or <link rel="image_src">
+    // (Copyous `image|og:image*` parity). First non-empty wins.
+    private static string? FirstImage(List<Dictionary<string, string>> metas, string html)
     {
         string? plain = null;
         string? twitter = null;
@@ -93,11 +93,23 @@ public static partial class LinkMetadataParser
             }
             twitter ??= kind.Equals("twitter:image", StringComparison.OrdinalIgnoreCase)
                 ? content : null;
-            plain ??= kind.Equals("image", StringComparison.OrdinalIgnoreCase)
+            plain ??= (kind.Equals("image", StringComparison.OrdinalIgnoreCase)
+                || kind.Equals("thumbnail", StringComparison.OrdinalIgnoreCase))
                 ? content : null;
         }
-        return twitter ?? plain;
+
+        if (twitter is not null) return twitter;
+        if (plain is not null) return plain;
+
+        var linkMatch = LinkImageSrcRegex().Match(html);
+        if (linkMatch.Success)
+        {
+            return linkMatch.Groups["href"].Value;
+        }
+
+        return null;
     }
+
 
     private static string? ReadTitleElement(string html)
     {
@@ -156,4 +168,8 @@ public static partial class LinkMetadataParser
 
     [GeneratedRegex(@"<title\b[^>]*>(?<t>.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex TitleRegex();
+
+    [GeneratedRegex(@"<link\b[^>]*\brel\s*=\s*[""']?image_src[""']?[^>]*\bhref\s*=\s*[""'](?<href>[^""']+)[""']", RegexOptions.IgnoreCase)]
+    private static partial Regex LinkImageSrcRegex();
 }
+

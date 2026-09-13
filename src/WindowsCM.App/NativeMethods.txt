@@ -1,0 +1,13 @@
+﻿D2D1CreateFactory
+ID2D1Factory
+ID2D1DCRenderTarget
+DWriteCreateFactory
+IDWriteFactory
+IDWriteTextFormat
+CreateCompatibleDC
+CreateDIBSection
+SelectObject
+DeleteObject
+DeleteDC
+D2D1_DRAW_TEXT_OPTIONS
+DWRITE_MEASURING_MODE

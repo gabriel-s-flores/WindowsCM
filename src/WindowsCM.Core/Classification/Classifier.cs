@@ -21,6 +21,7 @@ public static class Classifier
         }
         var trimmed = text.Trim();
         ItemKind kind = LinkDetector.IsLink(trimmed) ? ItemKind.Link
+            : EmojiDetector.IsAllEmojis(trimmed) ? ItemKind.Character
             : !GraphemeCounter.HasMoreThan(trimmed, maxCharacters) ? ItemKind.Character
             : ColorParser.IsColor(trimmed) ? ItemKind.Color
             : CodeDetector.IsCode(trimmed) ? ItemKind.Code

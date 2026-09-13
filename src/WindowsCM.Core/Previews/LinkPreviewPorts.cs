@@ -56,15 +56,23 @@ public interface ILinkPreviewHttp
 public sealed class LinkPreviewHttpClient : ILinkPreviewHttp
 {
     public const int TimeoutSeconds = 5;
-    public const string UserAgent = "Mozilla/5.0 (compatible; WindowsCM/1.0)";
+    public const string UserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
     private static readonly HttpClient Shared = CreateShared();
 
     private static HttpClient CreateShared()
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(TimeoutSeconds) };
+        var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = true,
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+        };
+        var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(TimeoutSeconds) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        client.DefaultRequestHeaders.Accept.ParseAdd("text/html");
+        client.DefaultRequestHeaders.Accept.ParseAdd(
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7");
         return client;
     }
 

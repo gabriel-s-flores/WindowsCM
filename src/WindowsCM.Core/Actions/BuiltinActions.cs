@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using WindowsCM.Core.Classification;
 using WindowsCM.Core.History;
+using WindowsCM.Core.Localization;
 
 namespace WindowsCM.Core.Actions;
 
@@ -26,6 +27,43 @@ public static class BuiltinActions
     // The QR chord in WPF spelling (GTK original: <Control>q).
     public const string QrShortcut = "Ctrl+Q";
 
+    public static string GetLocalizedName(string id, string fallbackName, bool? isPortuguese = null)
+    {
+        var pt = isPortuguese ?? LocalizationManager.IsPortuguese;
+        if (pt)
+        {
+            return id switch
+            {
+                OpenWithDefault => "Abrir com aplicativo padrão",
+                OpenWithFiles => "Abrir no Explorador de Arquivos",
+                OpenWithBrowser => "Abrir no navegador",
+                PasteAsPath => "Colar como caminho",
+                QrCode => "Gerar código QR",
+                "rgb" => "Converter para RGB",
+                "hex" => "Converter para HEX",
+                "hsl" => "Converter para HSL",
+                "oklch" => "Converter para OKLCH",
+                _ => fallbackName
+            };
+        }
+        else
+        {
+            return id switch
+            {
+                OpenWithDefault => "Open with default application",
+                OpenWithFiles => "Open in File Explorer",
+                OpenWithBrowser => "Open in browser",
+                PasteAsPath => "Paste as path",
+                QrCode => "Generate QR code",
+                "rgb" => "Convert to RGB",
+                "hex" => "Convert to HEX",
+                "hsl" => "Convert to HSL",
+                "oklch" => "Convert to OKLCH",
+                _ => fallbackName
+            };
+        }
+    }
+
     public static ActionConfig Default()
     {
         ColorAction Convert(string id, string name, string pattern, ColorSpace space) =>
@@ -33,40 +71,40 @@ public static class BuiltinActions
 
         return new ActionConfig(
             [
-                new ActionSubmenu("Open",
+                new ActionSubmenu("Abrir",
                 [
                     new CommandAction(
-                        OpenWithDefault, "Open with Default",
+                        OpenWithDefault, "Abrir com aplicativo padrão",
                         "powershell -NoProfile -NonInteractive -Command \"$input | ForEach-Object { $p = $_.Trim(); if ($p) { $u = [Uri]::UnescapeDataString(($p -replace 'file://','').Trim()).Trim('/'); if ($u) { Start-Process -FilePath $u } } }\"",
                         null, [ItemKind.Image, ItemKind.File],
                         ActionOutput.Ignore, []),
                     new CommandAction(
-                        OpenWithFiles, "Open with Files",
+                        OpenWithFiles, "Abrir no Explorador de Arquivos",
                         "explorer.exe /select,\"%1\"",
                         "^(.*)", [ItemKind.Image, ItemKind.File, ItemKind.Files],
                         ActionOutput.Ignore, []),
                     new CommandAction(
-                        OpenWithBrowser, "Open with Browser",
+                        OpenWithBrowser, "Abrir no navegador",
                         "powershell -NoProfile -NonInteractive -Command \"$input | ForEach-Object { $u = $_.Trim(); if ($u) { Start-Process -FilePath $u } }\"",
                         null, [ItemKind.Link],
                         ActionOutput.Ignore, []),
                 ]),
                 new CommandAction(
-                    PasteAsPath, "Paste as Path",
+                    PasteAsPath, "Colar como caminho",
                     "powershell -NoProfile -NonInteractive -Command \"$input | ForEach-Object { $p = $_.Trim(); if ($p) { [Uri]::UnescapeDataString(($p -replace 'file://','').Trim()).Trim('/') } }\"",
                     null, [ItemKind.Image, ItemKind.File, ItemKind.Files],
                     ActionOutput.Paste, []),
-                new ActionSubmenu("Convert",
+                new ActionSubmenu("Converter",
                 [
-                    Convert("rgb", "Rgb", "^(?!rgb)", ColorSpace.Rgb),
-                    Convert("hex", "Hex", "^(?!#)", ColorSpace.Hex),
-                    Convert("hsl", "Hsl", "^(?!hsl)", ColorSpace.Hsl),
+                    Convert("rgb", "RGB", "^(?!rgb)", ColorSpace.Rgb),
+                    Convert("hex", "HEX", "^(?!#)", ColorSpace.Hex),
+                    Convert("hsl", "HSL", "^(?!hsl)", ColorSpace.Hsl),
                     // hwb, linear-rgb, xyz, lab, lch, oklab stay commented,
                     // exactly like the Copyous source — oklch closes the list.
-                    Convert("oklch", "Oklch", "^(?!oklch)", ColorSpace.Oklch),
+                    Convert("oklch", "OKLCH", "^(?!oklch)", ColorSpace.Oklch),
                 ]),
                 new QrCodeAction(
-                    QrCode, "QR Code", null,
+                    QrCode, "Gerar código QR", null,
                     [ItemKind.Text, ItemKind.Code, ItemKind.Link, ItemKind.Character, ItemKind.Color],
                     [QrShortcut]),
             ],
@@ -92,7 +130,9 @@ public static class BuiltinActions
             if (node is ActionSubmenu submenu)
             {
                 var grouped = missing.OfType<ActionSubmenu>()
-                    .Where(m => m.Name == submenu.Name)
+                    .Where(m => m.Name == submenu.Name ||
+                                (m.Name == "Abrir" && submenu.Name == "Open") ||
+                                (m.Name == "Converter" && submenu.Name == "Convert"))
                     .ToList();
                 if (grouped.Count == 0)
                 {

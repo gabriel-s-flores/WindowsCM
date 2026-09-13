@@ -231,11 +231,11 @@ public static class CodeSyntaxTokenizer
         return spans;
     }
 
-    public static string DetectLanguage(string? code)
+    public static string? DetectLanguage(string? code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            return "Código";
+            return null;
         }
 
         if (Regex.IsMatch(code, @"\b(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+TABLE|UPDATE\s+.*\s+SET)\b", RegexOptions.IgnoreCase))
@@ -267,6 +267,6 @@ public static class CodeSyntaxTokenizer
             return "HTML";
         }
 
-        return "Código";
+        return null;
     }
 }

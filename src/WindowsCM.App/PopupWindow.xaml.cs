@@ -10,7 +10,9 @@ using System.Windows.Media.Animation;
 using WindowsCM.Core.Actions;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
+using WindowsCM.Core.Settings;
 using WinForms = System.Windows.Forms;
+
 
 namespace WindowsCM.App;
 
@@ -36,31 +38,50 @@ public partial class PopupWindow : Window
     private long _lastRenderTicks;
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
-    public bool IsLightTheme => _isLightTheme;
+    private ColorScheme _currentScheme = ColorScheme.Dark;
+    public ColorScheme CurrentScheme => _currentScheme;
+    public bool IsLightTheme => _currentScheme == ColorScheme.Light;
+
 
     public PopupWindow(PopupViewModel model, App app)
     {
         _model = model;
         _app = app;
         InitializeComponent();
-        ApplyTheme(isLight: false);
+        ApplyTheme(ColorScheme.Dark);
         ItemsList.SelectionChanged += OnListSelectionChanged;
+        FaviconService.FaviconUpdated += _ =>
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (IsVisible)
+                {
+                    ItemsList.Items.Refresh();
+                }
+            });
+        };
     }
 
-    public void ApplyTheme(bool isLight)
+    public void ApplyTheme(ColorScheme scheme)
     {
-        _isLightTheme = isLight;
-        var themeDict = PopupThemeBrushes.CreateThemeDictionary(isLight);
+        _currentScheme = scheme;
+        _isLightTheme = scheme == ColorScheme.Light;
+        var themeDict = PopupThemeBrushes.CreateThemeDictionary(scheme, _app.Settings.ItemColors);
         Resources.MergedDictionaries.Clear();
         Resources.MergedDictionaries.Add(themeDict);
         UpdateToggleButtons();
     }
+
+    public void ApplyTheme(bool isLight) =>
+        ApplyTheme(isLight ? ColorScheme.Light : ColorScheme.Dark);
+
 
     public void ShowAtCursor(bool incognito)
     {
         _isActivating = false;
         _lastShowTimestamp = Environment.TickCount64;
         SizeToContent = SizeToContent.Manual;
+        ApplyLayoutOrientation(_app.Settings.Dialog.Orientation);
         if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
         {
             _model.SetSearch("");
@@ -68,46 +89,181 @@ public partial class PopupWindow : Window
         _model.Show(incognito);
         SearchBox.Text = _model.SearchText;
         RefreshView();
-        // Show before measuring: a never-shown Window lays out to zero, so
-        // the first open must share the post-layout path with later opens.
-        // The window stays transparent until placed, so there is no flash
-        // at a stale position (first open == later opens, no jumps).
-        Opacity = 0;
-        try
-        {
-            Show();
-            UpdateLayout();
-            PlaceAtCursor(incognito);
-        }
-        finally
-        {
-            Opacity = 1;
-        }
+        _app.EnsureLinkPreviewsForRecentItems();
+        PlaceAtCursor(incognito);
+        ResetScrollToInitial();
+        UpdateLayout();
+        Show();
         var handle = new WindowInteropHelper(this).EnsureHandle();
         SetForegroundWindow(handle);
         Activate();
         ItemsList.Focus();
     }
 
+    public void ApplyLayoutOrientation(DialogOrientation orientation)
+    {
+        if (orientation == DialogOrientation.Vertical)
+        {
+            if (TryFindResource("VerticalItemsPanelTemplate") is ItemsPanelTemplate vPanel)
+            {
+                ItemsList.ItemsPanel = vPanel;
+            }
+            if (TryFindResource("VerticalCardItemStyle") is Style vStyle)
+            {
+                ItemsList.ItemContainerStyle = vStyle;
+            }
+            ScrollViewer.SetHorizontalScrollBarVisibility(ItemsList, ScrollBarVisibility.Disabled);
+            ScrollViewer.SetVerticalScrollBarVisibility(ItemsList, ScrollBarVisibility.Auto);
+
+            // Responsive TopBar: capsule on row 0 (spans all 3 cols), actions on row 1
+            if (TopBarGrid != null && TopBarGrid.RowDefinitions.Count > 1)
+            {
+                TopBarGrid.RowDefinitions[1].Height = GridLength.Auto;
+                if (SearchCapsuleBorder != null)
+                {
+                    Grid.SetRow(SearchCapsuleBorder, 0);
+                    Grid.SetColumn(SearchCapsuleBorder, 0);
+                    Grid.SetColumnSpan(SearchCapsuleBorder, 3);
+                    SearchCapsuleBorder.Width = double.NaN;
+                    SearchCapsuleBorder.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
+                    SearchCapsuleBorder.Margin = new Thickness(0, 0, 0, 8);
+                }
+                if (LeftActionsPanel != null)
+                {
+                    Grid.SetRow(LeftActionsPanel, 1);
+                    Grid.SetColumn(LeftActionsPanel, 0);
+                }
+                if (RightActionsPanel != null)
+                {
+                    Grid.SetRow(RightActionsPanel, 1);
+                    Grid.SetColumn(RightActionsPanel, 2);
+                }
+            }
+        }
+        else
+        {
+            if (TryFindResource("HorizontalItemsPanelTemplate") is ItemsPanelTemplate hPanel)
+            {
+                ItemsList.ItemsPanel = hPanel;
+            }
+            if (TryFindResource("HorizontalCardItemStyle") is Style hStyle)
+            {
+                ItemsList.ItemContainerStyle = hStyle;
+            }
+            ScrollViewer.SetHorizontalScrollBarVisibility(ItemsList, ScrollBarVisibility.Auto);
+            ScrollViewer.SetVerticalScrollBarVisibility(ItemsList, ScrollBarVisibility.Disabled);
+
+            // Responsive TopBar: Left actions, capsule (420px), Right actions all on row 0
+            if (TopBarGrid != null && TopBarGrid.RowDefinitions.Count > 1)
+            {
+                TopBarGrid.RowDefinitions[1].Height = new GridLength(0);
+                if (SearchCapsuleBorder != null)
+                {
+                    Grid.SetRow(SearchCapsuleBorder, 0);
+                    Grid.SetColumn(SearchCapsuleBorder, 1);
+                    Grid.SetColumnSpan(SearchCapsuleBorder, 1);
+                    SearchCapsuleBorder.Width = 420;
+                    SearchCapsuleBorder.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                    SearchCapsuleBorder.Margin = new Thickness(0);
+                }
+                if (LeftActionsPanel != null)
+                {
+                    Grid.SetRow(LeftActionsPanel, 0);
+                    Grid.SetColumn(LeftActionsPanel, 0);
+                }
+                if (RightActionsPanel != null)
+                {
+                    Grid.SetRow(RightActionsPanel, 0);
+                    Grid.SetColumn(RightActionsPanel, 2);
+                }
+            }
+        }
+    }
+
     public new void Hide()
     {
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
-        StopSmoothScroll();
+        ResetScrollToInitial();
         base.Hide();
         if (!_app.Settings.Behavior.RememberSearch)
         {
             _model.SetSearch("");
             SearchBox.Text = "";
         }
+
+        ApplyScrollbarPosition();
+    }
+
+    public void ResetScrollToInitial()
+    {
+        StopSmoothScroll();
+        var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
+        if (scrollViewer != null)
+        {
+            var orientation = _app.Settings.Dialog.Orientation;
+            var recentAtStart = orientation == DialogOrientation.Vertical
+                ? _app.Settings.Dialog.LargeVerticalOrder == VerticalItemOrder.RecentOnTop
+                : _app.Settings.Dialog.LargeHorizontalOrder == HorizontalItemOrder.RecentOnLeft;
+
+            if (recentAtStart)
+            {
+                scrollViewer.ScrollToHorizontalOffset(0);
+                scrollViewer.ScrollToVerticalOffset(0);
+                _scrollController.SetImmediate(0, scrollViewer.ScrollableWidth);
+            }
+            else
+            {
+                if (orientation == DialogOrientation.Horizontal)
+                {
+                    scrollViewer.ScrollToRightEnd();
+                    _scrollController.SetImmediate(scrollViewer.ScrollableWidth, scrollViewer.ScrollableWidth);
+                }
+                else
+                {
+                    scrollViewer.ScrollToBottom();
+                }
+            }
+        }
+        else
+        {
+            _scrollController.SetImmediate(0, 0);
+        }
+    }
+
+    public void ApplyScrollbarPosition()
+    {
+        ScrollbarPositionHelper.ApplyPositions(
+            ItemsList,
+            _app.Settings.Dialog.VerticalScrollbarPosition,
+            _app.Settings.Dialog.HorizontalScrollbarPosition);
     }
 
     public void RefreshView()
     {
+        var orientation = _app.Settings.Dialog.Orientation;
+        var recentAtStart = orientation == DialogOrientation.Vertical
+            ? _app.Settings.Dialog.LargeVerticalOrder == VerticalItemOrder.RecentOnTop
+            : _app.Settings.Dialog.LargeHorizontalOrder == HorizontalItemOrder.RecentOnLeft;
+        _model.SetItemOrdering(recentAtStart);
+
         ItemsList.ItemsSource = null;
         ItemsList.ItemsSource = _model.VisibleItems;
+
+        if (_model.IsViewingIncognito && _model.VisibleItems.Count == 0)
+        {
+            if (IncognitoEmptyState != null) IncognitoEmptyState.Visibility = Visibility.Visible;
+            ItemsList.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            if (IncognitoEmptyState != null) IncognitoEmptyState.Visibility = Visibility.Collapsed;
+            ItemsList.Visibility = Visibility.Visible;
+        }
+
         SyncSelectionFromModel();
         UpdateToggleButtons();
+        ApplyScrollbarPosition();
     }
 
     private void UpdateToggleButtons()
@@ -116,27 +272,195 @@ public partial class PopupWindow : Window
         {
             PinsButton.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
             PinsButton.Foreground = System.Windows.Media.Brushes.White;
-            PinsButton.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x90, 0xFF));
         }
         else
         {
             PinsButton.ClearValue(System.Windows.Controls.Button.BackgroundProperty);
             PinsButton.ClearValue(System.Windows.Controls.Button.ForegroundProperty);
-            PinsButton.ClearValue(System.Windows.Controls.Button.BorderBrushProperty);
         }
 
-        if (_model.IsIncognito)
+        var isIncognito = _model.IsIncognito;
+        var s = WindowsCM.Core.Localization.LocalizationManager.Strings;
+        if (isIncognito)
         {
-            IncognitoButton.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
+            IncognitoButton.Background = TryFindResource("IncognitoActiveButtonBrush") as System.Windows.Media.Brush
+                ?? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x7C, 0x3A, 0xED));
             IncognitoButton.Foreground = System.Windows.Media.Brushes.White;
-            IncognitoButton.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x90, 0xFF));
+            IncognitoButton.BorderBrush = TryFindResource("IncognitoActiveButtonBorderBrush") as System.Windows.Media.Brush
+                ?? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x93, 0x33, 0xEA));
+            IncognitoButton.ToolTip = s.PopupIncognitoTooltipActive;
+
+            if (IncognitoBanner != null) IncognitoBanner.Visibility = Visibility.Visible;
+            if (IncognitoTopAccent != null) IncognitoTopAccent.Visibility = Visibility.Visible;
+
+            if (_model.IsViewingIncognito)
+            {
+                if (IncognitoBannerTitle != null) IncognitoBannerTitle.Text = s.PopupIncognitoBannerTitle;
+                if (IncognitoBannerSubtitle != null) IncognitoBannerSubtitle.Text = s.PopupIncognitoBannerSubtitle;
+                if (IncognitoBannerDescription != null) IncognitoBannerDescription.Text = s.PopupIncognitoBannerDesc;
+                if (SwitchHistoryText != null) SwitchHistoryText.Text = s.PopupSwitchHistoryNormal;
+                if (SwitchHistoryIcon != null)
+                {
+                    SwitchHistoryIcon.Visibility = Visibility.Visible;
+                    SwitchHistoryIcon.Text = "\uE81C";
+                }
+                if (SwitchHistoryIncognitoIcon != null)
+                {
+                    SwitchHistoryIncognitoIcon.Visibility = Visibility.Collapsed;
+                }
+                if (WindowRootBorder != null && TryFindResource("IncognitoBorderGlowBrush") is System.Windows.Media.Brush glow)
+                {
+                    WindowRootBorder.BorderBrush = glow;
+                }
+            }
+            else
+            {
+                if (IncognitoBannerTitle != null) IncognitoBannerTitle.Text = s.PopupIncognitoBackgroundTitle;
+                if (IncognitoBannerSubtitle != null) IncognitoBannerSubtitle.Text = s.PopupIncognitoBackgroundSubtitle;
+                if (IncognitoBannerDescription != null) IncognitoBannerDescription.Text = s.PopupIncognitoBackgroundDesc;
+                if (SwitchHistoryText != null) SwitchHistoryText.Text = s.PopupSwitchHistoryIncognito;
+                if (SwitchHistoryIcon != null)
+                {
+                    SwitchHistoryIcon.Visibility = Visibility.Collapsed;
+                }
+                if (SwitchHistoryIncognitoIcon != null)
+                {
+                    SwitchHistoryIncognitoIcon.Visibility = Visibility.Visible;
+                }
+                if (WindowRootBorder != null && TryFindResource("PopupBorderBrush") is System.Windows.Media.Brush normalBorder)
+                {
+                    WindowRootBorder.BorderBrush = normalBorder;
+                }
+            }
         }
         else
         {
             IncognitoButton.ClearValue(System.Windows.Controls.Button.BackgroundProperty);
             IncognitoButton.ClearValue(System.Windows.Controls.Button.ForegroundProperty);
             IncognitoButton.ClearValue(System.Windows.Controls.Button.BorderBrushProperty);
+            IncognitoButton.ToolTip = s.PopupIncognitoTooltipInactive;
+
+            if (IncognitoBanner != null) IncognitoBanner.Visibility = Visibility.Collapsed;
+            if (IncognitoTopAccent != null) IncognitoTopAccent.Visibility = Visibility.Collapsed;
+            if (WindowRootBorder != null && TryFindResource("PopupBorderBrush") is System.Windows.Media.Brush normalBorder)
+            {
+                WindowRootBorder.BorderBrush = normalBorder;
+            }
         }
+
+
+        UpdateSearchPlaceholder();
+        UpdateSearchFilterVisuals();
+    }
+
+    private void UpdateSearchPlaceholder()
+    {
+        if (SearchPlaceholder != null)
+        {
+            SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    private void UpdateSearchFilterVisuals()
+    {
+        if (SearchFilterIcon == null) return;
+        var s = WindowsCM.Core.Localization.LocalizationManager.Strings;
+
+        if (_model.TypeFilter.HasValue)
+        {
+            var kind = _model.TypeFilter.Value;
+            var kindName = kind switch
+            {
+                ItemKind.Link => s.FilterLinks,
+                ItemKind.Code => s.FilterCode,
+                ItemKind.File => s.FilterFiles,
+                ItemKind.Image => s.FilterImages,
+                ItemKind.Character => s.FilterEmojis,
+                ItemKind.Color => s.FilterColors,
+                _ => s.FilterText
+            };
+            SearchFilterButton.ToolTip = string.Format(s.PopupFilterActiveTooltip, kindName);
+            SearchFilterIcon.Text = ItemDisplayFormatter.GetKindIconGlyph(kind);
+            var brushKey = kind switch
+            {
+                ItemKind.Link => "KindLinkBrush",
+                ItemKind.Code => "KindCodeBrush",
+                ItemKind.File => "KindFileBrush",
+                ItemKind.Image => "KindImageBrush",
+                ItemKind.Character => "KindCharBrush",
+                ItemKind.Color => "KindColorBrush",
+                _ => "KindTextBrush"
+            };
+            if (TryFindResource(brushKey) is System.Windows.Media.Brush b)
+            {
+                SearchFilterIcon.Foreground = b;
+            }
+        }
+        else
+        {
+            SearchFilterButton.ToolTip = s.PopupFilterTooltip;
+            SearchFilterIcon.Text = "\uE721";
+            SearchFilterIcon.SetResourceReference(TextBlock.ForegroundProperty, "SearchIconBrush");
+        }
+    }
+
+    private void OnSearchFilterClicked(object sender, RoutedEventArgs e)
+    {
+        var s = WindowsCM.Core.Localization.LocalizationManager.Strings;
+        var menu = new ContextMenu();
+        _isContextMenuOpen = true;
+
+        menu.Closed += (_, _) =>
+        {
+            _isContextMenuOpen = false;
+            if (!IsActive && !_isActivating && !_isDialogOpen)
+            {
+                Hide();
+            }
+        };
+
+        var iconFont = new System.Windows.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets");
+
+        MenuItem CreateItem(string label, string glyph, ItemKind? kind)
+        {
+            var isSelected = _model.TypeFilter == kind;
+            var item = new MenuItem
+            {
+                Header = isSelected ? $"✓  {label}" : $"     {label}",
+                Icon = new TextBlock
+                {
+                    Text = glyph,
+                    FontFamily = iconFont,
+                    FontSize = 12,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                },
+                FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal,
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+            item.Click += (_, _) =>
+            {
+                _model.SetTypeFilter(kind);
+                RefreshView();
+            };
+            return item;
+        }
+
+        menu.Items.Add(CreateItem(s.FilterAll, "\uE71D", null));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(CreateItem(s.FilterLinks, "\uE71B", ItemKind.Link));
+        menu.Items.Add(CreateItem(s.FilterCode, "\uE943", ItemKind.Code));
+        menu.Items.Add(CreateItem(s.FilterFiles, "\uED43", ItemKind.File));
+        menu.Items.Add(CreateItem(s.FilterImages, "\uEB9F", ItemKind.Image));
+        menu.Items.Add(CreateItem(s.FilterEmojis, "\uED53", ItemKind.Character));
+        menu.Items.Add(CreateItem(s.FilterColors, "\uE790", ItemKind.Color));
+        menu.Items.Add(CreateItem(s.FilterText, "\uE8A5", ItemKind.Text));
+
+        menu.PlacementTarget = SearchFilterButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 
     private void PlaceAtCursor(bool incognito)
@@ -152,21 +476,26 @@ public partial class PopupWindow : Window
         GetCursorPos(out var cursor);
         var screen = WinForms.Screen.FromPoint(new System.Drawing.Point(cursor.X, cursor.Y));
         var area = screen.WorkingArea;
-        var cursorDips = transform.Transform(new System.Windows.Point(cursor.X, cursor.Y));
         var topLeft = transform.Transform(new System.Windows.Point(area.Left, area.Top));
         var bottomRight = transform.Transform(new System.Windows.Point(area.Right, area.Bottom));
-        var placedHeight = PopupSizing.ClampHeight(ActualHeight > 0 ? ActualHeight : PopupSizing.MaxHeight);
         var workArea = new WorkArea(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y);
-        var (left, top, width) = PopupPlacement.PlaceHorizontalFill(
-            cursorDips.Y, placedHeight, workArea);
+
+        var orientation = _app.Settings.Dialog.Orientation;
+        var hPos = _app.Settings.Dialog.LargeHorizontalPosition;
+        var vPos = _app.Settings.Dialog.LargeVerticalPosition;
+
+        var (left, top, width, height) = PopupPlacement.PlaceLargePopup(
+            orientation, hPos, vPos, workArea);
         Left = left;
         Top = top;
         Width = width;
-        Height = placedHeight;
+        Height = height;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        UpdateSearchPlaceholder();
+        UpdateSearchFilterVisuals();
     }
 
     private void OnDeactivated(object? sender, EventArgs e)
@@ -185,6 +514,7 @@ public partial class PopupWindow : Window
         {
             return;
         }
+        UpdateSearchPlaceholder();
         // By design this never repositions or resizes: SizeToContent is
         // Manual while open (ticket 21), so filtering only swaps rows.
         _model.SetSearch(SearchBox.Text);
@@ -200,16 +530,41 @@ public partial class PopupWindow : Window
     private void OnIncognitoClicked(object sender, RoutedEventArgs e) =>
         _app.SetIncognito(!_model.IsIncognito);
 
+    private void OnExitIncognitoClicked(object sender, RoutedEventArgs e) =>
+        _app.SetIncognito(false);
+
+    private void OnSwitchHistoryClicked(object sender, RoutedEventArgs e)
+    {
+        if (_model.IsViewingIncognito)
+        {
+            _model.SwitchViewToPersistent();
+        }
+        else
+        {
+            _model.SwitchViewToIncognito();
+        }
+        RefreshView();
+    }
+
+
     private void OnClearClicked(object sender, RoutedEventArgs e)
     {
         _model.ClearKeepProtected();
         RefreshView();
     }
 
-    private void OnSettingsClicked(object sender, RoutedEventArgs e) => _app.OpenSettings();
+    private void OnSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        Hide();
+        _app.OpenSettings();
+    }
 
     private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if (_app.Settings.Dialog.Orientation == DialogOrientation.Vertical)
+        {
+            return;
+        }
         if (ItemsList == null) return;
         var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
         if (scrollViewer != null)
@@ -498,18 +853,34 @@ public partial class PopupWindow : Window
         }
     }
 
+    private void OnReceiveMobileClicked(object sender, RoutedEventArgs e)
+    {
+        _isDialogOpen = true;
+        try
+        {
+            _app.ShowMobileTransfer();
+        }
+        finally
+        {
+            _isDialogOpen = false;
+        }
+    }
+
     private void ShowQrForSelected()
     {
         if (_model.SelectedItem is not { } item)
         {
             return;
         }
-        var payload = QrActions.Payload(item.Kind, item.Content);
-        if (payload is null)
+        _isDialogOpen = true;
+        try
         {
-            return;
+            _app.ShowQr(item);
         }
-        _app.ShowQr(payload);
+        finally
+        {
+            _isDialogOpen = false;
+        }
     }
 
     private void ApplyTagSlot(int slot)
@@ -529,8 +900,9 @@ public partial class PopupWindow : Window
         _isDialogOpen = true;
         try
         {
+            var s = WindowsCM.Core.Localization.LocalizationManager.Strings;
             var text = TextInputDialog.Prompt(
-                isTitle ? "Editar título" : "Editar conteúdo",
+                isTitle ? s.DialogEditTitle : s.DialogEditContent,
                 isTitle ? item.Title ?? "" : item.Content,
                 multiline: !isTitle);
             if (text is null)
@@ -565,6 +937,23 @@ public partial class PopupWindow : Window
             _app.Store.SetPinned(item.Id, !item.Pinned);
             _model.Refresh();
             RefreshView();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCardQrButtonClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ClipboardItem item })
+        {
+            _isDialogOpen = true;
+            try
+            {
+                _app.ShowQr(item);
+            }
+            finally
+            {
+                _isDialogOpen = false;
+            }
             e.Handled = true;
         }
     }
@@ -608,6 +997,7 @@ public partial class PopupWindow : Window
 
     private void ShowCardContextMenu(ClipboardItem item, FrameworkElement target)
     {
+        var s = WindowsCM.Core.Localization.LocalizationManager.Strings;
         var menu = new ContextMenu();
         _isContextMenuOpen = true;
 
@@ -620,7 +1010,7 @@ public partial class PopupWindow : Window
             }
         };
 
-        var pasteItem = new MenuItem { Header = "Colar", InputGestureText = "Enter" };
+        var pasteItem = new MenuItem { Header = s.ContextMenuPaste, InputGestureText = "Enter" };
         pasteItem.Click += (_, _) =>
         {
             var req = new ActivationRequest(item.Id, RunDefaultAction: false);
@@ -629,7 +1019,7 @@ public partial class PopupWindow : Window
         };
         menu.Items.Add(pasteItem);
 
-        var copyItem = new MenuItem { Header = "Copiar", InputGestureText = "Shift+Enter" };
+        var copyItem = new MenuItem { Header = s.ContextMenuCopy, InputGestureText = "Shift+Enter" };
         copyItem.Click += (_, _) =>
         {
             var req = new ActivationRequest(item.Id, RunDefaultAction: false);
@@ -639,7 +1029,7 @@ public partial class PopupWindow : Window
 
         var pinItem = new MenuItem
         {
-            Header = item.Pinned ? "Desafixar" : "Fixar",
+            Header = item.Pinned ? s.ContextMenuUnpin : s.ContextMenuPin,
             InputGestureText = "Alt+P"
         };
         pinItem.Click += (_, _) =>
@@ -653,76 +1043,67 @@ public partial class PopupWindow : Window
         menu.Items.Add(new Separator());
 
         var applicable = _app.Executor.Applicable(_app.Actions, item);
-        if (applicable.Count > 0)
+        var commandActions = applicable.Where(a => a is not QrCodeAction && a.Id != BuiltinActions.QrCode && a is not ColorAction).ToList();
+        var colorActions = applicable.OfType<ColorAction>().ToList();
+
+        if (commandActions.Count > 0)
         {
-            var actionsSubmenu = new MenuItem { Header = "Ações" };
-            foreach (var action in applicable)
+            foreach (var action in commandActions)
             {
                 var captured = action;
-                var actionEntry = new MenuItem { Header = captured.Name };
+                var localized = BuiltinActions.GetLocalizedName(captured.Id, captured.Name);
+                var actionEntry = new MenuItem { Header = localized };
                 actionEntry.Click += (_, _) => _ = _app.RunActionAsync(captured, item);
-                actionsSubmenu.Items.Add(actionEntry);
+                menu.Items.Add(actionEntry);
             }
-            menu.Items.Add(actionsSubmenu);
         }
 
-        var qrPayload = QrActions.Payload(item.Kind, item.Content);
-        if (qrPayload is not null)
+        if (colorActions.Count > 0)
         {
-            var qrItem = new MenuItem { Header = "Gerar código QR", InputGestureText = "Ctrl+Q" };
-            qrItem.Click += (_, _) =>
+            var convertMenu = new MenuItem { Header = s.ContextMenuConvert };
+            foreach (var colorAct in colorActions)
             {
-                _isDialogOpen = true;
-                try
+                var captured = colorAct;
+                var subHeader = captured.Name;
+                if (subHeader.StartsWith("Converter para ", StringComparison.OrdinalIgnoreCase))
                 {
-                    _app.ShowQr(qrPayload);
+                    subHeader = subHeader["Converter para ".Length..];
                 }
-                finally
+                else if (subHeader.StartsWith("Convert to ", StringComparison.OrdinalIgnoreCase))
                 {
-                    _isDialogOpen = false;
+                    subHeader = subHeader["Convert to ".Length..];
                 }
-            };
-            menu.Items.Add(qrItem);
+                var colorEntry = new MenuItem { Header = subHeader.ToUpperInvariant() };
+                colorEntry.Click += (_, _) => _ = _app.RunActionAsync(captured, item);
+                convertMenu.Items.Add(colorEntry);
+            }
+            menu.Items.Add(convertMenu);
         }
 
-        var tagsSubmenu = new MenuItem { Header = "Tags" };
-        var noneTag = new MenuItem { Header = "Nenhuma tag" };
-        noneTag.Click += (_, _) =>
+        var qrItem = new MenuItem { Header = s.ContextMenuGenerateQr, InputGestureText = "Ctrl+Q" };
+        qrItem.Click += (_, _) =>
         {
-            _app.Store.SetTag(item.Id, null);
-            _model.Refresh();
-            RefreshView();
+            _isDialogOpen = true;
+            try
+            {
+                _app.ShowQr(item);
+            }
+            finally
+            {
+                _isDialogOpen = false;
+            }
         };
-        tagsSubmenu.Items.Add(noneTag);
-
-        for (int i = 0; i < ItemTags.All.Count; i++)
-        {
-            var tagHex = ItemTags.All[i];
-            var tagSlot = i + 1;
-            var tagItem = new MenuItem
-            {
-                Header = $"Tag {tagSlot} ({tagHex})",
-                IsChecked = string.Equals(item.Tag, tagHex, StringComparison.OrdinalIgnoreCase)
-            };
-            tagItem.Click += (_, _) =>
-            {
-                _app.Store.SetTag(item.Id, tagHex);
-                _model.Refresh();
-                RefreshView();
-            };
-            tagsSubmenu.Items.Add(tagItem);
-        }
-        menu.Items.Add(tagsSubmenu);
+        menu.Items.Add(qrItem);
 
         menu.Items.Add(new Separator());
 
-        var editTitleItem = new MenuItem { Header = "Editar título...", InputGestureText = "F2" };
+        var editTitleItem = new MenuItem { Header = s.ContextMenuEditTitle, InputGestureText = "F2" };
         editTitleItem.Click += (_, _) =>
         {
             _isDialogOpen = true;
             try
             {
-                var text = TextInputDialog.Prompt("Editar título", item.Title ?? "", multiline: false);
+                var text = TextInputDialog.Prompt(s.DialogEditTitle, item.Title ?? "", multiline: false);
                 if (text is not null)
                 {
                     _app.Store.SetTitle(item.Id, string.IsNullOrWhiteSpace(text) ? null : text.Trim());
@@ -741,13 +1122,13 @@ public partial class PopupWindow : Window
         };
         menu.Items.Add(editTitleItem);
 
-        var editContentItem = new MenuItem { Header = "Editar conteúdo...", InputGestureText = "Ctrl+E" };
+        var editContentItem = new MenuItem { Header = s.ContextMenuEditContent, InputGestureText = "Ctrl+E" };
         editContentItem.Click += (_, _) =>
         {
             _isDialogOpen = true;
             try
             {
-                var text = TextInputDialog.Prompt("Editar conteúdo", item.Content, multiline: true);
+                var text = TextInputDialog.Prompt(s.DialogEditContent, item.Content, multiline: true);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     _app.Store.TryUpdateContent(item.Id, item.Kind, text);
@@ -768,7 +1149,7 @@ public partial class PopupWindow : Window
 
         menu.Items.Add(new Separator());
 
-        var deleteItem = new MenuItem { Header = "Excluir", InputGestureText = "Delete" };
+        var deleteItem = new MenuItem { Header = s.ContextMenuDelete, InputGestureText = "Delete" };
         deleteItem.Click += (_, _) =>
         {
             _app.Store.Delete(item.Id);
@@ -819,6 +1200,12 @@ public partial class PopupWindow : Window
         // The model owns selection: the view only reports the clicked row.
         _model.SetSelectedIndex(ItemsList.SelectedIndex);
         SyncSelectionFromModel();
+    }
+
+    public void UpdateLanguage()
+    {
+        UpdateToggleButtons();
+        RefreshView();
     }
 
     [DllImport("user32.dll")]

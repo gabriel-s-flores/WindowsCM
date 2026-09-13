@@ -272,4 +272,34 @@ public sealed class ClassifierTests
 
         Assert.IsType<ClassifiedText>(classified);
     }
+
+    [Theory]
+    [InlineData("🚀🎉")]
+    [InlineData("😀😁😂🤣")]
+    [InlineData("❤️🔥✨")]
+    [InlineData("🚀  🎉")]
+    [InlineData("🇧🇷 🇺🇸")]
+    public void ClassifyText_MultipleEmojisOnly_ClassifiedAsCharacter(string emojiText)
+    {
+        var classified = Classifier.ClassifyText(emojiText);
+
+        Assert.NotNull(classified);
+        Assert.Equal(ItemKind.Character, classified.Kind);
+        Assert.Equal(emojiText, classified.Content);
+    }
+
+    [Theory]
+    [InlineData("Hello 🚀")]
+    [InlineData("🚀 123")]
+    [InlineData("Texto com emoji 😀")]
+    [InlineData("🚀.")]
+    public void ClassifyText_MixedTextWithEmoji_ClassifiedAsText(string mixedText)
+    {
+        var classified = Classifier.ClassifyText(mixedText);
+
+        Assert.NotNull(classified);
+        Assert.Equal(ItemKind.Text, classified.Kind);
+        Assert.Equal(mixedText, classified.Content);
+    }
 }
+

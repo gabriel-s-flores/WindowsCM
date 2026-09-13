@@ -18,21 +18,22 @@ public sealed class HistorySettingsTests
     }
 
     [Fact]
-    public void Defaults_Length50_AgeUnlimited_KeepProtected()
+    public void Defaults_Length100_AgeUnlimited_KeepProtected()
     {
         var history = new HistorySettings();
 
         Assert.Equal("", history.DatabaseLocation);
-        Assert.Equal(50, history.MaxItems);
+        Assert.Equal(100, history.MaxItems);
         Assert.Equal(0, history.MaxAgeMinutes);
         Assert.Equal(EndOfSessionMode.KeepPinnedAndTagged, history.EndOfSession);
     }
 
     [Fact]
-    public void Ranges_MatchGschema()
+    public void Ranges_HistoryLimitCapsAt100()
     {
         Assert.Equal(10, SettingLimits.HistoryLengthMin);
-        Assert.Equal(500, SettingLimits.HistoryLengthMax);
+        Assert.Equal(100, SettingLimits.HistoryLengthMax);
+        Assert.Equal(100, SettingLimits.HistoryLengthDefault);
         Assert.Equal(0, SettingLimits.HistoryTimeMin);
         Assert.Equal(1440, SettingLimits.HistoryTimeMax);
     }
@@ -43,7 +44,7 @@ public sealed class HistorySettingsTests
         var history = new HistorySettings { MaxItems = 5000, MaxAgeMinutes = -5 };
         history.Clamp();
 
-        Assert.Equal(500, history.MaxItems);
+        Assert.Equal(100, history.MaxItems);
         Assert.Equal(0, history.MaxAgeMinutes);
     }
 

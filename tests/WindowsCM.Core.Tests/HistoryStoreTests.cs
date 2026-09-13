@@ -242,6 +242,22 @@ public sealed class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Search_OrdersPinnedItemsFirstThenByDateDesc()
+    {
+        var t = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        _store.AddOrUpdate(Sample(content: "unpinned_new", capturedAt: t, pinned: false));
+        _store.AddOrUpdate(Sample(content: "pinned_old", capturedAt: t.AddHours(-2), pinned: true));
+        _store.AddOrUpdate(Sample(content: "unpinned_old", capturedAt: t.AddHours(-3), pinned: false));
+        _store.AddOrUpdate(Sample(content: "pinned_new", capturedAt: t.AddHours(-1), pinned: true));
+
+        var results = _store.Search("");
+
+        Assert.Equal(["pinned_new", "pinned_old", "unpinned_new", "unpinned_old"],
+            results.Select(i => i.Content));
+    }
+
+
+    [Fact]
     public void RefreshDate_RefreshesDateToTop()
     {
         var t = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);

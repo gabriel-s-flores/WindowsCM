@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using WindowsCM.Core.Popup;
+using WindowsCM.Core.Settings;
 
 namespace WindowsCM.Core.Tests.Popup;
 
@@ -180,5 +181,103 @@ public sealed class PopupPlacementTests
         Assert.Equal(1880, width);
         // 1032 - 348 = 684
         Assert.Equal(684, top);
+    }
+
+    [Fact]
+    public void PlaceLargePopup_Horizontal_Bottom()
+    {
+        var (left, top, width, height) = PopupPlacement.PlaceLargePopup(
+            DialogOrientation.Horizontal,
+            LargeHorizontalPosition.Bottom,
+            LargeVerticalPosition.Left,
+            Area1080p,
+            margin: 20);
+
+        Assert.Equal(20, left);
+        Assert.Equal(1880, width);
+        Assert.Equal(PopupSizing.MaxHeight, height);
+        // 1032 - 348 - 20 = 664
+        Assert.Equal(664, top);
+    }
+
+    [Fact]
+    public void PlaceLargePopup_Horizontal_Top()
+    {
+        var (left, top, width, height) = PopupPlacement.PlaceLargePopup(
+            DialogOrientation.Horizontal,
+            LargeHorizontalPosition.Top,
+            LargeVerticalPosition.Left,
+            Area1080p,
+            margin: 20);
+
+        Assert.Equal(20, left);
+        Assert.Equal(1880, width);
+        Assert.Equal(PopupSizing.MaxHeight, height);
+        // 0 + 20 = 20
+        Assert.Equal(20, top);
+    }
+
+    [Fact]
+    public void PlaceLargePopup_Vertical_Left()
+    {
+        var (left, top, width, height) = PopupPlacement.PlaceLargePopup(
+            DialogOrientation.Vertical,
+            LargeHorizontalPosition.Bottom,
+            LargeVerticalPosition.Left,
+            Area1080p,
+            verticalWidth: 380,
+            margin: 20);
+
+        Assert.Equal(20, left);
+        Assert.Equal(20, top);
+        Assert.Equal(380, width);
+        // 1032 - 40 = 992
+        Assert.Equal(992, height);
+    }
+
+    [Fact]
+    public void PlaceLargePopup_Vertical_Right()
+    {
+        var (left, top, width, height) = PopupPlacement.PlaceLargePopup(
+            DialogOrientation.Vertical,
+            LargeHorizontalPosition.Bottom,
+            LargeVerticalPosition.Right,
+            Area1080p,
+            verticalWidth: 380,
+            margin: 20);
+
+        // 1920 - 380 - 20 = 1520
+        Assert.Equal(1520, left);
+        Assert.Equal(20, top);
+        Assert.Equal(380, width);
+        Assert.Equal(992, height);
+    }
+
+    [Fact]
+    public void PlaceCompactPopup_Vertical_UsesVerticalDimensions()
+    {
+        var (left, top, width, height) = PopupPlacement.PlaceCompactPopup(
+            DialogOrientation.Vertical,
+            100, 100, Area1080p,
+            verticalWidth: 320, verticalHeight: 480);
+
+        Assert.Equal(320, width);
+        Assert.Equal(480, height);
+        Assert.Equal(112, left);
+        Assert.Equal(112, top);
+    }
+
+    [Fact]
+    public void PlaceCompactPopup_Horizontal_UsesHorizontalDimensions()
+    {
+        var (left, top, width, height) = PopupPlacement.PlaceCompactPopup(
+            DialogOrientation.Horizontal,
+            100, 100, Area1080p,
+            horizontalWidth: 540, horizontalHeight: 240);
+
+        Assert.Equal(540, width);
+        Assert.Equal(240, height);
+        Assert.Equal(112, left);
+        Assert.Equal(112, top);
     }
 }

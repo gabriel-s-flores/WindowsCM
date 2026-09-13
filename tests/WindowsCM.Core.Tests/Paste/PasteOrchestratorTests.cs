@@ -47,7 +47,19 @@ internal sealed class FakeInjector : IPasteInjector
 internal sealed class FakeForeground : IForegroundWindow
 {
     public IntPtr Current = new(123);
+    public List<IntPtr> Restored = [];
+    public bool ShouldRestore;
     public IntPtr GetCurrent() => Current;
+    public bool RestoreForeground(IntPtr hwnd)
+    {
+        Restored.Add(hwnd);
+        if (ShouldRestore)
+        {
+            Current = hwnd;
+            return true;
+        }
+        return Current == hwnd;
+    }
 }
 
 internal sealed class FakeElevation : IElevationProbe
@@ -349,5 +361,21 @@ public sealed class PasteOrchestratorTests : IDisposable
 
         Assert.Null(echo);
         Assert.Single(_store.List());
+    }
+
+    [Fact]
+    public async Task Execute_RestoresForegroundTarget_AndPastesDirectly()
+    {
+        var saved = SaveText("direct-paste");
+        var targetHwnd = new IntPtr(999);
+        _foreground.Current = new IntPtr(444); // Initially different (e.g. popup was foreground)
+        _foreground.ShouldRestore = true;
+
+        var outcome = await Subject().ExecuteAsync(saved.Id, targetHwnd, shiftHeld: false, Hide);
+
+        Assert.Equal(PasteStatus.Pasted, outcome.Status);
+        Assert.Contains(targetHwnd, _foreground.Restored);
+        Assert.Equal(targetHwnd, _foreground.Current);
+        Assert.Equal(PasteSequence.CtrlV, _injector.Last);
     }
 }

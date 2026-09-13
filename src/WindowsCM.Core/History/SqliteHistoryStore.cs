@@ -143,7 +143,7 @@ public sealed class SqliteHistoryStore : IHistoryStore
             sql.Append(" AND type = $type");
             search.Parameters.AddWithValue("$type", kind.Value.ToString());
         }
-        sql.Append(" ORDER BY datetime DESC");
+        sql.Append(" ORDER BY pinned DESC, datetime DESC");
         search.CommandText = sql.ToString();
         using var reader = search.ExecuteReader();
         return ReadAll(reader);
@@ -173,6 +173,19 @@ public sealed class SqliteHistoryStore : IHistoryStore
 
     public void SetTitle(long id, string? title) =>
         SetField(id, "title", (object?)title ?? DBNull.Value);
+
+    public void SetMetadata(long id, string? metadataJson) =>
+        SetField(id, "metadata", (object?)metadataJson ?? DBNull.Value);
+
+    public void SetMetadataAndTitle(long id, string? metadataJson, string? title)
+    {
+        using var update = _connection.CreateCommand();
+        update.CommandText = "UPDATE clipboard SET metadata = $metadata, title = $title WHERE id = $id";
+        update.Parameters.AddWithValue("$metadata", (object?)metadataJson ?? DBNull.Value);
+        update.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
+        update.Parameters.AddWithValue("$id", id);
+        update.ExecuteNonQuery();
+    }
 
     private void SetField(long id, string column, object value)
     {
@@ -269,6 +282,7 @@ public sealed class SqliteHistoryStore : IHistoryStore
             INSERT INTO clipboard_version (id, version) VALUES (1, 2)
               ON CONFLICT (id) DO NOTHING;
             CREATE INDEX IF NOT EXISTS idx_clipboard_datetime ON clipboard (datetime DESC);
+            CREATE INDEX IF NOT EXISTS idx_clipboard_pinned_datetime ON clipboard (pinned DESC, datetime DESC);
             CREATE INDEX IF NOT EXISTS idx_clipboard_protect ON clipboard (pinned, tag);
             PRAGMA journal_mode = WAL;
             PRAGMA busy_timeout = 5000;

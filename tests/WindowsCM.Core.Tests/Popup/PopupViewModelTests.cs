@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+using WindowsCM.Core.Capture;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
 
@@ -87,7 +87,8 @@ internal sealed class FakeHistoryStore : IHistoryStore
             .Where(i => tag is null || i.Tag == tag)
             .Where(i => !excludeTagged || i.Tag is null)
             .Where(i => kind is null || i.Kind == kind)
-            .OrderByDescending(i => i.CapturedAt)
+            .OrderByDescending(i => i.Pinned)
+            .ThenByDescending(i => i.CapturedAt)
             .ToList();
 
     public void RefreshDate(long id, DateTime utcNow)
@@ -102,6 +103,9 @@ internal sealed class FakeHistoryStore : IHistoryStore
     public void SetPinned(long id, bool pinned) => Mutate(id, i => i with { Pinned = pinned });
     public void SetTag(long id, string? tag) => Mutate(id, i => i with { Tag = tag });
     public void SetTitle(long id, string? title) => Mutate(id, i => i with { Title = title });
+    public void SetMetadata(long id, string? metadataJson) => Mutate(id, i => i with { MetadataJson = metadataJson });
+    public void SetMetadataAndTitle(long id, string? metadataJson, string? title) =>
+        Mutate(id, i => i with { MetadataJson = metadataJson, Title = title });
 
     private void Mutate(long id, Func<ClipboardItem, ClipboardItem> change)
     {
@@ -415,6 +419,64 @@ public sealed class PopupViewModelTests
     }
 
     [Fact]
+    public void ShowFalse_WhenStoreIsIncognito_DoesNotDisableIncognitoOnStore()
+    {
+        var persistent = new SqliteHistoryStore("Data Source=:memory:");
+        var tempDir = Path.Combine(Path.GetTempPath(), "wcm_vm_test_" + Guid.NewGuid().ToString("N"));
+        var images = new FileImageAssetStore(tempDir);
+        using var coordinator = new IncognitoSessionCoordinator(persistent, images);
+        coordinator.SetIncognito(true);
+
+        coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "ephemeral clip", false, null, DateTime.UtcNow, null, null));
+
+        var vm = new PopupViewModel(coordinator);
+        Assert.True(vm.IsIncognito);
+
+        vm.Show(incognito: false);
+
+        Assert.True(coordinator.IsIncognito);
+        Assert.Single(coordinator.List());
+        Assert.Equal("ephemeral clip", coordinator.List()[0].Content);
+
+        try { Directory.Delete(tempDir, true); } catch { }
+    }
+
+    [Fact]
+    public void DualView_SwitchingBetweenPersistentAndEphemeral_PreservesBoth()
+    {
+        var persistent = new SqliteHistoryStore("Data Source=:memory:");
+        var tempDir = Path.Combine(Path.GetTempPath(), "wcm_vm_test2_" + Guid.NewGuid().ToString("N"));
+        var images = new FileImageAssetStore(tempDir);
+        using var coordinator = new IncognitoSessionCoordinator(persistent, images);
+
+        coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "normal 1", false, null, DateTime.UtcNow.AddMinutes(-5), null, null));
+
+        coordinator.SetIncognito(true);
+        coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "secret 1", false, null, DateTime.UtcNow, null, null));
+
+        var vm = new PopupViewModel(coordinator);
+        vm.Show(incognito: true);
+
+        Assert.True(vm.IsViewingIncognito);
+        Assert.Single(vm.VisibleItems);
+        Assert.Equal("secret 1", vm.VisibleItems[0].Content);
+
+        vm.SwitchViewToPersistent();
+        Assert.False(vm.IsViewingIncognito);
+        Assert.True(coordinator.IsIncognito);
+        Assert.Single(vm.VisibleItems);
+        Assert.Equal("normal 1", vm.VisibleItems[0].Content);
+
+        vm.SwitchViewToIncognito();
+        Assert.True(vm.IsViewingIncognito);
+        Assert.Single(vm.VisibleItems);
+        Assert.Equal("secret 1", vm.VisibleItems[0].Content);
+
+        try { Directory.Delete(tempDir, true); } catch { }
+    }
+
+
+    [Fact]
     public void Theme_DefaultsDark_ProfileDefaultsDefault()
     {
         var vm = Subject();
@@ -531,4 +593,87 @@ public sealed class PopupViewModelTests
 
         Assert.Null(request);
     }
+
+    [Fact]
+    public void SetTypeFilter_FiltersByKind_ResetsSelection()
+    {
+        Save("hello text", kind: ItemKind.Text, minute: 0);
+        Save("https://example.com", kind: ItemKind.Link, minute: 1);
+        Save("console.log()", kind: ItemKind.Code, minute: 2);
+        var vm = Subject();
+
+        Assert.Equal(3, vm.VisibleItems.Count);
+
+        vm.SetTypeFilter(ItemKind.Link);
+        Assert.Single(vm.VisibleItems);
+        Assert.Equal(ItemKind.Link, vm.VisibleItems[0].Kind);
+        Assert.Equal(0, vm.SelectedIndex);
+        Assert.Equal(ItemKind.Link, vm.TypeFilter);
+
+        vm.SetTypeFilter(null);
+        Assert.Equal(3, vm.VisibleItems.Count);
+        Assert.Null(vm.TypeFilter);
+    }
+
+    [Fact]
+    public void ClearAllFilters_ResetsSearchPinsAndTypeFilter()
+    {
+        Save("test 1", kind: ItemKind.Text, pinned: true, minute: 0);
+        Save("test 2", kind: ItemKind.Link, pinned: false, minute: 1);
+        var vm = Subject();
+
+        vm.SetSearch("test");
+        vm.TogglePinsFilter();
+        vm.SetTypeFilter(ItemKind.Text);
+
+        Assert.True(vm.PinsOnly);
+        Assert.Equal("test", vm.SearchText);
+        Assert.Equal(ItemKind.Text, vm.TypeFilter);
+
+        vm.ClearAllFilters();
+
+        Assert.False(vm.PinsOnly);
+        Assert.Equal("", vm.SearchText);
+        Assert.Null(vm.TypeFilter);
+        Assert.Null(vm.TagFilter);
+        Assert.Equal(2, vm.VisibleItems.Count);
+    }
+
+    [Fact]
+    public void VisibleItems_PinnedItemsRemainAtFarLeftFirstSlot()
+    {
+        Save("oldest unpinned", minute: 0);
+        var pinnedOld = Save("pinned old", minute: 5, pinned: true);
+        Save("new unpinned", minute: 10);
+
+        var vm = Subject();
+
+        Assert.Equal(3, vm.VisibleItems.Count);
+        // Far-left (index 0) must be the pinned item even though "new unpinned" was copied after it
+        Assert.Equal("pinned old", vm.VisibleItems[0].Content);
+        Assert.Equal("new unpinned", vm.VisibleItems[1].Content);
+        Assert.Equal("oldest unpinned", vm.VisibleItems[2].Content);
+    }
+
+    [Fact]
+    public void Show_ResetsSelectedIndexToInitial_OnReopen()
+    {
+        Save("item 1", minute: 0);
+        Save("item 2", minute: 1);
+        Save("item 3", minute: 2);
+        var vm = Subject();
+
+        vm.Show(incognito: false);
+        Assert.Equal(0, vm.SelectedIndex);
+
+        vm.SetSelectedIndex(2);
+        Assert.Equal(2, vm.SelectedIndex);
+
+        vm.Hide();
+        vm.Show(incognito: false);
+
+        Assert.Equal(0, vm.SelectedIndex);
+    }
 }
+
+

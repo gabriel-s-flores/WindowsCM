@@ -115,6 +115,23 @@ public sealed class LockedHistoryStore : IHistoryStore
         }
     }
 
+    public void SetMetadata(long id, string? metadataJson)
+    {
+        lock (_gate)
+        {
+            _inner.SetMetadata(id, metadataJson);
+        }
+    }
+
+    public void SetMetadataAndTitle(long id, string? metadataJson, string? title)
+    {
+        lock (_gate)
+        {
+            _inner.SetMetadataAndTitle(id, metadataJson, title);
+        }
+    }
+
+
     public void Dispose()
     {
         if (_disposed)
@@ -132,7 +149,7 @@ public sealed class LockedHistoryStore : IHistoryStore
 // UI-thread popup behind TrayController and the pipe dispatcher: the tray
 // gestures already run on the UI thread, but pipe commands arrive on pool
 // threads, so every call marshals to the window's dispatcher.
-public sealed class ShellPopup(PopupWindow window, Dispatcher dispatcher) : ITrayPopup
+public sealed class ShellPopup(PopupWindow window, Dispatcher dispatcher, IIncognitoToggle incognito) : ITrayPopup
 {
     public bool IsVisible => dispatcher.Invoke(() => window.IsVisible);
 
@@ -149,22 +166,17 @@ public sealed class ShellPopup(PopupWindow window, Dispatcher dispatcher) : ITra
         }
         else if (!window.WasRecentlyHidden)
         {
-            window.ShowAtCursor(incognito: false);
+            window.ShowAtCursor(incognito.IsIncognito);
         }
     });
 }
 
-public sealed class ShellIncognito(
-    Core.Capture.CaptureService capture, PopupViewModel model, PopupWindow window) : IIncognitoToggle
-{
-    public bool IsIncognito => capture.IsIncognito;
 
-    public void SetIncognito(bool on)
-    {
-        capture.IsIncognito = on;
-        model.SetIncognito(on);
-        window.RefreshView();
-    }
+public sealed class ShellIncognito(App app) : IIncognitoToggle
+{
+    public bool IsIncognito => app.IsIncognito;
+
+    public void SetIncognito(bool on) => app.SetIncognito(on);
 }
 
 public sealed class ShellHistory(

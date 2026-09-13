@@ -36,11 +36,15 @@ public sealed class TrayController
         switch (item)
         {
             case TrayMenuItem.Open:
-                _popup.Show(incognito: false);
+                _popup.Show(incognito: _incognito.IsIncognito);
                 break;
             case TrayMenuItem.Incognito:
-                _incognito.SetIncognito(true);
-                _popup.Show(incognito: true);
+                var nextIncognito = !_incognito.IsIncognito;
+                _incognito.SetIncognito(nextIncognito);
+                if (nextIncognito)
+                {
+                    _popup.Show(incognito: true);
+                }
                 break;
             case TrayMenuItem.Clear:
                 _history.ClearKeepProtected();

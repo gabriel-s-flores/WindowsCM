@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using WindowsCM.Core.Capture;
 using WindowsCM.Core.Feedback;
+using WindowsCM.Core.Localization;
 using WindowsCM.Core.Paste;
 using WindowsCM.Core.Previews;
 
@@ -12,6 +13,7 @@ namespace WindowsCM.Core.Settings;
 // UI layer. Incognito stays runtime-only (never persisted, spec).
 public sealed class AppSettings
 {
+    public AppLanguage Language { get; set; } = AppLanguage.System;
     public HistorySettings History { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
     public ProcessExclusions Exclusions { get; set; } = new();
@@ -23,6 +25,8 @@ public sealed class AppSettings
     public ShortcutSettings Shortcuts { get; set; } = new();
     public FeedbackSettings Feedback { get; set; } = new();
     public PasteSettings Paste { get; set; } = new();
+    public ItemColorSettings ItemColors { get; set; } = new();
+    public FileCategorySettings FileCategories { get; set; } = new();
 
     public static AppSettings Default() => new();
 
@@ -48,12 +52,20 @@ public sealed class AppSettings
         Shortcuts ??= new();
         Feedback ??= new();
         Paste ??= new();
+        ItemColors ??= new();
+        FileCategories ??= new();
+        if (!Enum.IsDefined(typeof(AppLanguage), Language))
+        {
+            Language = AppLanguage.System;
+        }
         History.Clamp();
         Item.Clamp();
         Dialog.Clamp();
         PerType.Clamp();
         Feedback.Clamp();
         Paste.Clamp();
+        ItemColors.Clamp();
+        FileCategories.Clamp();
     }
 
     public ProfileName DetectProfile() => ProfilePresets.Detect(this);

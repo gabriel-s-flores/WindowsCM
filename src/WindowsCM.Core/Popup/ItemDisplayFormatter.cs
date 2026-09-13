@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.IO;
 using System.Text.Json;
+using WindowsCM.Core.Classification;
 using WindowsCM.Core.History;
+using WindowsCM.Core.Settings;
 
 namespace WindowsCM.Core.Popup;
 
@@ -15,8 +17,12 @@ public static class ItemDisplayFormatter
         ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".ico", ".tiff"
     };
 
-    public static string GetTitle(ClipboardItem item)
+    public static string GetTitle(ClipboardItem item) =>
+        GetTitle(item, null);
+
+    public static string GetTitle(ClipboardItem item, bool? isPortuguese)
     {
+        var isPt = isPortuguese ?? Localization.LocalizationManager.IsPortuguese;
         if (!string.IsNullOrWhiteSpace(item.Title))
         {
             return item.Title.Trim();
@@ -25,14 +31,14 @@ public static class ItemDisplayFormatter
         switch (item.Kind)
         {
             case ItemKind.Image:
-                return "Imagem";
+                return isPt ? "Imagem" : "Image";
 
             case ItemKind.File:
             {
                 var path = NormalizePath(item.Content?.Split('\n').FirstOrDefault());
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    return "Arquivo";
+                    return isPt ? "Arquivo" : "File";
                 }
                 var fileName = Path.GetFileName(path);
                 return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
@@ -48,14 +54,14 @@ public static class ItemDisplayFormatter
 
                 if (paths.Count == 0)
                 {
-                    return "Arquivos";
+                    return isPt ? "Arquivos" : "Files";
                 }
                 if (paths.Count == 1)
                 {
                     return Path.GetFileName(paths[0]);
                 }
                 var first = Path.GetFileName(paths[0]);
-                return $"{paths.Count} arquivos ({first})";
+                return isPt ? $"{paths.Count} arquivos ({first})" : $"{paths.Count} files ({first})";
             }
 
             case ItemKind.Code:
@@ -65,11 +71,23 @@ public static class ItemDisplayFormatter
                     .Split('\n')
                     .Select(s => s.Trim())
                     .FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? "";
-                return line.Length > 80 ? line[..80] + "..." : (line.Length > 0 ? line : (item.Kind == ItemKind.Code ? "Código" : "Texto"));
+                if (line.Length > 80)
+                {
+                    return line[..80] + "...";
+                }
+                if (line.Length > 0)
+                {
+                    return line;
+                }
+                if (item.Kind == ItemKind.Code)
+                {
+                    return isPt ? "Código" : "Code";
+                }
+                return isPt ? "Texto" : "Text";
             }
 
             case ItemKind.Color:
-                return item.Content?.Trim() ?? "Cor";
+                return item.Content?.Trim() ?? (isPt ? "Cor" : "Color");
 
             case ItemKind.Character:
             {
@@ -78,7 +96,7 @@ public static class ItemDisplayFormatter
                 {
                     return "Emoji";
                 }
-                return string.IsNullOrEmpty(content) ? "Caractere" : content;
+                return string.IsNullOrEmpty(content) ? (isPt ? "Caractere" : "Character") : content;
             }
 
             case ItemKind.Link:
@@ -97,58 +115,40 @@ public static class ItemDisplayFormatter
         }
     }
 
-    public static string GetTypeLabel(ClipboardItem item)
+    public static string GetTypeLabel(ClipboardItem item, FileCategorySettings? categorySettings = null) =>
+        GetTypeLabel(item, categorySettings, null);
+
+    public static string GetTypeLabel(ClipboardItem item, FileCategorySettings? categorySettings, bool? isPortuguese)
     {
+        var isPt = isPortuguese ?? Localization.LocalizationManager.IsPortuguese;
         switch (item.Kind)
         {
             case ItemKind.Image:
-                return "Imagem PNG";
+                return isPt ? "Imagem PNG" : "PNG Image";
 
             case ItemKind.File:
             {
                 var path = NormalizePath(item.Content?.Split('\n').FirstOrDefault());
                 var ext = Path.GetExtension(path)?.ToLowerInvariant() ?? "";
-                return ext switch
+                if (categorySettings != null)
                 {
-                    ".png" => "Imagem PNG",
-                    ".jpg" or ".jpeg" => "Imagem JPEG",
-                    ".gif" => "Imagem GIF",
-                    ".webp" => "Imagem WebP",
-                    ".bmp" => "Imagem BMP",
-                    ".svg" => "Imagem Vetorial SVG",
-                    ".ico" => "Ícone ICO",
-                    ".mp4" => "Vídeo MP4",
-                    ".mkv" => "Vídeo MKV",
-                    ".avi" => "Vídeo AVI",
-                    ".mov" => "Vídeo MOV",
-                    ".webm" => "Vídeo WebM",
-                    ".mp3" => "Áudio MP3",
-                    ".wav" => "Áudio WAV",
-                    ".flac" => "Áudio FLAC",
-                    ".pdf" => "Documento PDF",
-                    ".docx" or ".doc" => "Documento Word",
-                    ".xlsx" or ".xls" => "Planilha Excel",
-                    ".pptx" or ".ppt" => "Apresentação PowerPoint",
-                    ".zip" or ".rar" or ".7z" => "Arquivo Compactado",
-                    ".cs" => "Código C#",
-                    ".js" => "Código JavaScript",
-                    ".ts" => "Código TypeScript",
-                    ".py" => "Código Python",
-                    ".json" => "Arquivo JSON",
-                    ".xml" => "Arquivo XML",
-                    ".html" or ".htm" => "Documento HTML",
-                    ".css" => "Folha de Estilos CSS",
-                    ".md" => "Documento Markdown",
-                    ".txt" => "Documento de Texto",
-                    _ when !string.IsNullOrEmpty(ext) => $"Arquivo {ext.TrimStart('.').ToUpperInvariant()}",
-                    _ => "Arquivo"
-                };
+                    var cat = categorySettings.ResolveCategory(ext);
+                    if (cat != null && !cat.IsBuiltIn)
+                    {
+                        return string.IsNullOrEmpty(ext) ? cat.Name : $"{cat.Name} • {ext.TrimStart('.').ToUpperInvariant()}";
+                    }
+                }
+                return WindowsFileTypeResolver.GetFriendlyExtensionLabel(ext, isPt);
             }
 
             case ItemKind.Files:
             {
                 var count = (item.Content ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
-                return count > 1 ? $"{count} arquivos" : "Múltiplos arquivos";
+                if (isPt)
+                {
+                    return count > 1 ? $"{count} arquivos" : "Múltiplos arquivos";
+                }
+                return count > 1 ? $"{count} files" : "Multiple files";
             }
 
             case ItemKind.Code:
@@ -156,33 +156,44 @@ public static class ItemDisplayFormatter
                 var lang = ExtractLanguageFromMetadata(item.MetadataJson);
                 if (string.IsNullOrEmpty(lang))
                 {
-                    var detected = Previews.CodeSyntaxTokenizer.DetectLanguage(item.Content);
-                    if (detected != "Código")
-                    {
-                        lang = detected;
-                    }
+                    lang = Previews.CodeSyntaxTokenizer.DetectLanguage(item.Content);
                 }
-                return !string.IsNullOrEmpty(lang) ? $"Código ({lang})" : "Código";
+                var codeWord = isPt ? "Código" : "Code";
+                return !string.IsNullOrEmpty(lang) ? $"{codeWord} ({lang})" : codeWord;
             }
 
             case ItemKind.Text:
             {
                 var len = item.Content?.Length ?? 0;
-                return len > 0 ? $"Texto • {len} caracteres" : "Texto";
+                if (isPt)
+                {
+                    return len > 0 ? $"Texto • {len} caracteres" : "Texto";
+                }
+                return len > 0 ? $"Text • {len} characters" : "Text";
             }
 
             case ItemKind.Link:
-                return "Link Web";
+                return isPt ? "Link Web" : "Web Link";
 
             case ItemKind.Color:
-                return "Cor";
+                return isPt ? "Cor" : "Color";
 
             case ItemKind.Character:
             {
                 var content = item.Content?.Trim() ?? "";
-                var code = GetUnicodeCodePoint(content);
-                var prefix = IsEmoji(content) ? "Emoji" : "Caractere";
-                return !string.IsNullOrEmpty(code) ? $"{prefix} • {code}" : prefix;
+                if (IsEmoji(content))
+                {
+                    var count = EmojiDetector.CountEmojis(content);
+                    if (count > 1)
+                    {
+                        return $"Emoji • {count} emojis";
+                    }
+                    var code = GetUnicodeCodePoint(content);
+                    return !string.IsNullOrEmpty(code) ? $"Emoji • {code}" : "Emoji";
+                }
+                var charCode = GetUnicodeCodePoint(content);
+                var charWord = isPt ? "Caractere" : "Character";
+                return !string.IsNullOrEmpty(charCode) ? $"{charWord} • {charCode}" : charWord;
             }
 
             default:
@@ -244,23 +255,7 @@ public static class ItemDisplayFormatter
         return null;
     }
 
-    public static bool IsEmoji(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        foreach (var rune in text.EnumerateRunes())
-        {
-            var val = rune.Value;
-            if ((val >= 0x1F300 && val <= 0x1FAFF) ||
-                (val >= 0x2600 && val <= 0x27BF) ||
-                (val >= 0xFE00 && val <= 0xFE0F) ||
-                (val >= 0x1F1E6 && val <= 0x1F1FF) ||
-                (val >= 0x200D && val <= 0x200D))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    public static bool IsEmoji(string? text) => EmojiDetector.IsAllEmojis(text);
 
     public static string GetUnicodeCodePoint(string? text)
     {
@@ -269,18 +264,42 @@ public static class ItemDisplayFormatter
         return string.Join(" ", runes.Select(r => $"U+{r.Value:X4}"));
     }
 
-    public static string GetKindIconGlyph(ItemKind kind, string? content = null) => kind switch
+    public static string GetKindIconGlyph(ItemKind kind, string? content = null, FileCategorySettings? categories = null)
     {
-        ItemKind.Code => "\uE943",
-        ItemKind.Text => "\uE8A5",
-        ItemKind.Image => "\uEB9F",
-        ItemKind.File => "\uED43",
-        ItemKind.Files => "\uED25",
-        ItemKind.Link => "\uE71B",
-        ItemKind.Color => "\uE790",
-        ItemKind.Character => IsEmoji(content) ? "\uED53" : "\uE76E",
-        _ => "\uE8A5"
-    };
+        if ((kind == ItemKind.File || kind == ItemKind.Files) && categories != null && !string.IsNullOrWhiteSpace(content))
+        {
+            var first = content.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var cat = categories.ResolveCategory(first);
+            if (cat != null)
+            {
+                return cat.Id switch
+                {
+                    "images" => "\uEB9F",
+                    "video" => "\uE714",
+                    "audio" => "\uEC4F",
+                    "documents" => "\uE8A5",
+                    "spreadsheets" => "\uF0E3",
+                    "presentations" => "\uE8AD",
+                    "code" => "\uE943",
+                    "archives" => "\uF012",
+                    _ => "\uED43"
+                };
+            }
+        }
+
+        return kind switch
+        {
+            ItemKind.Code => "\uE943",
+            ItemKind.Text => "\uE8A5",
+            ItemKind.Image => "\uEB9F",
+            ItemKind.File => "\uED43",
+            ItemKind.Files => "\uED25",
+            ItemKind.Link => "\uE71B",
+            ItemKind.Color => "\uE790",
+            ItemKind.Character => IsEmoji(content) ? "\uED53" : "\uE76E",
+            _ => "\uE8A5"
+        };
+    }
 
     private static string NormalizePath(string? raw)
     {

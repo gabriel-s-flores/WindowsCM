@@ -82,4 +82,13 @@ public sealed class InstallerScriptTests
         Assert.Contains(InstallerContract.AppVersion, iss);
         Assert.Contains("10.0." + InstallerContract.MinWindowsBuild, iss);
     }
+
+    [Fact]
+    public void Setup_UsesCustomAppIcon()
+    {
+        var iss = Script();
+
+        Assert.Contains("SetupIconFile=", iss);
+        Assert.Contains("app.ico", iss);
+    }
 }

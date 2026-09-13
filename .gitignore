@@ -1,11 +1,47 @@
-# .NET
+# Build results
 bin/
 obj/
-.vs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+[Tt]est[Rr]esults/
 TestResults/
 
-# Release artifacts (ticket 18): portable zips, Inno output/setup exes,
-# and the single-file publish staging dir consumed by installer/*.iss.
+# Visual Studio / VS Code / JetBrains Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+*.DotSettings.user
+
+# Release and distribution artifacts
 dist/
 installer/Output/
 installer/publish/
+
+# SQLite & local runtime storage
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs & temp files
+*.log
+*.tmp
+*.bak
+*.dmp
+dummy.json
+
+# Windows & OS files
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+.DS_Store
+

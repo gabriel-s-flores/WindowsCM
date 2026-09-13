@@ -83,7 +83,7 @@ public sealed class AppSettingsTests
     public void SettingsStore_RoundTripsThroughJson()
     {
         var settings = AppSettings.Default();
-        settings.History.MaxItems = 123;
+        settings.History.MaxItems = 85;
         settings.Dialog.Orientation = DialogOrientation.Vertical;
         settings.Theme.Theme = ThemeChoice.Custom;
         settings.Theme.CustomBg = "rgb(1,2,3)";
@@ -92,7 +92,7 @@ public sealed class AppSettingsTests
 
         var restored = SettingsStore.Deserialize(SettingsStore.Serialize(settings));
 
-        Assert.Equal(123, restored.History.MaxItems);
+        Assert.Equal(85, restored.History.MaxItems);
         Assert.Equal(DialogOrientation.Vertical, restored.Dialog.Orientation);
         Assert.Equal(ThemeChoice.Custom, restored.Theme.Theme);
         Assert.Equal("rgb(1,2,3)", restored.Theme.CustomBg);
@@ -107,7 +107,7 @@ public sealed class AppSettingsTests
             """{"history":null,"dialog":null,"perType":{"file":null,"link":null},"theme":null}""");
 
         Assert.Equal(ProfileName.Default, restored.DetectProfile());
-        Assert.Equal(50, restored.History.MaxItems);
+        Assert.Equal(100, restored.History.MaxItems);
         Assert.NotNull(restored.Dialog);
         Assert.NotNull(restored.PerType.File);
         Assert.NotNull(restored.PerType.Link);
@@ -147,11 +147,11 @@ public sealed class AppSettingsTests
         SettingsStore.Save(path, first);
 
         var second = AppSettings.Default();
-        second.History.MaxItems = 200;
+        second.History.MaxItems = 75;
         SettingsStore.Save(path, second, backup: true);
 
         Assert.True(File.Exists(path + "~"));
-        Assert.Equal(200, SettingsStore.Load(path).History.MaxItems);
+        Assert.Equal(75, SettingsStore.Load(path).History.MaxItems);
         Assert.False(Directory.EnumerateFiles(dir, "*.tmp").Any());
     }
 
@@ -165,7 +165,48 @@ public sealed class AppSettingsTests
 
         var settings = SettingsStore.Load(path);
 
-        Assert.Equal(500, settings.History.MaxItems);
+        Assert.Equal(100, settings.History.MaxItems);
         Assert.Equal(200, settings.Item.Width);
+    }
+
+    [Fact]
+    public void DialogSettings_ScrollbarPosition_DefaultsAndClamping()
+    {
+        var settings = AppSettings.Default();
+        Assert.Equal(VerticalScrollbarPosition.Right, settings.Dialog.VerticalScrollbarPosition);
+        Assert.Equal(HorizontalScrollbarPosition.Bottom, settings.Dialog.HorizontalScrollbarPosition);
+
+        // Invalid enum cast
+        settings.Dialog.VerticalScrollbarPosition = (VerticalScrollbarPosition)999;
+        settings.Dialog.HorizontalScrollbarPosition = (HorizontalScrollbarPosition)999;
+        settings.Dialog.Clamp();
+
+        Assert.Equal(VerticalScrollbarPosition.Right, settings.Dialog.VerticalScrollbarPosition);
+        Assert.Equal(HorizontalScrollbarPosition.Bottom, settings.Dialog.HorizontalScrollbarPosition);
+
+        // Valid custom values
+        settings.Dialog.VerticalScrollbarPosition = VerticalScrollbarPosition.Left;
+        settings.Dialog.HorizontalScrollbarPosition = HorizontalScrollbarPosition.Top;
+        settings.Dialog.Clamp();
+
+        Assert.Equal(VerticalScrollbarPosition.Left, settings.Dialog.VerticalScrollbarPosition);
+        Assert.Equal(HorizontalScrollbarPosition.Top, settings.Dialog.HorizontalScrollbarPosition);
+    }
+
+    [Fact]
+    public void SettingsStore_ScrollbarPosition_RoundtripsThroughJson()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+
+        var original = AppSettings.Default();
+        original.Dialog.VerticalScrollbarPosition = VerticalScrollbarPosition.Left;
+        original.Dialog.HorizontalScrollbarPosition = HorizontalScrollbarPosition.Top;
+        SettingsStore.Save(path, original);
+
+        var loaded = SettingsStore.Load(path);
+        Assert.Equal(VerticalScrollbarPosition.Left, loaded.Dialog.VerticalScrollbarPosition);
+        Assert.Equal(HorizontalScrollbarPosition.Top, loaded.Dialog.HorizontalScrollbarPosition);
     }
 }

@@ -24,6 +24,52 @@ public sealed class FileDisplayHelperTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData(0, "")]
+    [InlineData(5, "00:05")]
+    [InlineData(59, "00:59")]
+    [InlineData(65, "01:05")]
+    [InlineData(235, "03:55")]
+    [InlineData(3600, "1:00:00")]
+    [InlineData(3725, "1:02:05")]
+    public void FormatDuration_FormatsExpectedUnits(int? seconds, string expected)
+    {
+        TimeSpan? ts = seconds.HasValue ? TimeSpan.FromSeconds(seconds.Value) : null;
+        var result = FileDisplayHelper.FormatDuration(ts);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void AudioMetadataInfo_Summaries_FormatProperly()
+    {
+        var full = new AudioMetadataInfo(
+            Title: "Shooting Stars",
+            Artist: "Bag Raiders",
+            Album: "Bag Raiders",
+            Duration: TimeSpan.FromSeconds(235),
+            FormattedDuration: "03:55",
+            FileSizeBytes: 34200000L,
+            FormattedSize: "32,6 MB");
+
+        Assert.True(full.HasArtistOrAlbum);
+        Assert.Equal("Bag Raiders • Bag Raiders", full.ArtistAndAlbumSummary);
+        Assert.Equal("03:55 • 32,6 MB", full.DurationAndSizeSummary);
+
+        var artistOnly = new AudioMetadataInfo(
+            Title: "Track 1",
+            Artist: "Solo Artist",
+            Album: "",
+            Duration: null,
+            FormattedDuration: "",
+            FileSizeBytes: 1048576L,
+            FormattedSize: "1,0 MB");
+
+        Assert.True(artistOnly.HasArtistOrAlbum);
+        Assert.Equal("Solo Artist", artistOnly.ArtistAndAlbumSummary);
+        Assert.Equal("1,0 MB", artistOnly.DurationAndSizeSummary);
+    }
+
     [Fact]
     public void GetFileDetails_SingleFile_ExtractsCleanNames()
     {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using WindowsCM.Core.Classification;
 using WindowsCM.Core.History;
+using WindowsCM.Core.Tray;
 
 namespace WindowsCM.Core.Capture;
 
@@ -41,8 +42,45 @@ public sealed class CaptureService
         _clock = clock;
     }
 
-    // Incognito suspends capture (in-memory only, never persisted).
-    public bool IsIncognito { get; set; }
+    private bool _isIncognito;
+    private SqliteHistoryStore? _standaloneIncognitoStore;
+    private EphemeralImageAssetStore? _standaloneIncognitoImages;
+
+    // Incognito routes capture to an isolated ephemeral session.
+    public bool IsIncognito
+    {
+        get => _store is IIncognitoToggle t ? t.IsIncognito : _isIncognito;
+        set
+        {
+            if (_store is IIncognitoToggle t)
+            {
+                t.SetIncognito(value);
+            }
+            else
+            {
+                if (value && !_isIncognito)
+                {
+                    _standaloneIncognitoStore = new SqliteHistoryStore("Data Source=:memory:");
+                    _standaloneIncognitoImages = new EphemeralImageAssetStore();
+                }
+                else if (!value && _isIncognito)
+                {
+                    _standaloneIncognitoStore?.Dispose();
+                    _standaloneIncognitoStore = null;
+                    _standaloneIncognitoImages?.Dispose();
+                    _standaloneIncognitoImages = null;
+                }
+            }
+            _isIncognito = value;
+            _lastSeen = null;
+        }
+    }
+
+    private IHistoryStore EffectiveStore =>
+        (_store is IIncognitoToggle) ? _store : (_standaloneIncognitoStore ?? _store);
+
+    private IImageAssetStore EffectiveImages =>
+        (_store is IIncognitoToggle) ? _images : (_standaloneIncognitoImages ?? _images);
 
     public ClipboardItem? Capture(ClipboardPayload payload, string? processName, DateTime utcNow)
     {
@@ -65,10 +103,6 @@ public sealed class CaptureService
         {
             return null;
         }
-        if (IsIncognito)
-        {
-            return null;
-        }
         // Recorded only for copies that will be stored.
         _lastSeen = identity;
 
@@ -81,7 +115,7 @@ public sealed class CaptureService
                 file.Kind, file.Content, false, null, utcNow, file.MetadataJson, null),
             ClassifiedImage image => new ClipboardItem(
                 ItemKind.Image,
-                _images.SaveIfAbsent(image.FileName, payload.Image!.Data),
+                EffectiveImages.SaveIfAbsent(image.FileName, payload.Image!.Data),
                 false, null, utcNow, null, null),
             _ => null,
         };
@@ -89,7 +123,7 @@ public sealed class CaptureService
         {
             return null;
         }
-        return _store.AddOrUpdate(item);
+        return EffectiveStore.AddOrUpdate(item);
     }
 
     // Convenience for the monitor path (clock + explicit process).

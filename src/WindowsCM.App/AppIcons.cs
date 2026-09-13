@@ -1,21 +1,58 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace WindowsCM.App;
 
-// Runtime tray icons (no binary asset to ship): a dark rounded square with
-// a paper-clipboard glyph, plus an accent variant for the copy-feedback
-// flash (Copyous wiggle parity: alternate base/overlay 3×65ms).
+// Production tray icons: loads high-resolution Fluent Design assets (app.ico / app-flash.ico)
+// matching the current system DPI / SmallIconSize, with fallback to vector rendering.
+// Overlay is the copy-feedback flash (Copyous wiggle parity: alternate base/overlay 3×65ms).
 internal static class AppIcons
 {
-    private static readonly Color Bg = Color.FromArgb(0x36, 0x36, 0x3A);
+    private static readonly Color BgBase = Color.FromArgb(0x00, 0x78, 0xD4);
+    private static readonly Color BgFlash = Color.FromArgb(0x00, 0xE5, 0xFF);
     private static readonly Color Paper = Color.FromArgb(0xFA, 0xFA, 0xFB);
-    private static readonly Color Accent = Color.FromArgb(0x35, 0x84, 0xE4);
+    private static readonly Color Clip = Color.FromArgb(0x00, 0x5A, 0x9E);
 
-    public static Icon Base { get; } = Build(true);
-    public static Icon Overlay { get; } = Build(false);
+    public static Icon Base { get; } = LoadIcon("app.ico", isBase: true);
+    public static Icon Overlay { get; } = LoadIcon("app-flash.ico", isBase: false);
+
+    private static Icon LoadIcon(string assetName, bool isBase)
+    {
+        try
+        {
+            var uri = new Uri($"pack://application:,,,/Assets/{assetName}", UriKind.Absolute);
+            var streamInfo = System.Windows.Application.GetResourceStream(uri);
+            if (streamInfo != null)
+            {
+                using var stream = streamInfo.Stream;
+                var smallSize = System.Windows.Forms.SystemInformation.SmallIconSize;
+                return new Icon(stream, smallSize);
+            }
+        }
+        catch
+        {
+            // Fall through to file path or vector fallback
+        }
+
+        try
+        {
+            var localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", assetName);
+            if (File.Exists(localPath))
+            {
+                var smallSize = System.Windows.Forms.SystemInformation.SmallIconSize;
+                return new Icon(localPath, smallSize);
+            }
+        }
+        catch
+        {
+            // Fall through to vector fallback
+        }
+
+        return Build(isBase);
+    }
 
     private static Icon Build(bool isBase)
     {
@@ -24,27 +61,27 @@ internal static class AppIcons
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Color.Transparent);
-            using (var bg = new SolidBrush(isBase ? Bg : Accent))
-            using (var path = RoundedRect(2, 2, 60, 60, 12))
+            using (var bg = new SolidBrush(isBase ? BgBase : BgFlash))
+            using (var path = RoundedRect(2, 2, 60, 60, 14))
             {
                 g.FillPath(bg, path);
             }
-            // Paper sheet.
-            using (var paper = new SolidBrush(isBase ? Paper : Bg))
+            // Frosted / paper sheet.
+            using (var paper = new SolidBrush(Paper))
             {
-                g.FillRectangle(paper, 20, 14, 24, 36);
+                g.FillRectangle(paper, 18, 14, 28, 38);
             }
             // Clip.
-            using (var clip = new SolidBrush(isBase ? Accent : Paper))
+            using (var clip = new SolidBrush(isBase ? Clip : BgBase))
             {
-                g.FillRectangle(clip, 27, 10, 10, 8);
+                g.FillRectangle(clip, 26, 10, 12, 8);
             }
-            // Text lines.
-            using (var lines = new SolidBrush(isBase ? Bg : Paper))
+            // Content lines.
+            using (var lines = new SolidBrush(isBase ? BgBase : Clip))
             {
-                g.FillRectangle(lines, 24, 24, 16, 3);
-                g.FillRectangle(lines, 24, 31, 16, 3);
-                g.FillRectangle(lines, 24, 38, 10, 3);
+                g.FillRectangle(lines, 22, 24, 20, 3);
+                g.FillRectangle(lines, 22, 31, 20, 3);
+                g.FillRectangle(lines, 22, 38, 14, 3);
             }
         }
         var handle = bitmap.GetHicon();

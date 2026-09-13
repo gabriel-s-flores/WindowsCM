@@ -52,7 +52,12 @@ public sealed class HotkeyService
             return new HotkeyOutcome(false, false, invalid);
         }
         var id = IdFor(slot);
-        var current = slot == HotkeySlot.Open ? OpenChord : IncognitoChord;
+        var current = slot switch
+        {
+            HotkeySlot.Open => OpenChord,
+            HotkeySlot.Incognito => IncognitoChord,
+            _ => throw new ArgumentOutOfRangeException(nameof(slot))
+        };
         if (current.Equals(chord))
         {
             return RegisterSlot(hwnd, slot, chord);
@@ -108,11 +113,19 @@ public sealed class HotkeyService
             "Pick another combination in Settings > Shortcuts.");
     }
 
-    private static int IdFor(HotkeySlot slot) =>
-        slot == HotkeySlot.Open ? HotkeyDefaults.IdOpen : HotkeyDefaults.IdIncognito;
+    private static int IdFor(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.Open => HotkeyDefaults.IdOpen,
+        HotkeySlot.Incognito => HotkeyDefaults.IdIncognito,
+        _ => throw new ArgumentOutOfRangeException(nameof(slot))
+    };
 
-    private static string SlotName(HotkeySlot slot) =>
-        slot == HotkeySlot.Open ? "Open popup" : "Incognito popup";
+    private static string SlotName(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.Open => "Open popup",
+        HotkeySlot.Incognito => "Incognito popup",
+        _ => "Popup"
+    };
 
     private static string OccupiedGuidance(HotkeySlot slot, HotkeyChord chord) =>
         $"{SlotName(slot)} ({chord}) is already registered by another app — " +
@@ -121,13 +134,14 @@ public sealed class HotkeyService
 
     private void SetGesture(HotkeySlot slot, string gesture)
     {
-        if (slot == HotkeySlot.Open)
+        switch (slot)
         {
-            _settings.OpenGesture = gesture;
-        }
-        else
-        {
-            _settings.IncognitoGesture = gesture;
+            case HotkeySlot.Open:
+                _settings.OpenGesture = gesture;
+                break;
+            case HotkeySlot.Incognito:
+                _settings.IncognitoGesture = gesture;
+                break;
         }
     }
 

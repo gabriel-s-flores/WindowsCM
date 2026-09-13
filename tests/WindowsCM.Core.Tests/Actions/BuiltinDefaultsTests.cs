@@ -11,7 +11,7 @@ public sealed class BuiltinDefaultsTests
     {
         var config = BuiltinActions.Default();
         var open = config.Actions.OfType<ActionSubmenu>()
-            .Single(s => s.Name == "Open");
+            .Single(s => s.Name == "Abrir");
 
         var ids = open.Actions.OfType<CommandAction>().Select(a => a.Id).ToList();
         Assert.Equal(
@@ -46,7 +46,7 @@ public sealed class BuiltinDefaultsTests
     {
         var config = BuiltinActions.Default();
         var convert = config.Actions.OfType<ActionSubmenu>()
-            .Single(s => s.Name == "Convert");
+            .Single(s => s.Name == "Converter");
 
         var colors = convert.Actions.OfType<ColorAction>().ToList();
         Assert.Equal(["rgb", "hex", "hsl", "oklch"],

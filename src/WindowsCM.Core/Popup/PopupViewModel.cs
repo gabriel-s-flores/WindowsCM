@@ -38,7 +38,9 @@ public sealed class PopupViewModel : ITrayPopup
     }
 
     public bool IsVisible { get; private set; }
-    public bool IsIncognito { get; private set; }
+    private bool _isIncognito;
+    public bool IsIncognito => _store is IIncognitoToggle t ? t.IsIncognito : _isIncognito;
+    public bool IsViewingIncognito { get; private set; }
     public string SearchText { get; private set; } = "";
     public bool PinsOnly { get; private set; }
     public ItemKind? TypeFilter { get; private set; }
@@ -47,6 +49,17 @@ public sealed class PopupViewModel : ITrayPopup
     public IReadOnlyList<ClipboardItem> VisibleItems { get; private set; } = [];
     public PopupTheme Theme { get; private set; } = PopupCards.DefaultTheme;
     public PopupProfile Profile { get; private set; } = PopupCards.FirstRunProfile;
+    public bool RecentAtStart { get; private set; } = true;
+
+    public void SetItemOrdering(bool recentAtStart)
+    {
+        if (RecentAtStart != recentAtStart)
+        {
+            RecentAtStart = recentAtStart;
+            SelectedIndex = -1;
+            Refresh();
+        }
+    }
 
     public ClipboardItem? SelectedItem =>
         SelectedIndex >= 0 && SelectedIndex < VisibleItems.Count
@@ -73,12 +86,36 @@ public sealed class PopupViewModel : ITrayPopup
 
     public void Show(bool incognito)
     {
-        IsIncognito = incognito;
+        IsViewingIncognito = incognito;
+        if (_store is IIncognitoToggle t)
+        {
+            if (incognito && !t.IsIncognito)
+            {
+                t.SetIncognito(true);
+            }
+        }
+        else
+        {
+            _isIncognito = incognito;
+        }
         IsVisible = true;
+        SelectedIndex = -1;
         Refresh();
     }
 
     public void Show() => Show(IsIncognito);
+
+    public void SwitchViewToPersistent()
+    {
+        IsViewingIncognito = false;
+        Refresh();
+    }
+
+    public void SwitchViewToIncognito()
+    {
+        IsViewingIncognito = true;
+        Refresh();
+    }
 
     public void Hide() => IsVisible = false;
 
@@ -103,44 +140,69 @@ public sealed class PopupViewModel : ITrayPopup
     public void SetSearch(string text)
     {
         SearchText = text;
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
     }
 
     public void TogglePinsFilter()
     {
         PinsOnly = !PinsOnly;
-        SelectedIndex = 0;
+        SelectedIndex = -1;
+        Refresh();
+    }
+
+    public void SetTypeFilter(ItemKind? kind)
+    {
+        TypeFilter = kind;
+        SelectedIndex = -1;
+        Refresh();
+    }
+
+    public void SetTagFilter(string? tag)
+    {
+        TagFilter = tag;
+        SelectedIndex = -1;
+        Refresh();
+    }
+
+    public void ClearAllFilters()
+    {
+        SearchText = "";
+        PinsOnly = false;
+        TypeFilter = null;
+        TagFilter = null;
+        SelectedIndex = -1;
         Refresh();
     }
 
     public void CycleTypeNext()
     {
         TypeFilter = NextType(TypeFilter, forward: true);
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
     }
 
     public void CycleTypePrevious()
     {
         TypeFilter = NextType(TypeFilter, forward: false);
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
     }
 
     public void CycleTagNext()
     {
         TagFilter = NextTag(TagFilter, forward: true);
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
     }
 
     public void CycleTagPrevious()
     {
         TagFilter = NextTag(TagFilter, forward: false);
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
     }
+
 
     public void MoveNext()
     {
@@ -236,7 +298,7 @@ public sealed class PopupViewModel : ITrayPopup
     public int ClearKeepProtected()
     {
         var removed = _store.Clear(keepProtected: true);
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
         return removed;
     }
@@ -244,14 +306,26 @@ public sealed class PopupViewModel : ITrayPopup
     public int ClearAll()
     {
         var removed = _store.Clear(keepProtected: false);
-        SelectedIndex = 0;
+        SelectedIndex = -1;
         Refresh();
         return removed;
     }
 
-    public void SetIncognito(bool on) => IsIncognito = on;
+    public void SetIncognito(bool on)
+    {
+        IsViewingIncognito = on;
+        if (_store is IIncognitoToggle t)
+        {
+            t.SetIncognito(on);
+        }
+        else
+        {
+            _isIncognito = on;
+        }
+        Refresh();
+    }
 
-    public void ToggleIncognito() => IsIncognito = !IsIncognito;
+    public void ToggleIncognito() => SetIncognito(!IsIncognito);
 
     public void SetTheme(PopupTheme theme) => Theme = theme;
 
@@ -259,24 +333,27 @@ public sealed class PopupViewModel : ITrayPopup
 
     public void Refresh()
     {
-        VisibleItems = _store.Search(
+        var targetStore = (!IsViewingIncognito && _store is IncognitoSessionCoordinator isc)
+            ? isc.PersistentStore
+            : _store;
+
+        var rawItems = targetStore.Search(
             SearchText,
             pinned: PinsOnly ? true : null,
             tag: TagFilter,
             kind: TypeFilter);
+
+        VisibleItems = ItemOrderingPolicy.OrderItems(rawItems, RecentAtStart);
         if (VisibleItems.Count == 0)
         {
             SelectedIndex = -1;
         }
-        else if (SelectedIndex < 0)
+        else if (SelectedIndex < 0 || SelectedIndex >= VisibleItems.Count)
         {
-            SelectedIndex = 0;
-        }
-        else if (SelectedIndex >= VisibleItems.Count)
-        {
-            SelectedIndex = VisibleItems.Count - 1;
+            SelectedIndex = ItemOrderingPolicy.GetInitialSelectedIndex(VisibleItems.Count, RecentAtStart);
         }
     }
+
 
     private static ItemKind? NextType(ItemKind? current, bool forward)
     {

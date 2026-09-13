@@ -24,6 +24,38 @@ public sealed class DialogItemHeaderTests
         Assert.Equal(6, dialog.MarginLeft);
         Assert.False(dialog.AutoHideSearch);
         Assert.True(dialog.ShowScrollbar);
+        Assert.Equal(LargeHorizontalPosition.Bottom, dialog.LargeHorizontalPosition);
+        Assert.Equal(LargeVerticalPosition.Left, dialog.LargeVerticalPosition);
+        Assert.Equal(HorizontalItemOrder.RecentOnLeft, dialog.LargeHorizontalOrder);
+        Assert.Equal(VerticalItemOrder.RecentOnTop, dialog.LargeVerticalOrder);
+        Assert.Equal(DialogOrientation.Vertical, dialog.CompactOrientation);
+        Assert.Equal(VerticalItemOrder.RecentOnTop, dialog.CompactVerticalOrder);
+        Assert.Equal(HorizontalItemOrder.RecentOnLeft, dialog.CompactHorizontalOrder);
+    }
+
+    [Fact]
+    public void DialogClamp_PinsInvalidEnumsToDefaults()
+    {
+        var dialog = new DialogSettings
+        {
+            LargeHorizontalPosition = (LargeHorizontalPosition)99,
+            LargeVerticalPosition = (LargeVerticalPosition)99,
+            LargeHorizontalOrder = (HorizontalItemOrder)99,
+            LargeVerticalOrder = (VerticalItemOrder)99,
+            CompactOrientation = (DialogOrientation)99,
+            CompactVerticalOrder = (VerticalItemOrder)99,
+            CompactHorizontalOrder = (HorizontalItemOrder)99,
+        };
+
+        dialog.Clamp();
+
+        Assert.Equal(LargeHorizontalPosition.Bottom, dialog.LargeHorizontalPosition);
+        Assert.Equal(LargeVerticalPosition.Left, dialog.LargeVerticalPosition);
+        Assert.Equal(HorizontalItemOrder.RecentOnLeft, dialog.LargeHorizontalOrder);
+        Assert.Equal(VerticalItemOrder.RecentOnTop, dialog.LargeVerticalOrder);
+        Assert.Equal(DialogOrientation.Vertical, dialog.CompactOrientation);
+        Assert.Equal(VerticalItemOrder.RecentOnTop, dialog.CompactVerticalOrder);
+        Assert.Equal(HorizontalItemOrder.RecentOnLeft, dialog.CompactHorizontalOrder);
     }
 
     [Fact]

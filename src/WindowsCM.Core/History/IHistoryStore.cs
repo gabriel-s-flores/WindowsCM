@@ -44,4 +44,7 @@ public interface IHistoryStore : IDisposable
     void SetPinned(long id, bool pinned);
     void SetTag(long id, string? tag);
     void SetTitle(long id, string? title);
+    void SetMetadata(long id, string? metadataJson);
+    void SetMetadataAndTitle(long id, string? metadataJson, string? title);
 }
+
