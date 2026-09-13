@@ -172,7 +172,7 @@ Pre-built binaries for Windows 10 and Windows 11 (x64) are available in each [Gi
 Clone the repository and compile the solution:
 
 ```powershell
-git clone https://github.com/your-username/WindowsCM.git
+git clone https://github.com/gabriel-s-flores/WindowsCM.git
 cd WindowsCM
 
 # Run test suite
