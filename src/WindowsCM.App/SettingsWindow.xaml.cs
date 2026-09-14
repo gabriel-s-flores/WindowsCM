@@ -35,6 +35,7 @@ public partial class SettingsWindow : Window
     private readonly IntPtr _hotkeyHwnd;
     private readonly Action? _onSettingsLiveUpdated;
     private readonly Action _onClosed;
+    private readonly Action? _onShowWelcome;
     private ColorScheme _currentScheme;
     private bool _loading = true;
     private Button? _activeNavBtn;
@@ -58,7 +59,8 @@ public partial class SettingsWindow : Window
         IntPtr hotkeyHwnd,
         ColorScheme effectiveScheme,
         Action? onSettingsLiveUpdated,
-        Action onClosed)
+        Action onClosed,
+        Action? onShowWelcome = null)
     {
         _settings = settings;
         _settingsPath = settingsPath;
@@ -66,6 +68,7 @@ public partial class SettingsWindow : Window
         _hotkeyHwnd = hotkeyHwnd;
         _onSettingsLiveUpdated = onSettingsLiveUpdated;
         _onClosed = onClosed;
+        _onShowWelcome = onShowWelcome;
 
         InitializeComponent();
 
@@ -1731,6 +1734,8 @@ public partial class SettingsWindow : Window
         {
         }
     }
+
+    private void OnShowWelcomeClicked(object sender, RoutedEventArgs e) => _onShowWelcome?.Invoke();
 
     private void OnOpenData(object sender, RoutedEventArgs e) => OpenInExplorer(AppFolders.DataDir());
 

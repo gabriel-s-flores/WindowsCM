@@ -53,6 +53,7 @@ public partial class App : System.Windows.Application
     private long _lastFeedbackId = -1;
     private DateTime _lastFeedbackAt;
     private SettingsWindow? _settingsWindow;
+    private WelcomeWindow? _welcomeWindow;
     private Win32WindowsThemeDetector? _themeDetector;
     private IncognitoSessionCoordinator? _coordinator;
     private LinkPreviewService? _linkPreviewService;
@@ -128,6 +129,9 @@ public partial class App : System.Windows.Application
         }
 
         BuildServices(pipeName);
+        // Also on a --hidden (autostart) first start: a tray-only app is
+        // otherwise invisible to someone who never opened it themselves.
+        ShowWelcomeOnFirstRun();
         if (!cli.StartHidden)
         {
             // Normal start stays tray-only; the popup opens via hotkey/tray.
@@ -679,6 +683,34 @@ public partial class App : System.Windows.Application
         _compactPopup?.RefreshView();
     }
 
+    private void ShowWelcomeOnFirstRun()
+    {
+        if (_settings.Onboarding.WelcomeShown)
+        {
+            return;
+        }
+        // Persist before showing so a crash or kill never re-greets.
+        _settings.Onboarding.WelcomeShown = true;
+        SettingsStore.Save(_settingsPath, _settings);
+        ShowWelcome();
+    }
+
+    internal void ShowWelcome()
+    {
+        if (_welcomeWindow is not null)
+        {
+            _welcomeWindow.Activate();
+            return;
+        }
+        _welcomeWindow = new WelcomeWindow(
+            _hotkeys?.OpenChord.ToString() ?? HotkeyDefaults.OpenGesture,
+            _hotkeys?.IncognitoChord.ToString() ?? HotkeyDefaults.IncognitoGesture,
+            openSettings: () => OpenSettings());
+        _welcomeWindow.Closed += (_, _) => _welcomeWindow = null;
+        _welcomeWindow.Show();
+        _welcomeWindow.Activate();
+    }
+
     internal void OpenSettings()
     {
         if (_settingsWindow is not null)
@@ -717,7 +749,8 @@ public partial class App : System.Windows.Application
                 _popup?.RefreshView();
                 _compactPopup?.RefreshView();
             },
-            onClosed: () => _settingsWindow = null);
+            onClosed: () => _settingsWindow = null,
+            onShowWelcome: ShowWelcome);
 
         _settingsWindow.Closed += (_, _) => OnSettingsClosed();
         _settingsWindow.Show();
