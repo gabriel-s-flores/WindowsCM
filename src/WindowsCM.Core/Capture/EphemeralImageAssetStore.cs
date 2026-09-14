@@ -9,10 +9,13 @@ public sealed class EphemeralImageAssetStore : IImageAssetStore, IDisposable
     public string Directory { get; }
     private bool _disposed;
 
+    // The uninstaller sweeps %TEMP% for this prefix (InstallerContract).
+    public const string DirectoryPrefix = "WindowsCM_Incognito_";
+
     public EphemeralImageAssetStore(string? baseDir = null)
     {
         var root = baseDir ?? Path.GetTempPath();
-        Directory = Path.Combine(root, "WindowsCM_Incognito_" + Guid.NewGuid().ToString("N"));
+        Directory = Path.Combine(root, DirectoryPrefix + Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(Directory);
     }
 

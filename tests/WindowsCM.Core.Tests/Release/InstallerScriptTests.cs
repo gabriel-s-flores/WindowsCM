@@ -95,6 +95,68 @@ public sealed class InstallerScriptTests
         Assert.Contains("<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>", csproj);
     }
 
+    // The part of [Code] between two markers, e.g. one uninstall step.
+    private static string Between(string text, string start, string end)
+    {
+        var from = text.IndexOf(start, StringComparison.Ordinal);
+        Assert.True(from >= 0, $"missing '{start}'");
+        var to = text.IndexOf(end, from + start.Length, StringComparison.Ordinal);
+        Assert.True(to >= 0, $"missing '{end}' after '{start}'");
+        return text[from..to];
+    }
+
+    [Fact]
+    public void Uninstall_StopsTheAppAndRemovesAutostartBeforeDeletingFiles()
+    {
+        var iss = Script();
+        var beforeFilesGo = Between(iss, "usUninstall:", "usPostUninstall:");
+
+        // The tray app holds the history DB open and would recreate files.
+        Assert.Contains("taskkill.exe", iss);
+        Assert.Contains("/F /IM {#AppExe}", iss);
+        Assert.Contains("StopRunningApp();", beforeFilesGo);
+        // Always, not only when autostart was ticked in the installer:
+        // Settings and the welcome guide write the same Run value.
+        Assert.Contains(@"RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';", iss);
+        Assert.Contains("RunValueName = '" + InstallerContract.RunValueName + "';", iss);
+        Assert.Contains("RegDeleteValue(HKCU, RunKey, RunValueName);", beforeFilesGo);
+    }
+
+    [Fact]
+    public void Uninstall_AlwaysRemovesTempLeftovers_UserDataOnlyWhenChosen()
+    {
+        var iss = Script();
+        var afterFilesGo = Between(iss, "usPostUninstall:", "if RemoveDataChosen then");
+
+        Assert.Contains("BundleExtractSubPath = '" + InstallerContract.BundleExtractSubPath + "';", iss);
+        Assert.Contains("IncognitoTempPrefix = '" + InstallerContract.IncognitoTempPrefix + "';", iss);
+        Assert.Contains("BundleExtractSubPath", afterFilesGo);
+        Assert.Contains("DeleteIncognitoTempFolders();", afterFilesGo);
+
+        var userData = iss[iss.IndexOf("if RemoveDataChosen then", StringComparison.Ordinal)..];
+        Assert.Contains("DeleteFolder(ExpandConstant('{localappdata}\\WindowsCM'))", userData);
+        Assert.Contains("DeleteFolder(ExpandConstant('{userappdata}\\WindowsCM'))", userData);
+    }
+
+    [Fact]
+    public void Uninstall_Silent_KeepsDataWithoutPrompting()
+    {
+        var iss = Script();
+        var prompt = Between(iss, "function InitializeUninstall", "CreateCustomForm");
+
+        Assert.Contains("if UninstallSilent then", prompt);
+        Assert.Contains("exit;", prompt);
+    }
+
+    [Fact]
+    public void Upgrade_ClearsNativeDllsUnpackedByOlderBuilds()
+    {
+        var iss = Script();
+
+        Assert.Contains("[InstallDelete]", iss);
+        Assert.Contains("Type: filesandordirs; Name: \"{%TEMP}\\" + InstallerContract.BundleExtractSubPath + "\"", iss);
+    }
+
     [Fact]
     public void Setup_UsesCustomAppIcon()
     {

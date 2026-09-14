@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+using WindowsCM.Core.Capture;
 using WindowsCM.Core.Lifecycle;
 
 namespace WindowsCM.Core.Release;
@@ -27,6 +28,12 @@ public static class InstallerContract
     public const int MinWindowsBuild = 19042;
 
     public static string RunValueName => AutostartManager.RunValueName;
+
+    // Not user data, so uninstall always removes them from %TEMP%: the
+    // folder where the single-file exe unpacks its native DLLs (one
+    // subfolder per build) and leftover incognito image folders.
+    public const string BundleExtractSubPath = @".net\" + AppName;
+    public static string IncognitoTempPrefix => EphemeralImageAssetStore.DirectoryPrefix;
 
     public static string ExpectedAutostartCommand(string installDir) =>
         AutostartManager.BuildCommand(Path.Combine(installDir, ExeName));
