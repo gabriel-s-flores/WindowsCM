@@ -33,7 +33,10 @@
 ; See docs/release/smoke-matrix.md for the full release gate.
 
 #define AppName "WindowsCM"
-#define AppVersion "1.0.0"
+; CI passes the release version with /DAppVersion=x.y.z; local builds keep this.
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppExe "WindowsCM.exe"
 #define AppId "{5443123D-2460-456A-ABAA-B3ECD11A4134}"
 
