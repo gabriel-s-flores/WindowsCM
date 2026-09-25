@@ -13,4 +13,10 @@ public sealed class BehaviorSettings
     public bool ProtectPinned { get; set; } = true;
     public bool ProtectTagged { get; set; } = true;
     public bool UpdateDateOnCopy { get; set; } = true;
+
+    // WindowsCM addition (no Copyous flag): picking an item pastes it into
+    // the field that was focused before the popup opened. On by default;
+    // off means a pick only copies. Toggled from the tray menu and Settings;
+    // settings files written before this flag existed load it as true.
+    public bool AutoPaste { get; set; } = true;
 }

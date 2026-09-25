@@ -93,6 +93,7 @@ public sealed class AppSettings
         PasteSequence = Paste.Sequence,
         PasteDelayMs = Paste.DelayMs,
         SwapCopyPaste = Shortcuts.SwapCopy,
+        AutoPaste = Behavior.AutoPaste,
     };
 
     public SoundOptions ToSoundOptions() => Feedback.ToSoundOptions();

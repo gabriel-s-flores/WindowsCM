@@ -63,6 +63,7 @@ public partial class App : System.Windows.Application
     private readonly ErrorLog _errorLog = new(ErrorLog.DefaultPath());
     private readonly UnhandledErrorPolicy _errorPolicy = new();
     private System.Windows.Threading.DispatcherTimer? _viewRefreshTimer;
+    private Win32ForegroundTracker? _foregroundTracker;
     private bool _servicesReady;
 
     internal AppSettings Settings => _settings;
@@ -220,13 +221,17 @@ public partial class App : System.Windows.Application
         listener.ClipboardChanged += OnClipboardChangedFeedback;
 
         var foreground = new Win32ForegroundWindow();
+        // Must be built on this (UI) thread: the foreground hook calls back
+        // through its message loop.
+        _foregroundTracker = new Win32ForegroundTracker();
+        _disposables.Add(_foregroundTracker);
         var pasteOptions = _settings.ToPasteOptions();
         _pasteOptions = pasteOptions;
         _orchestrator = new PasteOrchestrator(_coordinator, _capture,
             new FileImageReader(AppFolders.ImagesDir()), new Win32ClipboardWriter(),
             foreground, new Win32ElevationProbe(), new Win32PasteInjector(),
             new SystemPasteDelay(), pasteOptions, clock);
-        _pasteTarget = foreground.GetCurrent();
+        _pasteTarget = CapturePasteTarget();
 
         _executor = new ActionExecutor(new ProcessRunner(), new ShellLauncher());
 
@@ -259,24 +264,16 @@ public partial class App : System.Windows.Application
         // handle and misreports focus loss.
         var popup = new TargetCapturingPopup(
             shell,
-            captureTarget: () =>
-            {
-                try
-                {
-                    return foreground.GetCurrent();
-                }
-                catch (PlatformNotSupportedException)
-                {
-                    return IntPtr.Zero;
-                }
-            },
+            captureTarget: CapturePasteTarget,
             onCaptured: hw => _pasteTarget = hw);
         var history = new ShellHistory(_coordinator, _popupModel, _popup);
         var settings = new ShellSettingsOpener(dispatcher, () => OpenSettings());
         var exiter = new ShellExiter(() => Shutdown(0));
         var controller = new TrayController(popup, incognito, history, settings, exiter);
 
-        _tray = new TrayManager(controller, incognito, dispatcher, () => ShowCompactPopup());
+        _tray = new TrayManager(controller, incognito, dispatcher, () => ShowCompactPopup(),
+            isAutoPaste: () => _settings.Behavior.AutoPaste,
+            setAutoPaste: SetAutoPaste);
         _disposables.Add(_tray);
         if (!string.IsNullOrWhiteSpace(conflictGuidance))
         {
@@ -345,13 +342,53 @@ public partial class App : System.Windows.Application
         _settingsWindow?.UpdateLanguage();
     }
 
+    // The window a pick pastes into, resolved when the popup is asked for:
+    // the app the user was in (even when opened from the tray, where the
+    // taskbar holds the foreground), or Zero when the last place was the
+    // desktop — then a pick only copies (PasteTargetPolicy).
+    private IntPtr CapturePasteTarget()
+    {
+        try
+        {
+            return _foregroundTracker?.ResolveTarget() ?? IntPtr.Zero;
+        }
+        catch (Exception ex) when (ex is PlatformNotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            return IntPtr.Zero;
+        }
+    }
+
+    // Tray menu toggle: applies live and persists.
+    internal void SetAutoPaste(bool on)
+    {
+        _settings.Behavior.AutoPaste = on;
+        ApplyAutoPaste();
+        try
+        {
+            SettingsStore.Save(_settingsPath, _settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogError("settings-save", ex);
+        }
+        _settingsWindow?.SyncAutoPaste(on);
+    }
+
+    private void ApplyAutoPaste()
+    {
+        if (_pasteOptions is not null)
+        {
+            _pasteOptions.AutoPaste = _settings.Behavior.AutoPaste;
+        }
+    }
+
     private void OnHotkey(HotkeySlot slot)
     {
         if (_popup is null || _compactPopup is null || _capture is null || _coordinator is null)
         {
             return;
         }
-        _pasteTarget = new Win32ForegroundWindow().GetCurrent();
+        _pasteTarget = CapturePasteTarget();
         if (_popup.IsVisible)
         {
             _popup.Hide();
@@ -381,7 +418,7 @@ public partial class App : System.Windows.Application
         {
             return;
         }
-        _pasteTarget = new Win32ForegroundWindow().GetCurrent();
+        _pasteTarget = CapturePasteTarget();
         if (_popup?.IsVisible == true)
         {
             _popup.Hide();
@@ -842,6 +879,7 @@ public partial class App : System.Windows.Application
             {
                 UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
                 ApplyHistoryLimitsToCapture();
+                ApplyAutoPaste();
                 _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
                     DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
                 _popupModel?.Refresh();
@@ -890,6 +928,7 @@ public partial class App : System.Windows.Application
             _pasteOptions.PasteSequence = fresh.PasteSequence;
             _pasteOptions.PasteDelayMs = fresh.PasteDelayMs;
             _pasteOptions.SwapCopyPaste = fresh.SwapCopyPaste;
+            _pasteOptions.AutoPaste = fresh.AutoPaste;
         }
         _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
             DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);

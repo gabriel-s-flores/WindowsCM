@@ -114,6 +114,7 @@ public partial class SettingsWindow : Window
         HistoryLimitValueText.Text = LocalizationManager.Strings.SettingsHistoryLimitBadge(_settings.History.MaxItems);
 
         AutostartCheck.IsChecked = AutostartManager.IsEnabled(new RegistryRunKeyStore());
+        AutoPasteCheck.IsChecked = _settings.Behavior.AutoPaste;
 
         EndOfSessionCombo.SelectedIndex = (int)_settings.History.EndOfSession;
 
@@ -779,6 +780,28 @@ public partial class SettingsWindow : Window
         else
         {
             AutostartManager.Disable(store);
+        }
+    }
+
+    private void OnAutoPasteChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.Behavior.AutoPaste = AutoPasteCheck.IsChecked == true;
+        _onSettingsLiveUpdated?.Invoke();
+    }
+
+    // The tray menu toggles the same setting while this window may be open.
+    internal void SyncAutoPaste(bool on)
+    {
+        var wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            AutoPasteCheck.IsChecked = on;
+        }
+        finally
+        {
+            _loading = wasLoading;
         }
     }
 
