@@ -18,6 +18,7 @@ public interface IAppStrings
     string TrayShortcutConflictTitle { get; }
     string TrayMissingItemBalloon(long id);
     string TrayPasteFailedBalloon(string message);
+    string TrayCopyFailedBalloon(string message);
     string TrayIconTooltip { get; }
     string TrayIconTooltipIncognito { get; }
 

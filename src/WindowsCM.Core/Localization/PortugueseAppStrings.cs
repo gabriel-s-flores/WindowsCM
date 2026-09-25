@@ -21,6 +21,7 @@ public sealed class PortugueseAppStrings : IAppStrings
     public string TrayShortcutConflictTitle => "Conflito de atalhos";
     public string TrayMissingItemBalloon(long id) => $"Item {id} não está mais no histórico, então nada foi copiado.";
     public string TrayPasteFailedBalloon(string message) => $"Falha ao colar após a cópia: {message}";
+    public string TrayCopyFailedBalloon(string message) => $"Não foi possível copiar para a área de transferência (outro app pode estar usando): {message}";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Modo anônimo";
 

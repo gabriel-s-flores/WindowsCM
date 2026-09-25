@@ -7,6 +7,7 @@ using WindowsCM.Core.Actions;
 using WindowsCM.Core.Capture;
 using WindowsCM.Core.Capture.Win32;
 using WindowsCM.Core.Classification;
+using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.Feedback;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Hotkeys;
@@ -59,6 +60,10 @@ public partial class App : System.Windows.Application
     private LinkPreviewService? _linkPreviewService;
     private MiniTransferHttpServer? _transferServer;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, byte> _inFlightLinkFetches = new();
+    private readonly ErrorLog _errorLog = new(ErrorLog.DefaultPath());
+    private readonly UnhandledErrorPolicy _errorPolicy = new();
+    private System.Windows.Threading.DispatcherTimer? _viewRefreshTimer;
+    private bool _servicesReady;
 
     internal AppSettings Settings => _settings;
     internal IHistoryStore Store => _coordinator ?? (IHistoryStore?)_store ?? throw new InvalidOperationException("Services not built.");
@@ -82,6 +87,7 @@ public partial class App : System.Windows.Application
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        InstallCrashHandlers();
         AppFolders.EnsureCreated();
         _settingsPath = AppFolders.SettingsPath();
         _settings = SettingsStore.Load(_settingsPath);
@@ -129,6 +135,7 @@ public partial class App : System.Windows.Application
         }
 
         BuildServices(pipeName);
+        _servicesReady = true;
         // Also on a --hidden (autostart) first start: a tray-only app is
         // otherwise invisible to someone who never opened it themselves.
         ShowWelcomeOnFirstRun();
@@ -138,10 +145,49 @@ public partial class App : System.Windows.Application
         }
     }
 
+    // Safety net: before this any exception in a UI handler closed the app
+    // without a trace. Errors are logged (never clipboard content); isolated
+    // UI errors are survived, a burst (a per-frame failure) is not. A
+    // failure while services are still being built is never swallowed: a
+    // half-built app would keep running without a tray icon, holding the
+    // single-instance mutex.
+    private void InstallCrashHandlers()
+    {
+        DispatcherUnhandledException += (_, args) =>
+        {
+            LogError("ui", args.Exception);
+            args.Handled = _servicesReady && _errorPolicy.ShouldContinue(DateTime.UtcNow);
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            LogError(args.IsTerminating ? "fatal" : "background",
+                args.ExceptionObject as Exception ?? new Exception(args.ExceptionObject?.ToString()));
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            LogError("task", args.Exception);
+            args.SetObserved();
+        };
+    }
+
+    internal void LogError(string context, Exception exception) => _errorLog.Write(context, exception);
+
     private void BuildServices(string pipeName)
     {
         var dispatcher = Dispatcher;
         var clock = new SystemClock();
+        // Coalesces background refresh requests (link previews finishing,
+        // one per link) into a single model + view refresh.
+        _viewRefreshTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background, dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(150),
+        };
+        _viewRefreshTimer.Tick += (_, _) =>
+        {
+            _viewRefreshTimer.Stop();
+            _popupModel?.Refresh();
+            _popup?.RefreshView();
+            _compactPopup?.RefreshView();
+        };
 
         _store = new LockedHistoryStore(
             new SqliteHistoryStore($"Data Source={_settings.History.ResolveDatabasePath()};Pooling=false"));
@@ -160,12 +206,17 @@ public partial class App : System.Windows.Application
         _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
             clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
         _capture.SweepOrphanImages();
+        // Only the first screenful: a full prewarm would hold every
+        // thumbnail in memory even if the popup is never opened.
+        PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
 
         var listener = new MessageOnlyClipboardListener();
         _disposables.Add(listener);
+        listener.HandlerFailed += (_, ex) => LogError("clipboard-listener", ex);
         var monitor = new ClipboardMonitor(listener, new Win32ClipboardReader(),
             _capture, new Win32SequenceProvider(), new Win32ForegroundProcess(), clock);
         _disposables.Add(monitor);
+        monitor.CaptureFailed += (_, ex) => LogError("capture", ex);
         listener.ClipboardChanged += OnClipboardChangedFeedback;
 
         var foreground = new Win32ForegroundWindow();
@@ -243,7 +294,17 @@ public partial class App : System.Windows.Application
 
         _themeDetector = new Win32WindowsThemeDetector();
         _disposables.Add(_themeDetector);
-        _themeDetector.ThemeChanged += (_, scheme) => dispatcher.Invoke(() => UpdateTheme(scheme));
+        _themeDetector.ThemeChanged += (_, scheme) =>
+        {
+            try
+            {
+                dispatcher.Invoke(() => UpdateTheme(scheme));
+            }
+            catch (Exception ex)
+            {
+                LogError("theme", ex);
+            }
+        };
         UpdateTheme(_themeDetector.DetectSystemScheme());
 
         WatchActionsFile();
@@ -332,33 +393,64 @@ public partial class App : System.Windows.Application
     // Copy-feedback for captures the monitor stored: runs after the
     // monitor's handler (subscribed later), so the store head is current.
     // Head identity (id + datetime) dedups bumps vs. genuinely new items.
+    // It runs on the clipboard listener thread, so the head is one indexed
+    // query (not the whole history per copy) and nothing may escape.
     private void OnClipboardChangedFeedback(object? sender, EventArgs e)
     {
         if (_coordinator is null || _tray is null)
         {
             return;
         }
-        var head = _coordinator.List().FirstOrDefault();
-        if (head is null || (head.Id == _lastFeedbackId && head.CapturedAt == _lastFeedbackAt))
+        try
         {
-            return;
-        }
-        _lastFeedbackId = head.Id;
-        _lastFeedbackAt = head.CapturedAt;
-        CopyFeedbackService.NotifyCopied(_settings.ToCopyFeedbackOptions(), _tray, _tray);
-        SoundFeedback.PlayIfEnabled(_settings.ToSoundOptions(),
-            new MediaPlayerSoundPlayer(Dispatcher, AppContext.BaseDirectory));
+            var head = _coordinator.GetLatest();
+            if (head is null || (head.Id == _lastFeedbackId && head.CapturedAt == _lastFeedbackAt))
+            {
+                return;
+            }
+            _lastFeedbackId = head.Id;
+            _lastFeedbackAt = head.CapturedAt;
+            CopyFeedbackService.NotifyCopied(_settings.ToCopyFeedbackOptions(), _tray, _tray);
+            SoundFeedback.PlayIfEnabled(_settings.ToSoundOptions(),
+                new MediaPlayerSoundPlayer(Dispatcher, AppContext.BaseDirectory));
 
-        if (head.Kind == ItemKind.Link)
+            if (head.Kind == ItemKind.Link)
+            {
+                FetchPreviewInBackground(head);
+            }
+            else if (head.Kind == ItemKind.Image)
+            {
+                PrewarmImageThumbnails([head]);
+            }
+        }
+        catch (Exception ex)
         {
-            FetchPreviewInBackground(head);
+            LogError("copy-feedback", ex);
         }
     }
+
+    private static void PrewarmImageThumbnails(IEnumerable<ClipboardItem> items) =>
+        ImageThumbnailCache.Prewarm(items
+            .Where(i => i.Kind == ItemKind.Image)
+            .Select(ItemDisplayFormatter.TryGetLocalImagePath)
+            .OfType<string>());
+
+    // Thread-safe: coalesces into one refresh on the dispatcher.
+    private void RequestViewRefresh() =>
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_viewRefreshTimer is null)
+            {
+                return;
+            }
+            _viewRefreshTimer.Stop();
+            _viewRefreshTimer.Start();
+        });
 
     internal void EnsureLinkPreviewsForRecentItems()
     {
         if (_coordinator is null || _linkPreviewService is null) return;
-        var links = _coordinator.List().Where(i => i.Kind == ItemKind.Link).Take(15);
+        var links = _coordinator.Search("", kind: ItemKind.Link).Take(15);
         foreach (var link in links)
         {
             var (title, _, img) = ItemMetadataJson.GetLink(link.MetadataJson);
@@ -408,16 +500,12 @@ public partial class App : System.Windows.Application
 
                 _coordinator.SetMetadataAndTitle(item.Id, merged, title);
 
-                _ = Dispatcher.BeginInvoke(() =>
-                {
-                    _popupModel?.Refresh();
-                    _popup?.RefreshView();
-                    _compactPopup?.RefreshView();
-                });
+                RequestViewRefresh();
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort background enrichment
+                LogError("link-preview", ex);
             }
             finally
             {
@@ -432,7 +520,7 @@ public partial class App : System.Windows.Application
         {
             return;
         }
-        var item = _coordinator.List().FirstOrDefault(i => i.Id == request.ItemId);
+        var item = _coordinator.GetById(request.ItemId);
         if (item is null)
         {
             var missing = ActivationFeedbackPolicy.ForMissingItem(request.ItemId);
@@ -617,8 +705,18 @@ public partial class App : System.Windows.Application
                 _popup.Hide();
                 break;
             case ActionStatus.Copy when result.Output is not null:
-                System.Windows.Clipboard.SetText(result.Output);
                 _popup.Hide();
+                try
+                {
+                    // Another app holding the clipboard open throws here.
+                    System.Windows.Clipboard.SetText(result.Output);
+                }
+                catch (System.Runtime.InteropServices.ExternalException ex)
+                {
+                    LogError("action-copy", ex);
+                    _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TrayCopyFailedBalloon(ex.Message));
+                    break;
+                }
                 ExplicitCopyFeedback();
                 SubtleToastWindow.ShowToast(LocalizationManager.Strings.ToastAddedToClipboard);
                 break;
@@ -743,6 +841,7 @@ public partial class App : System.Windows.Application
             onSettingsLiveUpdated: () =>
             {
                 UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
+                ApplyHistoryLimitsToCapture();
                 _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
                     DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
                 _popupModel?.Refresh();
@@ -757,6 +856,21 @@ public partial class App : System.Windows.Application
         _settingsWindow.Activate();
     }
 
+    // History limits are enforced on every capture, so slider changes must
+    // reach the live options before the settings window closes.
+    private void ApplyHistoryLimitsToCapture()
+    {
+        if (_captureOptions is null)
+        {
+            return;
+        }
+        var fresh = _settings.ToCaptureOptions();
+        _captureOptions.HistoryMaxItems = fresh.HistoryMaxItems;
+        _captureOptions.HistoryMaxAgeMinutes = fresh.HistoryMaxAgeMinutes;
+        _captureOptions.ProtectPinned = fresh.ProtectPinned;
+        _captureOptions.ProtectTagged = fresh.ProtectTagged;
+    }
+
     private void OnSettingsClosed()
     {
         SettingsStore.Save(_settingsPath, _settings);
@@ -769,6 +883,7 @@ public partial class App : System.Windows.Application
             _captureOptions.MaxCharacters = fresh.MaxCharacters;
             _captureOptions.UpdateDateOnCopy = fresh.UpdateDateOnCopy;
         }
+        ApplyHistoryLimitsToCapture();
         if (_pasteOptions is not null)
         {
             var fresh = _settings.ToPasteOptions();
@@ -802,6 +917,7 @@ public partial class App : System.Windows.Application
             };
             watcher.Changed += (_, _) => ReloadActions();
             watcher.Created += (_, _) => ReloadActions();
+            watcher.Error += (_, args) => LogError("actions-watcher", args.GetException());
             _disposables.Add(watcher);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)

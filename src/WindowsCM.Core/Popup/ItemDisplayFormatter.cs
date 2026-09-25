@@ -35,7 +35,7 @@ public static class ItemDisplayFormatter
 
             case ItemKind.File:
             {
-                var path = NormalizePath(item.Content?.Split('\n').FirstOrDefault());
+                var path = NormalizePath(FirstSegment(item.Content));
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     return isPt ? "Arquivo" : "File";
@@ -67,10 +67,8 @@ public static class ItemDisplayFormatter
             case ItemKind.Code:
             case ItemKind.Text:
             {
-                var line = (item.Content ?? "")
-                    .Split('\n')
-                    .Select(s => s.Trim())
-                    .FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? "";
+                // 81 chars are enough to know whether the "..." cut applies.
+                var line = TextPreview.FirstNonBlankLine(item.Content, maxLength: 81) ?? "";
                 if (line.Length > 80)
                 {
                     return line[..80] + "...";
@@ -128,7 +126,7 @@ public static class ItemDisplayFormatter
 
             case ItemKind.File:
             {
-                var path = NormalizePath(item.Content?.Split('\n').FirstOrDefault());
+                var path = NormalizePath(FirstSegment(item.Content));
                 var ext = Path.GetExtension(path)?.ToLowerInvariant() ?? "";
                 if (categorySettings != null)
                 {
@@ -207,10 +205,9 @@ public static class ItemDisplayFormatter
         {
             return "";
         }
-        var lines = item.Content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        var previewLines = lines.Take(maxLines).ToList();
-        var result = string.Join("\n", previewLines);
-        if (lines.Length > maxLines)
+        var (lines, hasMore) = TextPreview.FirstLines(item.Content, maxLines);
+        var result = string.Join("\n", lines);
+        if (hasMore)
         {
             result += "\n...";
         }
@@ -244,7 +241,7 @@ public static class ItemDisplayFormatter
 
         if (item.Kind == ItemKind.File)
         {
-            var firstLine = item.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var firstLine = TextPreview.FirstNonEmptySegment(item.Content);
             var path = NormalizePath(firstLine);
             if (!string.IsNullOrWhiteSpace(path) && ImageExtensions.Contains(Path.GetExtension(path)))
             {
@@ -268,7 +265,7 @@ public static class ItemDisplayFormatter
     {
         if ((kind == ItemKind.File || kind == ItemKind.Files) && categories != null && !string.IsNullOrWhiteSpace(content))
         {
-            var first = content.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var first = TextPreview.FirstNonEmptySegment(content);
             var cat = categories.ResolveCategory(first);
             if (cat != null)
             {
@@ -299,6 +296,17 @@ public static class ItemDisplayFormatter
             ItemKind.Character => IsEmoji(content) ? "\uED53" : "\uE76E",
             _ => "\uE8A5"
         };
+    }
+
+    // Text before the first '\n' (string.Split('\n').FirstOrDefault()).
+    private static string? FirstSegment(string? text)
+    {
+        if (text is null)
+        {
+            return null;
+        }
+        var breakAt = text.IndexOf('\n');
+        return breakAt < 0 ? text : text[..breakAt];
     }
 
     private static string NormalizePath(string? raw)

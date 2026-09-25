@@ -21,6 +21,7 @@ public sealed class UserDataPolicyTests
         Assert.Contains(AppFolders.ActionsDefault(), preserved);
         Assert.Contains(AppFolders.ImagesDir(), preserved);
         Assert.Contains(AppFolders.CacheDir(), preserved);
+        Assert.Contains(AppFolders.LogsDir(), preserved);
     }
 
     [Fact]

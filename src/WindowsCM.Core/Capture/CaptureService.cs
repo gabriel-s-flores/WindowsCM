@@ -30,6 +30,11 @@ public sealed class CaptureService
     // no-leak record. In-memory only, like incognito itself.
     private (ItemKind Kind, string Hash)? _lastSeen;
 
+    // Capture runs on the clipboard listener thread while copy-back
+    // (CopiedFromHistory) and the incognito toggle run on the UI thread:
+    // one gate keeps _lastSeen and the standalone session consistent.
+    private readonly object _gate = new();
+
     public CaptureService(
         IHistoryStore store,
         IImageAssetStore images,
@@ -52,27 +57,30 @@ public sealed class CaptureService
         get => _store is IIncognitoToggle t ? t.IsIncognito : _isIncognito;
         set
         {
-            if (_store is IIncognitoToggle t)
+            lock (_gate)
             {
-                t.SetIncognito(value);
-            }
-            else
-            {
-                if (value && !_isIncognito)
+                if (_store is IIncognitoToggle t)
                 {
-                    _standaloneIncognitoStore = new SqliteHistoryStore("Data Source=:memory:");
-                    _standaloneIncognitoImages = new EphemeralImageAssetStore();
+                    t.SetIncognito(value);
                 }
-                else if (!value && _isIncognito)
+                else
                 {
-                    _standaloneIncognitoStore?.Dispose();
-                    _standaloneIncognitoStore = null;
-                    _standaloneIncognitoImages?.Dispose();
-                    _standaloneIncognitoImages = null;
+                    if (value && !_isIncognito)
+                    {
+                        _standaloneIncognitoStore = new SqliteHistoryStore("Data Source=:memory:");
+                        _standaloneIncognitoImages = new EphemeralImageAssetStore();
+                    }
+                    else if (!value && _isIncognito)
+                    {
+                        _standaloneIncognitoStore?.Dispose();
+                        _standaloneIncognitoStore = null;
+                        _standaloneIncognitoImages?.Dispose();
+                        _standaloneIncognitoImages = null;
+                    }
                 }
+                _isIncognito = value;
+                _lastSeen = null;
             }
-            _isIncognito = value;
-            _lastSeen = null;
         }
     }
 
@@ -83,6 +91,14 @@ public sealed class CaptureService
         (_store is IIncognitoToggle) ? _images : (_standaloneIncognitoImages ?? _images);
 
     public ClipboardItem? Capture(ClipboardPayload payload, string? processName, DateTime utcNow)
+    {
+        lock (_gate)
+        {
+            return CaptureLocked(payload, processName, utcNow);
+        }
+    }
+
+    private ClipboardItem? CaptureLocked(ClipboardPayload payload, string? processName, DateTime utcNow)
     {
         // Exclusions first: an excluded copy returns before classification and
         // records nothing.
@@ -123,7 +139,25 @@ public sealed class CaptureService
         {
             return null;
         }
-        return EffectiveStore.AddOrUpdate(item);
+        var store = EffectiveStore;
+        var stored = store.AddOrUpdate(item);
+        EnforceHistoryLimits(store, utcNow);
+        return stored;
+    }
+
+    // Copyous evicts on insert: without this the history-length and
+    // history-time limits only applied at startup, so a long session grew
+    // the list (and every popup refresh) without bound. Image files of
+    // evicted rows stay until the startup orphan sweep, as before.
+    private void EnforceHistoryLimits(IHistoryStore store, DateTime utcNow)
+    {
+        if (_options.HistoryMaxItems <= 0 && _options.HistoryMaxAgeMinutes <= 0)
+        {
+            return;
+        }
+        var maxCount = _options.HistoryMaxItems > 0 ? _options.HistoryMaxItems : int.MaxValue;
+        store.Evict(maxCount, Math.Max(0, _options.HistoryMaxAgeMinutes), utcNow,
+            _options.ProtectPinned, _options.ProtectTagged);
     }
 
     // Convenience for the monitor path (clock + explicit process).
@@ -135,15 +169,18 @@ public sealed class CaptureService
     // setting says so, and always records prev so our own write never echoes.
     public void CopiedFromHistory(long id, DateTime utcNow)
     {
-        var item = _store.List().FirstOrDefault(i => i.Id == id);
-        if (item is null)
+        lock (_gate)
         {
-            return;
-        }
-        _lastSeen = (item.Kind, SuppressionHash(item));
-        if (_options.UpdateDateOnCopy)
-        {
-            _store.RefreshDate(id, utcNow);
+            var item = _store.GetById(id);
+            if (item is null)
+            {
+                return;
+            }
+            _lastSeen = (item.Kind, SuppressionHash(item));
+            if (_options.UpdateDateOnCopy)
+            {
+                _store.RefreshDate(id, utcNow);
+            }
         }
     }
 
@@ -152,11 +189,15 @@ public sealed class CaptureService
     // are shown with a fallback, never deleted here.
     public void SweepOrphanImages()
     {
-        var referenced = _store.List()
-            .Where(i => i.Kind == ItemKind.Image)
-            .Select(i => FileUris.TryGetFileName(i.Content))
-            .OfType<string>();
-        _images.SweepOrphans(referenced);
+        lock (_gate)
+        {
+            var referenced = _store.List()
+                .Where(i => i.Kind == ItemKind.Image)
+                .Select(i => FileUris.TryGetFileName(i.Content))
+                .OfType<string>()
+                .ToList();
+            _images.SweepOrphans(referenced);
+        }
     }
 
     // CF_HTML stored opaque in v1 (rewritten verbatim by copy-back, issue 12).

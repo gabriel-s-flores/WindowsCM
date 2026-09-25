@@ -41,6 +41,22 @@ public sealed class LockedHistoryStore : IHistoryStore
         }
     }
 
+    public ClipboardItem? GetById(long id)
+    {
+        lock (_gate)
+        {
+            return _inner.GetById(id);
+        }
+    }
+
+    public ClipboardItem? GetLatest()
+    {
+        lock (_gate)
+        {
+            return _inner.GetLatest();
+        }
+    }
+
     public long TryUpdateContent(long id, ItemKind kind, string content)
     {
         lock (_gate)

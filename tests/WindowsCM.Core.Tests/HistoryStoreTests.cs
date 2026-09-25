@@ -470,4 +470,78 @@ public sealed class HistoryStoreTests : IDisposable
             }
         }
     }
+
+    [Fact]
+    public void GetById_ReturnsTheStoredItem_OrNullWhenGone()
+    {
+        var first = _store.AddOrUpdate(Sample(content: "first", title: "one"));
+        var second = _store.AddOrUpdate(Sample(content: "second"));
+
+        var found = _store.GetById(first.Id);
+
+        Assert.NotNull(found);
+        Assert.Equal("first", found.Content);
+        Assert.Equal("one", found.Title);
+        Assert.Equal("second", _store.GetById(second.Id)?.Content);
+
+        _store.Delete(first.Id);
+
+        Assert.Null(_store.GetById(first.Id));
+    }
+
+    [Fact]
+    public void GetLatest_MatchesListHead()
+    {
+        Assert.Null(_store.GetLatest());
+
+        _store.AddOrUpdate(Sample(content: "old",
+            capturedAt: new DateTime(2026, 9, 9, 10, 0, 0, DateTimeKind.Utc)));
+        _store.AddOrUpdate(Sample(content: "new",
+            capturedAt: new DateTime(2026, 9, 9, 11, 0, 0, DateTimeKind.Utc)));
+        _store.AddOrUpdate(Sample(content: "pinned but older", pinned: true,
+            capturedAt: new DateTime(2026, 9, 9, 9, 0, 0, DateTimeKind.Utc)));
+
+        var latest = _store.GetLatest();
+
+        Assert.Equal("new", latest?.Content);
+        Assert.Equal(_store.List()[0].Id, latest?.Id);
+    }
+
+    [Fact]
+    public void GetLatest_SkipsUnknownFutureTypes()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".db");
+        try
+        {
+            using (var store = new SqliteHistoryStore($"Data Source={path};Pooling=false"))
+            {
+                store.AddOrUpdate(Sample(content: "readable",
+                    capturedAt: new DateTime(2026, 9, 9, 11, 0, 0, DateTimeKind.Utc)));
+            }
+            using (var setup = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=false"))
+            {
+                setup.Open();
+                using var insert = setup.CreateCommand();
+                insert.CommandText = """
+                    INSERT INTO clipboard (type, content, pinned, tag, datetime, metadata, title)
+                    VALUES ('FutureKind', 'from-newer-app', 0, NULL, '2026-09-09 12:00:00', NULL, NULL);
+                    """;
+                insert.ExecuteNonQuery();
+            }
+
+            using var reopened = new SqliteHistoryStore($"Data Source={path};Pooling=false");
+
+            Assert.Equal("readable", reopened.GetLatest()?.Content);
+        }
+        finally
+        {
+            foreach (var file in new[] { path, path + "-wal", path + "-shm" })
+            {
+                if (File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+    }
 }

@@ -55,14 +55,28 @@ public sealed class ClipboardMonitor : IDisposable
         _hasSequence = true;
     }
 
+    // A failed capture (clipboard held by another app, SQLite busy, disk
+    // full, a malformed image) is reported and skipped, never thrown: the
+    // production listener raises this from its native window procedure,
+    // where an escaping exception terminates the whole process. The next
+    // notification captures normally.
+    public event EventHandler<Exception>? CaptureFailed;
+
     private void CaptureCurrent()
     {
-        var payload = _reader.Read();
-        if (payload is null)
+        try
         {
-            return;
+            var payload = _reader.Read();
+            if (payload is null)
+            {
+                return;
+            }
+            _capture.Capture(payload, _processes.CurrentProcessName, _clock.UtcNow);
         }
-        _capture.Capture(payload, _processes.CurrentProcessName, _clock.UtcNow);
+        catch (Exception ex)
+        {
+            CaptureFailed?.Invoke(this, ex);
+        }
     }
 
     public void Dispose()

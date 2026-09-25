@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
+using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.Popup;
 
 namespace WindowsCM.App;
@@ -73,8 +73,10 @@ public static class MediaMetadataService
     private static readonly PROPERTYKEY PKeyAlbum = new(new Guid("56A3372E-CE9C-11D2-9F0E-006097C686F6"), 4);
     private static readonly PROPERTYKEY PKeyDuration = new(new Guid("64440490-4C8B-11D1-8B70-080036B11A03"), 3);
 
-    private static readonly ConcurrentDictionary<string, AudioMetadataInfo?> AudioCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly ConcurrentDictionary<string, string?> MediaBadgeCache = new(StringComparer.OrdinalIgnoreCase);
+    // Bounded: keys carry path + write time + language, so an unbounded map
+    // only ever grew over a long session.
+    private static readonly LruCache<string, AudioMetadataInfo?> AudioCache = new(512, StringComparer.OrdinalIgnoreCase);
+    private static readonly LruCache<string, string?> MediaBadgeCache = new(512, StringComparer.OrdinalIgnoreCase);
 
     public static AudioMetadataInfo? GetAudioMetadata(string? rawPath)
     {
@@ -103,13 +105,13 @@ public static class MediaMetadataService
         }
 
         var cacheKey = $"{path}_{lastWrite}_{(WindowsCM.Core.Localization.LocalizationManager.IsPortuguese ? "pt" : "en")}";
-        if (AudioCache.TryGetValue(cacheKey, out var cached))
+        if (AudioCache.TryGet(cacheKey, out var cached))
         {
             return cached;
         }
 
         var result = ExtractAudioMetadata(path, fileSize);
-        AudioCache[cacheKey] = result;
+        AudioCache.Set(cacheKey, result);
         return result;
     }
 
@@ -140,7 +142,7 @@ public static class MediaMetadataService
         }
 
         var cacheKey = $"{path}_{lastWrite}_{(WindowsCM.Core.Localization.LocalizationManager.IsPortuguese ? "pt" : "en")}";
-        if (MediaBadgeCache.TryGetValue(cacheKey, out var cached))
+        if (MediaBadgeCache.TryGet(cacheKey, out var cached))
         {
             return cached;
         }
@@ -163,7 +165,7 @@ public static class MediaMetadataService
             badge = formattedSize;
         }
 
-        MediaBadgeCache[cacheKey] = badge;
+        MediaBadgeCache.Set(cacheKey, badge);
         return badge;
     }
 

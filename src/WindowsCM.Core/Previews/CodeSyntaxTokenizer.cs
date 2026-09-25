@@ -67,9 +67,9 @@ public static class CodeSyntaxTokenizer
             return Array.Empty<CodeSyntaxSpan>();
         }
 
-        var lines = rawCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        var isTruncated = lines.Length > maxLines;
-        var selectedLines = lines.Take(maxLines).ToList();
+        // Bounded: only the previewed lines are read, each clipped, so a
+        // multi-megabyte paste costs the same as a snippet.
+        var (selectedLines, isTruncated) = Popup.TextPreview.FirstLines(rawCode, maxLines);
         var code = string.Join("\n", selectedLines);
         if (isTruncated)
         {
@@ -231,14 +231,29 @@ public static class CodeSyntaxTokenizer
         return spans;
     }
 
+    // Language hints only need the start of the snippet. Scanning a whole
+    // multi-megabyte paste with `.*` backtracking froze the UI thread (the
+    // card label runs this per realized card), so detection reads a bounded
+    // slice and the regex carries a timeout.
+    public const int DetectionSliceLength = 4000;
+
+    private static readonly Regex SqlRegex = new(
+        @"\b(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+TABLE|UPDATE\s+.*\s+SET)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
+
     public static string? DetectLanguage(string? code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
             return null;
         }
+        if (code.Length > DetectionSliceLength)
+        {
+            code = code[..DetectionSliceLength];
+        }
 
-        if (Regex.IsMatch(code, @"\b(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+TABLE|UPDATE\s+.*\s+SET)\b", RegexOptions.IgnoreCase))
+        if (IsSql(code))
         {
             return "SQL";
         }
@@ -268,5 +283,17 @@ public static class CodeSyntaxTokenizer
         }
 
         return null;
+    }
+
+    private static bool IsSql(string code)
+    {
+        try
+        {
+            return SqlRegex.IsMatch(code);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 }

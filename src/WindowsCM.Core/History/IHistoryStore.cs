@@ -12,6 +12,14 @@ public interface IHistoryStore : IDisposable
     // All items, newest first.
     IReadOnlyList<ClipboardItem> List();
 
+    // One item by id, or null when it is gone. Hot paths (paste, copy-back,
+    // activation) use this instead of scanning List(). The default keeps
+    // fakes working; real stores override it with an indexed lookup.
+    ClipboardItem? GetById(long id) => List().FirstOrDefault(i => i.Id == id);
+
+    // The newest item (List() head), or null when history is empty.
+    ClipboardItem? GetLatest() => List().FirstOrDefault();
+
     // Edit identity. Returns -1 when applied, or the conflicting item id
     // (Gda parity) leaving the edited item untouched.
     long TryUpdateContent(long id, ItemKind kind, string content);

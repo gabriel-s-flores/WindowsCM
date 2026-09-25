@@ -32,6 +32,7 @@ public static class UserDataPolicy
         ActionsPaths.Default(),
         AppFolders.ImagesDir(),
         AppFolders.CacheDir(),
+        AppFolders.LogsDir(),
     ];
 
     public static bool IsUserData(string path) =>
