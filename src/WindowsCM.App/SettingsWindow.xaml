@@ -370,6 +370,24 @@
             </Grid>
           </Border>
 
+          <!-- Card: Colar Automaticamente -->
+          <Border Style="{StaticResource SettingsCard}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{DynamicResource Loc_SettingsAutoPasteTitle}" FontWeight="SemiBold" FontSize="14"
+                           Foreground="{DynamicResource CardTitleBrush}" />
+                <TextBlock Text="{DynamicResource Loc_SettingsAutoPasteSubtitle}"
+                           FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="AutoPasteCheck" Grid.Column="1" VerticalAlignment="Center"
+                        Checked="OnAutoPasteChanged" Unchecked="OnAutoPasteChanged" />
+            </Grid>
+          </Border>
+
           <!-- Card: Encerramento de Sessão -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>

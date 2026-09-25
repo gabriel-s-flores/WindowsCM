@@ -455,4 +455,23 @@ public class LocalizationTests
         Assert.NotEqual(ptText, enText);
         Assert.NotEqual(en.TrayPasteFailedBalloon("x"), en.TrayCopyFailedBalloon("x"));
     }
+
+    [Fact]
+    public void AutoPasteStrings_HaveParityInBothLanguages()
+    {
+        IAppStrings pt = new PortugueseAppStrings();
+        IAppStrings en = new EnglishAppStrings();
+
+        foreach (var pick in new Func<IAppStrings, string>[]
+        {
+            s => s.TrayAutoPaste,
+            s => s.SettingsAutoPasteTitle,
+            s => s.SettingsAutoPasteSubtitle,
+        })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(pick(pt)));
+            Assert.False(string.IsNullOrWhiteSpace(pick(en)));
+            Assert.NotEqual(pick(pt), pick(en));
+        }
+    }
 }

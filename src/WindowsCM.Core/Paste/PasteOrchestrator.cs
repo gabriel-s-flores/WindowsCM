@@ -6,7 +6,8 @@ namespace WindowsCM.Core.Paste;
 
 // Choosing an item, end to end: plan the clipboard contents, write them,
 // record the copy in history (date policy + echo suppression), then —
-// unless the chord says copy-only — hide the popup, wait for the target to
+// unless the chord says copy-only — hide the popup, and when auto-paste is
+// on and a pasteable window was focused (PasteTargetPolicy), wait for it to
 // regain focus, assert it is still foreground, and inject the paste chord.
 // The target handle is captured by the UI at hotkey time and passed in
 // (research 02: never re-resolve it here). Every refusal carries
@@ -85,18 +86,19 @@ public sealed class PasteOrchestrator
             return new PasteOutcome(PasteStatus.CopiedOnly, null, null);
         }
         await hideUi().ConfigureAwait(false);
-        if (capturedTarget != IntPtr.Zero)
+        // Auto-paste off, or nothing pasteable was focused when the popup
+        // was asked for (desktop, no window): the pick is on the clipboard
+        // and the popup closes, but no keystroke goes to a guessed window.
+        if (!_options.AutoPaste || capturedTarget == IntPtr.Zero)
         {
-            _foreground.RestoreForeground(capturedTarget);
+            return new PasteOutcome(PasteStatus.CopiedOnly, null, null);
         }
+        _foreground.RestoreForeground(capturedTarget);
         await _delay.Delay(_options.PasteDelayMs, ct).ConfigureAwait(false);
         // Foreground first: ensure target is restored and active.
         if (_foreground.GetCurrent() != capturedTarget)
         {
-            if (capturedTarget != IntPtr.Zero)
-            {
-                _foreground.RestoreForeground(capturedTarget);
-            }
+            _foreground.RestoreForeground(capturedTarget);
             if (_foreground.GetCurrent() != capturedTarget)
             {
                 return new PasteOutcome(

@@ -22,6 +22,7 @@ public sealed class EnglishAppStrings : IAppStrings
     public string TrayCopyFailedBalloon(string message) => $"Could not copy to the clipboard (another app may be using it): {message}";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Incognito mode";
+    public string TrayAutoPaste => "Paste automatically";
 
     // Popup (Cards & Top Bar)
     public string PopupSettingsTooltip => "Settings";
@@ -249,6 +250,8 @@ public sealed class EnglishAppStrings : IAppStrings
     public string SettingsHistoryLimitRestore => "Restore recommended (100)";
     public string SettingsAutostartTitle => "Start with Windows";
     public string SettingsAutostartSubtitle => "Run WindowsCM silently in the system tray when starting the computer.";
+    public string SettingsAutoPasteTitle => "Paste into the selected field automatically";
+    public string SettingsAutoPasteSubtitle => "Picking an item pastes it where you had clicked before opening WindowsCM. When off, the item is only copied to the clipboard.";
     public string SettingsEndOfSessionTitle => "Cleanup on session end";
     public string SettingsEndOfSessionSubtitle => "History behavior when restarting, signing out, or shutting down Windows.";
     public string SettingsEndOfSessionClearAll => "Clear all";

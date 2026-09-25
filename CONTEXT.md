@@ -38,6 +38,10 @@ _Avoid_: pause (it captures in-memory for the duration), permanent storage, auto
 The time-ordered collection of items, bounded by length and age limits, minus pinned/tagged protection rules.
 _Avoid_: log, feed
 
+**Auto-paste**:
+Picking an item pastes it into the field the user had clicked before opening WindowsCM (the paste target), not just onto the clipboard. On by default, toggled from the tray menu or Settings. The paste target is the app that held the focus — or, when WindowsCM is opened from the tray, the last app before the taskbar; when that last place was the desktop there is no target and the pick is only copied.
+_Avoid_: paste-on-copy (a dropped Copyous flag), auto-type
+
 **Mobile transfer**:
 Bidirectional local Wi-Fi transfer of files (audio, image, documents, video) and text/clipboard between the computer and a mobile device via QR code and an embedded local server.
 _Avoid_: cloud sync, pairing, bluetooth

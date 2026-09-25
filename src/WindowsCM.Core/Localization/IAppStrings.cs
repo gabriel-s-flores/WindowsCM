@@ -21,6 +21,7 @@ public interface IAppStrings
     string TrayCopyFailedBalloon(string message);
     string TrayIconTooltip { get; }
     string TrayIconTooltipIncognito { get; }
+    string TrayAutoPaste { get; }
 
     // Popup (Cards & Top Bar)
     string PopupSettingsTooltip { get; }
@@ -248,6 +249,8 @@ public interface IAppStrings
     string SettingsHistoryLimitRestore { get; }
     string SettingsAutostartTitle { get; }
     string SettingsAutostartSubtitle { get; }
+    string SettingsAutoPasteTitle { get; }
+    string SettingsAutoPasteSubtitle { get; }
     string SettingsEndOfSessionTitle { get; }
     string SettingsEndOfSessionSubtitle { get; }
     string SettingsEndOfSessionClearAll { get; }

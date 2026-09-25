@@ -24,6 +24,7 @@ public sealed class PortugueseAppStrings : IAppStrings
     public string TrayCopyFailedBalloon(string message) => $"Não foi possível copiar para a área de transferência (outro app pode estar usando): {message}";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Modo anônimo";
+    public string TrayAutoPaste => "Colar automaticamente";
 
     // Popup (Cards & Top Bar)
     public string PopupSettingsTooltip => "Configurações";
@@ -251,6 +252,8 @@ public sealed class PortugueseAppStrings : IAppStrings
     public string SettingsHistoryLimitRestore => "Restaurar recomendado (100)";
     public string SettingsAutostartTitle => "Iniciar com o Windows";
     public string SettingsAutostartSubtitle => "Executar o WindowsCM silenciosamente na bandeja do sistema ao ligar o computador.";
+    public string SettingsAutoPasteTitle => "Colar automaticamente no campo selecionado";
+    public string SettingsAutoPasteSubtitle => "Ao escolher um item, ele é colado onde você havia clicado antes de abrir o WindowsCM. Desativado, o item só é copiado para a área de transferência.";
     public string SettingsEndOfSessionTitle => "Limpeza ao encerrar a sessão";
     public string SettingsEndOfSessionSubtitle => "Comportamento do histórico ao reiniciar, deslogar ou desligar o Windows.";
     public string SettingsEndOfSessionClearAll => "Limpar tudo";
