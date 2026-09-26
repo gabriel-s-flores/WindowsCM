@@ -54,15 +54,89 @@ public sealed class DibToPngTests
         rgb24[14] = 24;
         var paletted = DIB1x1(1, 2, 3);
         paletted[14] = 8;
-        var bitfields = DIB1x1(1, 2, 3);
-        bitfields[16] = 3; // BI_BITFIELDS, typical of CF_DIBV5 from 32bpp sources
+        var oddMasks = Bitfields2x1(0x000000FF, 0x0000FF00, 0x00FF0000);
 
         Assert.True(DibToPng.CanConvert(rgb32.AsSpan(0, 40)));
         Assert.True(DibToPng.CanConvert(rgb24.AsSpan(0, 40)));
+        Assert.True(DibToPng.CanConvert(Bitfields2x1().AsSpan(0, DibToPng.HeaderLength)));
+        Assert.True(DibToPng.CanConvert(V5Bitfields1x1().AsSpan(0, DibToPng.HeaderLength)));
         Assert.False(DibToPng.CanConvert(paletted.AsSpan(0, 40)));
-        Assert.False(DibToPng.CanConvert(bitfields.AsSpan(0, 40)));
+        Assert.False(DibToPng.CanConvert(oddMasks.AsSpan(0, DibToPng.HeaderLength)));
+        Assert.False(DibToPng.CanConvert(Bitfields2x1().AsSpan(0, 40))); // masks not visible
         Assert.False(DibToPng.CanConvert(rgb32.AsSpan(0, 20)));
-        Assert.Throws<NotSupportedException>(() => DibToPng.FromDib(bitfields));
+        Assert.Throws<NotSupportedException>(() => DibToPng.FromDib(oddMasks));
+    }
+
+    // 2x1 32bpp BI_BITFIELDS with a plain BITMAPINFOHEADER: the masks follow
+    // the header, then the pixels (blue, red) — how Windows synthesizes
+    // CF_DIB from a 32-bit bitmap.
+    private static byte[] Bitfields2x1(uint r = 0x00FF0000, uint g = 0x0000FF00, uint b = 0x000000FF)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(40); w.Write(2); w.Write(1); w.Write((short)1); w.Write((short)32);
+        w.Write(3); // BI_BITFIELDS
+        w.Write(8); w.Write(0); w.Write(0); w.Write(0); w.Write(0);
+        w.Write(r); w.Write(g); w.Write(b);
+        w.Write((byte)255); w.Write((byte)0); w.Write((byte)0); w.Write((byte)0); // blue
+        w.Write((byte)0); w.Write((byte)0); w.Write((byte)255); w.Write((byte)0); // red
+        return ms.ToArray();
+    }
+
+    // 1x1 32bpp BI_BITFIELDS with a BITMAPV5HEADER (CF_DIBV5): the masks live
+    // inside the 124-byte header and the pixel follows it.
+    private static byte[] V5Bitfields1x1()
+    {
+        var dib = new byte[124 + 4];
+        BitConverter.GetBytes(124).CopyTo(dib, 0);
+        BitConverter.GetBytes(1).CopyTo(dib, 4);
+        BitConverter.GetBytes(1).CopyTo(dib, 8);
+        BitConverter.GetBytes((short)1).CopyTo(dib, 12);
+        BitConverter.GetBytes((short)32).CopyTo(dib, 14);
+        BitConverter.GetBytes(3).CopyTo(dib, 16);
+        BitConverter.GetBytes(0x00FF0000u).CopyTo(dib, 40);
+        BitConverter.GetBytes(0x0000FF00u).CopyTo(dib, 44);
+        BitConverter.GetBytes(0x000000FFu).CopyTo(dib, 48);
+        BitConverter.GetBytes(0xFF000000u).CopyTo(dib, 52);
+        dib[124] = 0; dib[125] = 255; dib[126] = 0; dib[127] = 255; // green
+        return dib;
+    }
+
+    [Fact]
+    public void FromDib_Bitfields_ReadsPixelsAfterTheMasks()
+    {
+        var png = Decode(DibToPng.FromDib(Bitfields2x1()));
+
+        Assert.Equal(2, png.Width);
+        Assert.Equal(new byte[] { 0, 0, 255, 255, 255, 0, 0, 255 }, png.Rgba); // blue, red
+    }
+
+    [Fact]
+    public void FromDib_V5Bitfields_ReadsPixelsAfterTheV5Header()
+    {
+        var png = Decode(DibToPng.FromDib(V5Bitfields1x1()));
+
+        Assert.Equal(new byte[] { 0, 255, 0, 255 }, png.Rgba); // green
+    }
+
+    // Minimal reader for the encoder's own output: IHDR size + the single
+    // unfiltered IDAT stream.
+    private static (int Width, byte[] Rgba) Decode(byte[] png)
+    {
+        var width = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16, 4));
+        var idatLength = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(33, 4));
+        using var zlib = new System.IO.Compression.ZLibStream(
+            new MemoryStream(png, 41, idatLength), System.IO.Compression.CompressionMode.Decompress);
+        using var raw = new MemoryStream();
+        zlib.CopyTo(raw);
+        var bytes = raw.ToArray();
+        var stride = width * 4;
+        var rgba = new List<byte>();
+        for (var row = 0; row * (stride + 1) < bytes.Length; row++)
+        {
+            rgba.AddRange(bytes.Skip(row * (stride + 1) + 1).Take(stride)); // skip the filter byte
+        }
+        return (width, rgba.ToArray());
     }
 
     [Fact]

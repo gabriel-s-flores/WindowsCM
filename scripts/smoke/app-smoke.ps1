@@ -287,6 +287,22 @@ function Sample-Process([string]$label) {
     return $sample
 }
 
+# Managed heap after a full, induced GC (dotnet-gcdump collects one): the
+# leak signal. Private bytes alone only show that the GC has not run yet.
+$gcdumpExe = Join-Path $env:USERPROFILE '.dotnet\tools\dotnet-gcdump.exe'
+function Heap-After-GC([string]$label) {
+    if (-not (Test-Path $gcdumpExe)) { return $null }
+    $dump = Join-Path $OutDir "heap-$label.gcdump"
+    & $gcdumpExe collect -p $script:app.Id -o $dump 2>&1 | Out-Null
+    if (-not (Test-Path $dump)) { return $null }
+    $text = (& $gcdumpExe report $dump 2>&1 | Out-String)
+    Set-Content -Path (Join-Path $OutDir "heap-$label.txt") -Value $text
+    $match = [regex]::Match($text, '([\d,\.]+)\s+GC Heap bytes')
+    $bytes = if ($match.Success) { [double]($match.Groups[1].Value -replace '[,\.]', '') } else { $null }
+    $top = ($text -split "`n" | Where-Object { $_ -match '^\s+[\d,\.]+\s+[\d,\.]+\s+\S' } | Select-Object -First 6) -join "`n"
+    return @{ MB = if ($bytes) { [math]::Round($bytes / 1MB, 1) } else { $null }; Top = $top }
+}
+
 function New-Payload([int]$i) {
     $data = New-Object System.Windows.Forms.DataObject
     switch ($i % 9) {
@@ -381,6 +397,7 @@ for ($i = 1; $i -le $Copies; $i++) {
         Pipe 'hide' | Out-Null
         if ($reply -ne 'ok') { $failures.Add("pipe show answered '$reply' at copy $i") }
         $samples.Add((Sample-Process "copy $i"))
+        if ($i -eq 150) { $heapMid = Heap-After-GC 'copy150' }
     }
 }
 $copyWatch.Stop()
@@ -405,7 +422,8 @@ if (Alive) {
     if ($early) {
         $growth = $final.privateMB - $early.privateMB
         Note "  private memory: $($early.privateMB) MB at copy 100 -> $($final.privateMB) MB at the end ($([math]::Round($growth,1)) MB)"
-        Check ($growth -lt 150) "no unbounded memory growth once the history is full (< 150 MB after copy 100)"
+        # Informative: private bytes grow until the GC decides to collect;
+        # the leak check is the managed heap after a forced full GC below.
     }
     Check ($final.workingSetMB -lt 600) "working set under 600 MB ($($final.workingSetMB) MB)"
     $sorted = $openTimes | Sort-Object
@@ -418,6 +436,19 @@ if (Alive) {
     }
     $metrics.copiesPerSecond = [math]::Round($Copies / $copyWatch.Elapsed.TotalSeconds, 1)
     foreach ($sample in $samples) { Note ("  memory at {0}: private {1} MB, working set {2} MB, {3} handles, {4} threads" -f $sample.at, $sample.privateMB, $sample.workingSetMB, $sample.handles, $sample.threads) }
+    $heapEnd = Heap-After-GC 'end'
+    if ($heapMid -and $heapEnd -and $heapMid.MB -and $heapEnd.MB) {
+        $afterGc = Sample-Process 'after full GC'
+        Note "  managed heap after a full GC: $($heapMid.MB) MB at copy 150 -> $($heapEnd.MB) MB at copy $Copies (private bytes then: $($afterGc.privateMB) MB)"
+        Note '  largest types at the end:'
+        Note '```'
+        Note $heapEnd.Top
+        Note '```'
+        Check (($heapEnd.MB - $heapMid.MB) -lt 20) "no managed memory leak: the heap after a full GC stays flat once the history is full (+$([math]::Round($heapEnd.MB - $heapMid.MB, 1)) MB over 150 copies)"
+        $metrics.managedHeapAfterGcMB = @{ copy150 = $heapMid.MB; end = $heapEnd.MB }
+    } else {
+        Note "  (dotnet-gcdump unavailable: managed heap not measured)"
+    }
     # The same popup, app idle: separates rendering cost from load.
     $idleTimes = New-Object System.Collections.Generic.List[double]
     for ($k = 0; $k -lt 6; $k++) {
