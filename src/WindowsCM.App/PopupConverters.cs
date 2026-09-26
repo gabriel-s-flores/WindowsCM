@@ -124,7 +124,9 @@ internal sealed class PinnedVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Image and file thumbnails from persisted PNGs, local file paths or native Windows Shell previews.
+// Image and file thumbnails: captured PNGs (the app's own image store) are
+// decoded here; a File card's thumbnail comes from CardFileFacts, never
+// from the disk on the UI thread.
 internal sealed class ImageThumbConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -132,20 +134,11 @@ internal sealed class ImageThumbConverter : IValueConverter
         string? localPath = null;
         if (value is ClipboardItem item)
         {
-            localPath = ItemDisplayFormatter.TryGetLocalImagePath(item);
-            if (string.IsNullOrEmpty(localPath) && (item.Kind == ItemKind.File || item.Kind == ItemKind.Files))
+            if (item.Kind is ItemKind.File or ItemKind.Files)
             {
-                var first = TextPreview.FirstNonEmptySegment(item.Content);
-                first = FileDisplayHelper.NormalizePath(first);
-                if (!string.IsNullOrEmpty(first) && File.Exists(first))
-                {
-                    var thumb = ThumbnailService.GetThumbnail(first);
-                    if (thumb != null)
-                    {
-                        return thumb;
-                    }
-                }
+                return CardFileFacts.ForItem(item)?.Thumbnail;
             }
+            localPath = ItemDisplayFormatter.TryGetLocalImagePath(item);
         }
         else if (value is string content)
         {
@@ -180,7 +173,8 @@ internal sealed class ImageThumbConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Visibility converter for image preview box (now supporting rich Windows Shell thumbnails).
+// Visibility converter for image preview box: captured images, and File
+// cards once their probed thumbnail (Shell preview or decoded image) is in.
 internal sealed class ImagePreviewVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -192,29 +186,11 @@ internal sealed class ImagePreviewVisibilityConverter : IValueConverter
                 return Visibility.Visible;
             }
 
-            var path = ItemDisplayFormatter.TryGetLocalImagePath(item);
-            if (!string.IsNullOrEmpty(path))
+            if (item.Kind is ItemKind.File or ItemKind.Files
+                && !MediaItemClassifier.IsAudioItem(item, out _)
+                && CardFileFacts.ForItem(item)?.Thumbnail != null)
             {
                 return Visibility.Visible;
-            }
-
-            if (item.Kind == ItemKind.File || item.Kind == ItemKind.Files)
-            {
-                if (MediaItemClassifier.IsAudioItem(item, out _))
-                {
-                    return Visibility.Collapsed;
-                }
-
-                var first = TextPreview.FirstNonEmptySegment(item.Content);
-                first = FileDisplayHelper.NormalizePath(first);
-                if (!string.IsNullOrEmpty(first) && File.Exists(first))
-                {
-                    var thumb = ThumbnailService.GetThumbnail(first);
-                    if (thumb != null)
-                    {
-                        return Visibility.Visible;
-                    }
-                }
             }
         }
         return Visibility.Collapsed;
@@ -441,39 +417,19 @@ internal sealed class CardPinBrushConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Visibility converter for file / files preview box (when not an image).
+// Visibility converter for file / files preview box (when not an image):
+// the icon + name view, also shown while the file is still being probed.
 internal sealed class FilePreviewVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is ClipboardItem item)
+        if (value is ClipboardItem item && item.Kind is ItemKind.File or ItemKind.Files)
         {
-            if (item.Kind == ItemKind.File || item.Kind == ItemKind.Files)
+            if (MediaItemClassifier.IsAudioItem(item, out _))
             {
-                if (MediaItemClassifier.IsAudioItem(item, out _))
-                {
-                    return Visibility.Collapsed;
-                }
-
-                var localImage = ItemDisplayFormatter.TryGetLocalImagePath(item);
-                if (!string.IsNullOrEmpty(localImage))
-                {
-                    return Visibility.Collapsed;
-                }
-
-                var first = TextPreview.FirstNonEmptySegment(item.Content);
-                first = FileDisplayHelper.NormalizePath(first);
-                if (!string.IsNullOrEmpty(first) && File.Exists(first))
-                {
-                    var thumb = ThumbnailService.GetThumbnail(first);
-                    if (thumb != null)
-                    {
-                        return Visibility.Collapsed;
-                    }
-                }
-
-                return Visibility.Visible;
+                return Visibility.Collapsed;
             }
+            return CardFileFacts.ForItem(item)?.Thumbnail != null ? Visibility.Collapsed : Visibility.Visible;
         }
         return Visibility.Collapsed;
     }
@@ -482,7 +438,8 @@ internal sealed class FilePreviewVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// System icon converter for File / Files items.
+// System icon for File / Files items: the file's own icon once probed,
+// the extension's generic icon (registry only) until then.
 internal sealed class FileIconConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -490,12 +447,17 @@ internal sealed class FileIconConverter : IValueConverter
         var isLarge = parameter is not "small";
         if (value is ClipboardItem item)
         {
+            if (item.Kind is not (ItemKind.File or ItemKind.Files))
+            {
+                return null;
+            }
             var firstPath = TextPreview.FirstNonEmptySegment(item.Content);
-            return FileIconService.GetFileIcon(firstPath, isLarge);
+            var facts = CardFileFacts.TryGet(firstPath);
+            return (isLarge ? facts?.Icon : null) ?? FileIconService.GetExtensionIcon(firstPath, isLarge);
         }
         if (value is string path)
         {
-            return FileIconService.GetFileIcon(path, isLarge);
+            return FileIconService.GetExtensionIcon(path, isLarge);
         }
         return null;
     }
@@ -511,7 +473,7 @@ internal sealed class FileDisplayNameConverter : IValueConverter
     {
         if (value is ClipboardItem item)
         {
-            var details = FileDisplayHelper.GetFileDetails(item);
+            var details = CardFileFacts.DetailsFor(item);
             return details?.FileName ?? LocalizationManager.Strings.KindFile;
         }
         return "";
@@ -528,7 +490,7 @@ internal sealed class FileDetailsSummaryConverter : IValueConverter
     {
         if (value is ClipboardItem item)
         {
-            var details = FileDisplayHelper.GetFileDetails(item);
+            var details = CardFileFacts.DetailsFor(item);
             if (details == null) return "";
             if (details.IsMultiple)
             {
@@ -554,7 +516,7 @@ internal sealed class FileDirectorySummaryConverter : IValueConverter
     {
         if (value is ClipboardItem item)
         {
-            var details = FileDisplayHelper.GetFileDetails(item);
+            var details = CardFileFacts.DetailsFor(item);
             if (!string.IsNullOrEmpty(details?.DirectoryPath))
             {
                 return "📁 " + details.DirectoryPath;
@@ -574,7 +536,7 @@ internal sealed class FileListSummaryConverter : IValueConverter
     {
         if (value is ClipboardItem item)
         {
-            var details = FileDisplayHelper.GetFileDetails(item);
+            var details = CardFileFacts.DetailsFor(item);
             if (details is { IsMultiple: true })
             {
                 var take = details.Items.Take(3).Select(f => $"• {f.FileName}").ToList();
@@ -588,6 +550,18 @@ internal sealed class FileListSummaryConverter : IValueConverter
         }
         return "";
     }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// Syntax highlighting input: only Code cards show the code box. Bound to
+// every card's Content, the tokenizer built hundreds of Runs for each text
+// card that scrolled into view, all inside a collapsed TextBlock.
+internal sealed class CodeContentConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is ClipboardItem { Kind: ItemKind.Code } item ? item.Content : null;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1086,7 +1060,17 @@ internal static class MediaItemClassifier
         ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".flv", ".m4v", ".3gp"
     };
 
-    public static bool IsAudioItem(ClipboardItem item, out string? singlePath)
+    public static bool IsAudioItem(ClipboardItem item, out string? singlePath) =>
+        IsMediaItem(item, IsAudioPath, out singlePath);
+
+    public static bool IsVideoItem(ClipboardItem item, out string? singlePath) =>
+        IsMediaItem(item, IsVideoPath, out singlePath);
+
+    public static bool IsAudioPath(string path) => IsCategory(path, "audio", AudioExtensions);
+
+    public static bool IsVideoPath(string path) => IsCategory(path, "video", VideoExtensions);
+
+    private static bool IsMediaItem(ClipboardItem item, Func<string, bool> isMediaPath, out string? singlePath)
     {
         singlePath = null;
         if (item.Kind != ItemKind.File)
@@ -1096,74 +1080,59 @@ internal static class MediaItemClassifier
 
         var first = TextPreview.FirstNonEmptySegment(item.Content);
         var path = FileDisplayHelper.NormalizePath(first);
-        if (string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path) || !isMediaPath(path))
         {
             return false;
         }
-
-        var ext = Path.GetExtension(path);
-        var app = System.Windows.Application.Current as App;
-        var category = app?.Settings?.FileCategories?.ResolveCategory(ext);
-        if (category != null && category.Id.Equals("audio", StringComparison.OrdinalIgnoreCase))
-        {
-            singlePath = path;
-            return true;
-        }
-
-        if (AudioExtensions.Contains(ext))
-        {
-            singlePath = path;
-            return true;
-        }
-
-        return false;
+        singlePath = path;
+        return true;
     }
 
-    public static bool IsVideoItem(ClipboardItem item, out string? singlePath)
+    private static bool IsCategory(string path, string categoryId, HashSet<string> extensions)
     {
-        singlePath = null;
-        if (item.Kind != ItemKind.File)
-        {
-            return false;
-        }
-
-        var first = TextPreview.FirstNonEmptySegment(item.Content);
-        var path = FileDisplayHelper.NormalizePath(first);
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
         var ext = Path.GetExtension(path);
         var app = System.Windows.Application.Current as App;
         var category = app?.Settings?.FileCategories?.ResolveCategory(ext);
-        if (category != null && category.Id.Equals("video", StringComparison.OrdinalIgnoreCase))
+        if (category != null && category.Id.Equals(categoryId, StringComparison.OrdinalIgnoreCase))
         {
-            singlePath = path;
             return true;
         }
-
-        if (VideoExtensions.Contains(ext))
-        {
-            singlePath = path;
-            return true;
-        }
-
-        return false;
+        return extensions.Contains(ext);
     }
 }
 
-// Visibility converter for the dedicated Audio preview layout
+// Probed facts of an audio / video File card (CardFileFacts), or of a raw
+// path; null until the probe lands or when the file is gone.
+internal static class MediaFacts
+{
+    public static FileFacts? Audio(object value) => Of(value, MediaItemClassifier.IsAudioItem);
+
+    public static FileFacts? Video(object value) => Of(value, MediaItemClassifier.IsVideoItem);
+
+    private delegate bool MediaTest(ClipboardItem item, out string? path);
+
+    private static FileFacts? Of(object value, MediaTest isMedia)
+    {
+        var path = value switch
+        {
+            ClipboardItem item when isMedia(item, out var itemPath) => itemPath,
+            string rawPath => rawPath,
+            _ => null,
+        };
+        return CardFileFacts.TryGet(path) is { Exists: true } facts ? facts : null;
+    }
+}
+
+// Visibility converter for the dedicated Audio preview layout: shown while
+// the file is probed (name + generic art), hidden once it is known gone.
 internal sealed class AudioPreviewVisibilityConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
-        {
-            return Visibility.Visible;
-        }
-        return Visibility.Collapsed;
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is ClipboardItem item
+            && MediaItemClassifier.IsAudioItem(item, out var path)
+            && CardFileFacts.TryGet(path) is not { Exists: false }
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1172,18 +1141,8 @@ internal sealed class AudioPreviewVisibilityConverter : IValueConverter
 // Converter for audio album cover art
 internal sealed class AudioCoverImageConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
-        {
-            return ThumbnailService.GetThumbnail(path, 160, 160);
-        }
-        if (value is string rawPath && File.Exists(rawPath))
-        {
-            return ThumbnailService.GetThumbnail(rawPath, 160, 160);
-        }
-        return null;
-    }
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        MediaFacts.Audio(value)?.AudioCover;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1194,15 +1153,7 @@ internal sealed class AudioHasCoverVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        bool hasCover = false;
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
-        {
-            hasCover = ThumbnailService.GetThumbnail(path, 160, 160) != null;
-        }
-        else if (value is string rawPath && File.Exists(rawPath))
-        {
-            hasCover = ThumbnailService.GetThumbnail(rawPath, 160, 160) != null;
-        }
+        var hasCover = MediaFacts.Audio(value)?.AudioCover != null;
 
         bool invert = parameter is string p && (p.Equals("Invert", StringComparison.OrdinalIgnoreCase) || p.Equals("Inverse", StringComparison.OrdinalIgnoreCase));
         if (invert)
@@ -1221,25 +1172,18 @@ internal sealed class AudioTrackTitleConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
+        var path = value switch
         {
-            var meta = MediaMetadataService.GetAudioMetadata(path);
-            if (!string.IsNullOrWhiteSpace(meta?.Title))
-            {
-                return meta.Title;
-            }
-            return Path.GetFileNameWithoutExtension(path);
-        }
-        if (value is string rawPath && File.Exists(rawPath))
+            ClipboardItem item when MediaItemClassifier.IsAudioItem(item, out var itemPath) => itemPath,
+            string rawPath => rawPath,
+            _ => null,
+        };
+        if (string.IsNullOrWhiteSpace(path))
         {
-            var meta = MediaMetadataService.GetAudioMetadata(rawPath);
-            if (!string.IsNullOrWhiteSpace(meta?.Title))
-            {
-                return meta.Title;
-            }
-            return Path.GetFileNameWithoutExtension(rawPath);
+            return "";
         }
-        return "";
+        var title = MediaFacts.Audio(value)?.Audio?.Title;
+        return !string.IsNullOrWhiteSpace(title) ? title : Path.GetFileNameWithoutExtension(path);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
@@ -1249,20 +1193,8 @@ internal sealed class AudioTrackTitleConverter : IValueConverter
 // Converter for artist and album summary ("Artist • Album" or "Artist")
 internal sealed class AudioArtistAlbumConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
-        {
-            var meta = MediaMetadataService.GetAudioMetadata(path);
-            return meta?.ArtistAndAlbumSummary ?? "";
-        }
-        if (value is string rawPath && File.Exists(rawPath))
-        {
-            var meta = MediaMetadataService.GetAudioMetadata(rawPath);
-            return meta?.ArtistAndAlbumSummary ?? "";
-        }
-        return "";
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        MediaFacts.Audio(value)?.Audio?.ArtistAndAlbumSummary ?? "";
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1271,20 +1203,8 @@ internal sealed class AudioArtistAlbumConverter : IValueConverter
 // Visibility converter for whether artist/album line should be visible
 internal sealed class AudioHasArtistOrAlbumVisibilityConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
-        {
-            var meta = MediaMetadataService.GetAudioMetadata(path);
-            return meta?.HasArtistOrAlbum == true ? Visibility.Visible : Visibility.Collapsed;
-        }
-        if (value is string rawPath && File.Exists(rawPath))
-        {
-            var meta = MediaMetadataService.GetAudioMetadata(rawPath);
-            return meta?.HasArtistOrAlbum == true ? Visibility.Visible : Visibility.Collapsed;
-        }
-        return Visibility.Collapsed;
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        MediaFacts.Audio(value)?.Audio?.HasArtistOrAlbum == true ? Visibility.Visible : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1293,20 +1213,8 @@ internal sealed class AudioHasArtistOrAlbumVisibilityConverter : IValueConverter
 // Converter for audio duration and file size summary ("03:55 • 34,2 MB")
 internal sealed class AudioDurationAndSizeConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsAudioItem(item, out var path) && File.Exists(path))
-        {
-            var meta = MediaMetadataService.GetAudioMetadata(path);
-            return meta?.DurationAndSizeSummary ?? "";
-        }
-        if (value is string rawPath && File.Exists(rawPath))
-        {
-            var meta = MediaMetadataService.GetAudioMetadata(rawPath);
-            return meta?.DurationAndSizeSummary ?? "";
-        }
-        return "";
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        MediaFacts.Audio(value)?.Audio?.DurationAndSizeSummary ?? "";
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1315,18 +1223,8 @@ internal sealed class AudioDurationAndSizeConverter : IValueConverter
 // Converter for overlay badge on video thumbnails ("02:15 • 45,2 MB")
 internal sealed class VideoOverlayBadgeConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsVideoItem(item, out var path) && File.Exists(path))
-        {
-            return MediaMetadataService.GetMediaOverlayBadge(path) ?? "";
-        }
-        if (value is string rawPath && File.Exists(rawPath))
-        {
-            return MediaMetadataService.GetMediaOverlayBadge(rawPath) ?? "";
-        }
-        return "";
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        MediaFacts.Video(value)?.VideoBadge ?? "";
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
@@ -1335,20 +1233,11 @@ internal sealed class VideoOverlayBadgeConverter : IValueConverter
 // Visibility converter for video overlay badge
 internal sealed class VideoOverlayVisibilityConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is ClipboardItem item && MediaItemClassifier.IsVideoItem(item, out var path) && File.Exists(path))
-        {
-            var badge = MediaMetadataService.GetMediaOverlayBadge(path);
-            return !string.IsNullOrWhiteSpace(badge) ? Visibility.Visible : Visibility.Collapsed;
-        }
-        return Visibility.Collapsed;
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is ClipboardItem && !string.IsNullOrWhiteSpace(MediaFacts.Video(value)?.VideoBadge)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }
-
-
-
-
