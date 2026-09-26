@@ -34,7 +34,7 @@ public sealed class PasteInjectionException : Exception
 
 // Foreground target for the paste flow. The UI captures the handle at hotkey
 // time and passes it to the orchestrator, which asserts it before injecting
-// (research 02 § "Colar no app focado").
+// (research 02 § "Pasting into the focused app").
 public interface IForegroundWindow
 {
     IntPtr GetCurrent();

@@ -278,7 +278,7 @@ public sealed class PopupViewModel : ITrayPopup
     }
 
     // Plain Delete refuses pinned items; Shift+Delete forces (research 03
-    // §5 "Delete (＋Shift força)" parity). False when nothing happened.
+    // §5 "Delete (＋Shift forces)" parity). False when nothing happened.
     public bool DeleteSelected(bool force)
     {
         var selected = SelectedItem;

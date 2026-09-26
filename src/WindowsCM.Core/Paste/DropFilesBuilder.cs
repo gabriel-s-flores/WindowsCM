@@ -4,8 +4,8 @@ using System.Text;
 
 namespace WindowsCM.Core.Paste;
 
-// Builds the CF_HDROP payload for file copy-back (research 02 § "Regras de
-// ownership" 8): DROPFILES with pFiles = header size, fWide = TRUE, absolute
+// Builds the CF_HDROP payload for file copy-back (research 02 § "Ownership
+// rules" 8): DROPFILES with pFiles = header size, fWide = TRUE, absolute
 // paths as UTF-16 double-NUL-terminated. The drop effect is always copy —
 // Copyous parity forces the copy operation on copy-back, so a stored cut
 // marker never reaches the clipboard.

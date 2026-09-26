@@ -1,38 +1,38 @@
-# Barra grande: monitor fixo e modo livre
+# Large window: fixed monitor and free mode
 
 Status: resolved
 Type: feature
-Blocked by: auto-paste-toggle (branch empilhada)
+Blocked by: auto-paste-toggle (stacked branch)
 
-## Pedido
+## Request
 
-Além de encostar a barra grande nas 4 bordas da tela (como hoje), ter um
-modo para múltiplos monitores e um modo livre, em que o usuário arrasta a
-barra para onde quiser.
+Besides docking the large window to the 4 edges of the screen (as today),
+have a mode for multiple monitors and a free mode, in which the user drags
+the window wherever they want.
 
-## Decisões do usuário
+## User decisions
 
-- Múltiplos monitores = **escolher um monitor fixo** onde a barra sempre abre.
-- Modo livre = **arrastar e redimensionar**, lembrando posição e tamanho.
+- Multiple monitors = **pick a fixed monitor** where the window always opens.
+- Free mode = **drag and resize**, remembering position and size.
 
-## Solução
+## Solution
 
-Detalhes em `docs/adr/0006-large-window-placement-modes.md`.
-Configurações → Layout & Posicionamento → Área principal → **Posicionamento**:
-"Na borda — monitor do mouse" (padrão, igual antes), "Na borda — monitor
-fixo" (lista de monitores + **Identificar**) e "Livre — arrastar e
-redimensionar" (+ **Restaurar posição**).
+Details in `docs/adr/0006-large-window-placement-modes.md`.
+Settings → Layout & Placement → Main Window → **Placement**:
+"Docked — monitor under the mouse" (default, same as before),
+"Docked — a fixed monitor" (monitor list + **Identify**) and
+"Free — drag and resize" (+ **Reset position**).
 
-## Smoke manual (Windows)
+## Manual smoke (Windows)
 
-- [ ] Monitor fixo com 2 telas: com o mouse na tela 1, o atalho abre a barra
-      na tela escolhida, encostada na borda configurada.
-- [ ] Identificar mostra "1"/"2" no centro de cada tela e some em 2 s sem
-      roubar o foco.
-- [ ] Desconectar o monitor escolhido: a barra abre no principal; reconectar:
-      volta para o escolhido.
-- [ ] Livre: arrastar pela alça do topo e pelas áreas vazias do cabeçalho;
-      redimensionar pelas 4 bordas e cantos; fechar e reabrir no mesmo lugar e
-      tamanho; horizontal e vertical guardam retângulos separados.
-- [ ] Livre: cliques em cards, botões e busca continuam funcionando normalmente.
-- [ ] Restaurar posição recentraliza a barra no próximo uso.
+- [ ] Fixed monitor with 2 screens: with the mouse on screen 1, the hotkey
+      opens the window on the chosen screen, docked to the configured edge.
+- [ ] Identify shows "1"/"2" in the center of each screen and disappears in
+      2 s without stealing the focus.
+- [ ] Disconnect the chosen monitor: the window opens on the primary one;
+      reconnect: it goes back to the chosen one.
+- [ ] Free: drag by the top handle and by the empty areas of the header;
+      resize from the 4 edges and corners; close and reopen at the same place
+      and size; horizontal and vertical keep separate rectangles.
+- [ ] Free: clicks on cards, buttons and search keep working normally.
+- [ ] Reset position recenters the window on the next use.

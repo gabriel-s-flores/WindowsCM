@@ -2,28 +2,28 @@ Status: resolved
 Type: task
 
 ## Answer
-Implementado em `WindowsCM.Core.Transfer.MobileWebTemplate`:
-- Interface responsiva com design Fluent para celular.
-- Seção de download com suporte dedicado para áudio (player HTML5), imagens (preview), vídeos e documentos.
-- Seção de upload com abas para textos (com botão de colar) e arquivos (drag and drop, câmera e galeria com barra de progresso).
-- Totalmente autocontida, sem requisições para servidores externos.
+Implemented in `WindowsCM.Core.Transfer.MobileWebTemplate`:
+- Responsive interface with Fluent design for phones.
+- Download section with dedicated support for audio (HTML5 player), images (preview), videos and documents.
+- Upload section with tabs for text (with a paste button) and files (drag and drop, camera and gallery with a progress bar).
+- Fully self-contained, with no requests to external servers.
 
-## Descrição
+## Description
 
-Criar a página web móvel servida pelo servidor local para exibição no smartphone (iOS e Android) quando o QR Code for escaneado.
+Create the mobile web page served by the local server, to be shown on the phone (iOS and Android) when the QR Code is scanned.
 
-## Requisitos
+## Requirements
 
-- Design limpo seguindo o estilo Windows 11 Fluent (cantos arredondados, paleta moderna, detecção de modo escuro/claro nativo do navegador via `@media (prefers-color-scheme)`).
-- **Visão de Download (PC -> Celular)**:
-  - Card com o item a ser baixado:
-    - Se for Áudio: título da música/áudio, tamanho em MB, player de áudio HTML5 `<audio controls src="..." style="width: 100%">` e botão estilizado "Baixar Áudio".
-    - Se for Imagem: visualizador da imagem em alta resolução com botão "Baixar Imagem".
-    - Se for Arquivo/Documento: ícone do tipo de arquivo, nome, tamanho e botão "Baixar Arquivo".
-    - Se for Texto/Código/Link: caixa de texto elegante com destaque e botão "Copiar Texto" (usando `navigator.clipboard.writeText` com fallback e toast de confirmação na tela).
-- **Visão de Upload (Celular -> PC)**:
-  - Aba / Seção "Enviar para o PC":
-    - Caixa de texto para colar ou digitar mensagens/links com botão "Enviar Texto".
-    - Seletor de arquivo e área de drop com suporte a múltiplos arquivos, fotos da câmera, galeria, áudios e documentos.
-    - Botão "Enviar Arquivo" com barra de progresso visual de upload e feedback de envio imediato ("Enviado com sucesso para o computador!").
-- Totalmente autocontida (sem CDNs externas, funcionando 100% offline em redes locais sem acesso à internet).
+- Clean design following the Windows 11 Fluent style (rounded corners, modern palette, detection of the browser's native dark/light mode via `@media (prefers-color-scheme)`).
+- **Download View (PC -> Phone)**:
+  - Card with the item to be downloaded:
+    - If Audio: song/audio title, size in MB, HTML5 audio player `<audio controls src="..." style="width: 100%">` and a styled "Download Audio" button.
+    - If Image: high-resolution image viewer with a "Download Image" button.
+    - If File/Document: file type icon, name, size and a "Download File" button.
+    - If Text/Code/Link: elegant highlighted text box and a "Copy Text" button (using `navigator.clipboard.writeText` with a fallback and an on-screen confirmation toast).
+- **Upload View (Phone -> PC)**:
+  - "Send to PC" Tab / Section:
+    - Text box to paste or type messages/links, with a "Send Text" button.
+    - File picker and drop area supporting multiple files, camera photos, gallery, audio and documents.
+    - "Send File" button with a visual upload progress bar and immediate send feedback ("Successfully sent to computer!").
+- Fully self-contained (no external CDNs, working 100% offline on local networks without internet access).

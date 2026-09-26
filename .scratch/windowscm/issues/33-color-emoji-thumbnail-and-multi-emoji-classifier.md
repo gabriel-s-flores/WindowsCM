@@ -1,62 +1,62 @@
-# Issue 33: Renderização rica (full-color preenchido) de thumbnails de emojis e classificação de múltiplos emojis
+# Issue 33: Rich rendering (filled full-color) of emoji thumbnails and classification of multiple emojis
 
 Status: resolved
 Type: task
 Blocked by: 32
 
-## Contexto
+## Context
 
-Atualmente no WindowsCM:
-1. **Renderização de Emojis em Thumbnails de Preview**:
-   No `PopupWindow.xaml`, os emojis em itens do tipo `Character` são renderizados via `<TextBlock FontFamily="Segoe UI Emoji" ...>`. No WPF (.NET 8), o motor de renderização de fontes padrão não dá suporte a tabelas OpenType de fontes coloridas (COLR/CPAL ou SVG). Como resultado, o Windows exibe apenas o glifo base de fallback em contorno monocromático ("outlined"), sem preenchimento colorido.
-2. **Classificação de Múltiplos Emojis**:
-   Quando o usuário copia múltiplos emojis (ex.: "🚀🎉", "😀😁😂", "❤️🔥✨", "🇧🇷 🇺🇸"), o `Classifier.ClassifyText` classifica o item como `ItemKind.Text` em vez de `ItemKind.Character` (Emoji), porque a regra atual só classifica como `Character` se `!GraphemeCounter.HasMoreThan(trimmed, maxCharacters)` (onde `maxCharacters` padrão é 1). Se houver texto e emojis misturados (ex.: "Hello 🚀"), deve continuar sendo classificado como `Text`, mas quando forem **somente emojis** (e espaços em branco opcionais), deve ser reconhecido como `Emoji` (`ItemKind.Character`).
+Currently in WindowsCM:
+1. **Emoji Rendering in Preview Thumbnails**:
+   In `PopupWindow.xaml`, emojis in `Character` items are rendered via `<TextBlock FontFamily="Segoe UI Emoji" ...>`. In WPF (.NET 8), the default font rendering engine does not support the OpenType color font tables (COLR/CPAL or SVG). As a result, Windows shows only the fallback base glyph as a monochrome outline ("outlined"), with no color fill.
+2. **Classification of Multiple Emojis**:
+   When the user copies multiple emojis (e.g. "🚀🎉", "😀😁😂", "❤️🔥✨", "🇧🇷 🇺🇸"), `Classifier.ClassifyText` classifies the item as `ItemKind.Text` instead of `ItemKind.Character` (Emoji), because the current rule only classifies as `Character` if `!GraphemeCounter.HasMoreThan(trimmed, maxCharacters)` (where `maxCharacters` defaults to 1). If text and emojis are mixed (e.g. "Hello 🚀"), it must still be classified as `Text`, but when there are **only emojis** (and optional whitespace), it must be recognized as `Emoji` (`ItemKind.Character`).
 
-## Escopo e Requisitos
+## Scope and Requirements
 
-1. **Classificação e Detecção Precisa de Emojis (`EmojiDetector`)**:
-   - Criar `WindowsCM.Core.Classification.EmojiDetector` com suporte a todos os blocos Unicode de emojis (Emoticons, Pictogramas, Símbolos, Bandeiras / Regional Indicators, ZWJ sequences, Fitzpatrick skin tones, modificadores de variação `\uFE0F`, keycaps).
-   - `IsAllEmojis(string? text)`: retorna `true` se o texto consistir exclusivamente de 1 ou mais grafemas de emoji (permitindo espaços em branco entre eles). Retorna `false` se contiver qualquer caractere alfanumérico, pontuação comum ou texto regular.
-   - Atualizar `Classifier.ClassifyText`: se `EmojiDetector.IsAllEmojis(trimmed)` for verdadeiro, classificar como `ItemKind.Character`.
-   - Garantir que texto misturado com emoji (ex.: `"Olá 😀"`, `"🚀 123"`) continue sendo classificado como `ItemKind.Text`.
-2. **Formatação e Rótulos no Card (`ItemDisplayFormatter`)**:
-   - `GetTitle`: retornar `"Emoji"` para itens com conteúdo de emoji (seja 1 ou vários).
+1. **Accurate Emoji Classification and Detection (`EmojiDetector`)**:
+   - Create `WindowsCM.Core.Classification.EmojiDetector` with support for all Unicode emoji blocks (Emoticons, Pictographs, Symbols, Flags / Regional Indicators, ZWJ sequences, Fitzpatrick skin tones, variation modifiers `\uFE0F`, keycaps).
+   - `IsAllEmojis(string? text)`: returns `true` if the text consists exclusively of 1 or more emoji graphemes (allowing whitespace between them). Returns `false` if it contains any alphanumeric character, common punctuation or regular text.
+   - Update `Classifier.ClassifyText`: if `EmojiDetector.IsAllEmojis(trimmed)` is true, classify as `ItemKind.Character`.
+   - Ensure that text mixed with emoji (e.g. `"Hello 😀"`, `"🚀 123"`) is still classified as `ItemKind.Text`.
+2. **Card Formatting and Labels (`ItemDisplayFormatter`)**:
+   - `GetTitle`: return `"Emoji"` for items with emoji content (whether 1 or several).
    - `GetTypeLabel`:
      - 1 emoji: `"Emoji • U+1F680"`
-     - Múltiplos emojis: `"Emoji • N emojis"` (ex.: `"Emoji • 3 emojis"`)
-     - Caractere não-emoji único: `"Caractere • U+0041"`
-   - `GetKindIconGlyph`: retornar o ícone Fluent de emoji `\uED53` para qualquer item `Character` cujo conteúdo seja emoji.
-3. **Renderização Full-Color de Thumbnails de Emojis via Direct2D / DirectWrite (`EmojiService`)**:
-   - Implementar `EmojiService` em `WindowsCM.App` usando Direct2D e DirectWrite nativos do Windows com `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`.
-   - Renderizar bitmaps 32bpp PBGRA nítidos, 100% preenchidos e coloridos (Fluent Emojis oficiais do Windows 11), sem contornos vazios ou renderização monocromática.
-   - Cache em memória com `ConcurrentDictionary<string, ImageSource>` para recuperação instantânea (0ms de overhead na rolagem/renderização).
-   - Suporte a múltiplos emojis na mesma miniatura lado a lado com dimensionamento adaptativo (fontSize ajustado pela quantidade de emojis para caber perfeitamente no card).
-4. **Atualização da Interface XAML (`PopupWindow.xaml`)**:
-   - Substituir o TextBlock monocromático por elemento `<Image>` vinculado ao conversor `EmojiThumbnail`, com fallback gracioso.
-   - Exibição de código Unicode ou contagem formatada abaixo da miniatura.
-5. **Testes Automatizados (TDD - Red/Green)**:
-   - Testes unitários exaustivos em `EmojiDetectorTests.cs`, `ClassifierTests.cs` e `ItemDisplayFormatterTests.cs`.
+     - Multiple emojis: `"Emoji • N emojis"` (e.g. `"Emoji • 3 emojis"`)
+     - Single non-emoji character: `"Character • U+0041"`
+   - `GetKindIconGlyph`: return the Fluent emoji icon `\uED53` for any `Character` item whose content is emoji.
+3. **Full-Color Rendering of Emoji Thumbnails via Direct2D / DirectWrite (`EmojiService`)**:
+   - Implement `EmojiService` in `WindowsCM.App` using Windows' native Direct2D and DirectWrite with `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`.
+   - Render crisp 32bpp PBGRA bitmaps, 100% filled and in color (the official Windows 11 Fluent Emojis), with no hollow outlines or monochrome rendering.
+   - In-memory cache with `ConcurrentDictionary<string, ImageSource>` for instant retrieval (0ms overhead when scrolling/rendering).
+   - Support for multiple emojis side by side in the same thumbnail with adaptive sizing (fontSize adjusted to the number of emojis so they fit the card perfectly).
+4. **XAML Interface Update (`PopupWindow.xaml`)**:
+   - Replace the monochrome TextBlock with an `<Image>` element bound to the `EmojiThumbnail` converter, with a graceful fallback.
+   - Display of the Unicode code or a formatted count below the thumbnail.
+5. **Automated Tests (TDD - Red/Green)**:
+   - Exhaustive unit tests in `EmojiDetectorTests.cs`, `ClassifierTests.cs` and `ItemDisplayFormatterTests.cs`.
 
 ## Answer
 
-Implementação concluída com sucesso seguindo o ciclo TDD de Matt Pocock:
+Implementation completed successfully following Matt Pocock's TDD cycle:
 
 1. **`EmojiDetector` (`WindowsCM.Core.Classification`)**:
-   - Implementada detecção completa de grafemas Unicode com suporte a Emoticons, Pictogramas, ZWJ sequences, tons de pele, seletores de variação, bandeiras e keycaps.
-   - Métodos públicos puros: `IsAllEmojis`, `CountEmojis`, `IsEmojiGrapheme` e `IsPrimaryEmojiRune`.
-   - `Classifier.ClassifyText` atualizado para classificar sequências puras de emojis como `ItemKind.Character`.
-   - Textos mistos com emojis e caracteres comuns continuam sendo classificados como `ItemKind.Text`.
+   - Implemented complete Unicode grapheme detection with support for Emoticons, Pictographs, ZWJ sequences, skin tones, variation selectors, flags and keycaps.
+   - Pure public methods: `IsAllEmojis`, `CountEmojis`, `IsEmojiGrapheme` and `IsPrimaryEmojiRune`.
+   - `Classifier.ClassifyText` updated to classify pure emoji sequences as `ItemKind.Character`.
+   - Mixed text with emojis and ordinary characters is still classified as `ItemKind.Text`.
 2. **`ItemDisplayFormatter` (`WindowsCM.Core.Popup`)**:
-   - `GetTitle`: padronizado para `"Emoji"` em qualquer item de emoji.
-   - `GetTypeLabel`: formata `"Emoji • U+1F680"` para emoji único e `"Emoji • N emojis"` para múltiplos emojis.
-   - `GetKindIconGlyph`: retorna `\uED53` (ícone Fluent de emoji) para itens de emoji.
+   - `GetTitle`: standardized to `"Emoji"` for any emoji item.
+   - `GetTypeLabel`: formats `"Emoji • U+1F680"` for a single emoji and `"Emoji • N emojis"` for multiple emojis.
+   - `GetKindIconGlyph`: returns `\uED53` (Fluent emoji icon) for emoji items.
 3. **`EmojiService` (`WindowsCM.App`)**:
-   - Implementada renderização com Direct2D + DirectWrite usando `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`.
-   - Imagens 100% preenchidas e com cores ricas (Fluent Emojis do Windows 11).
-   - Cache em memória `ConcurrentDictionary<string, ImageSource>` congelado (`Freeze()`) com 0ms de custo de rolagem na UI.
-   - Dimensionamento adaptativo para múltiplos emojis (lado a lado no card).
-4. **UI WPF (`PopupWindow.xaml` & `PopupConverters`)**:
-   - Miniatura de emoji substituída por elemento `<Image>` com alta qualidade de interpolação e fallback gracioso para caracteres alfanuméricos.
-   - Subtítulo com contagem ou codepoint.
-5. **Testes**:
-   - 885 testes unitários passando 100% verdes (`dotnet test`).
+   - Implemented rendering with Direct2D + DirectWrite using `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`.
+   - Images 100% filled and in rich colors (Windows 11 Fluent Emojis).
+   - In-memory `ConcurrentDictionary<string, ImageSource>` cache, frozen (`Freeze()`), with 0ms of scrolling cost in the UI.
+   - Adaptive sizing for multiple emojis (side by side on the card).
+4. **WPF UI (`PopupWindow.xaml` & `PopupConverters`)**:
+   - Emoji thumbnail replaced with an `<Image>` element with high-quality interpolation and a graceful fallback for alphanumeric characters.
+   - Subtitle with the count or codepoint.
+5. **Tests**:
+   - 885 unit tests passing, 100% green (`dotnet test`).

@@ -1,124 +1,127 @@
-# Auditoria de performance e estabilidade
+# Performance and stability audit
 
 Status: resolved
 Type: fix
 
-## Relato
+## Report
 
-O app crashou muitas vezes, principalmente com muitos itens no histórico, e
-apresentou lentidão.
+The app crashed many times, especially with many items in the history, and
+was slow.
 
-## Achados (ordem de gravidade)
+## Findings (in order of severity)
 
 ### Crashes
 
-1. **Exceção no thread do listener de clipboard mata o processo.**
-   `MessageOnlyClipboardListener.WndProc` é um callback nativo (reverse
-   P/Invoke) que dispara `ClipboardChanged` → `ClipboardMonitor` →
-   `CaptureService` → SQLite/IO de imagem, e depois o feedback de cópia do
-   `App`. Qualquer exceção ali (SQLite ocupado, disco cheio, PNG corrompido,
-   `Dispatcher.Invoke` falhando) atravessa a fronteira nativa e derruba o
-   processo sem aviso.
-2. **Store do modo anônimo sem sincronização.** O `SqliteHistoryStore`
-   `:memory:` criado pelo `IncognitoSessionCoordinator` não passa pelo
-   `LockedHistoryStore`: é usado ao mesmo tempo pelo listener (captura), pela
-   UI (popup), pelo pool (preview de links) e pelo pipe. `SqliteConnection`
-   não é thread-safe, e `SetIncognito(false)` descarta o store enquanto outra
-   thread ainda o usa → corrupção nativa / `ObjectDisposedException`.
-3. **Sem rede de proteção global.** Nenhum handler para
-   `DispatcherUnhandledException`, `AppDomain.UnhandledException` ou
-   `TaskScheduler.UnobservedTaskException`, e nenhum log: qualquer erro num
-   handler de UI fecha o app e não deixa rastro para diagnóstico.
-4. **Estado compartilhado do `CaptureService` sem lock.** `_lastSeen` é lido
-   e escrito pelo listener (captura) e pela UI (`CopiedFromHistory`).
-5. **`Clipboard.SetText` sem proteção** na ação "Copiar" (clipboard ocupado
-   por outro app → `COMException`).
-6. **Dispose do listener no thread errado.** `PostQuitMessage` era chamado
-   no thread da UI, então o loop do listener nunca saía e o `Join` esperava
-   2 s em todo encerramento.
+1. **An exception on the clipboard listener thread kills the process.**
+   `MessageOnlyClipboardListener.WndProc` is a native callback (reverse
+   P/Invoke) that raises `ClipboardChanged` → `ClipboardMonitor` →
+   `CaptureService` → SQLite/image IO, and then the `App`'s copy feedback.
+   Any exception there (SQLite busy, disk full, corrupt PNG,
+   `Dispatcher.Invoke` failing) crosses the native boundary and takes the
+   process down without warning.
+2. **Incognito mode store without synchronization.** The `:memory:`
+   `SqliteHistoryStore` created by the `IncognitoSessionCoordinator` does not
+   go through the `LockedHistoryStore`: it is used at the same time by the
+   listener (capture), the UI (popup), the pool (link previews) and the pipe.
+   `SqliteConnection` is not thread-safe, and `SetIncognito(false)` disposes
+   of the store while another thread is still using it → native corruption /
+   `ObjectDisposedException`.
+3. **No global safety net.** No handler for
+   `DispatcherUnhandledException`, `AppDomain.UnhandledException` or
+   `TaskScheduler.UnobservedTaskException`, and no log: any error in a UI
+   handler closes the app and leaves no trace for diagnosis.
+4. **`CaptureService` shared state without a lock.** `_lastSeen` is read and
+   written by the listener (capture) and by the UI (`CopiedFromHistory`).
+5. **Unguarded `Clipboard.SetText`** in the "Copy" action (clipboard held by
+   another app → `COMException`).
+6. **Listener disposed on the wrong thread.** `PostQuitMessage` was called on
+   the UI thread, so the listener's loop never exited and the `Join` waited
+   2 s on every shutdown.
 
-### Lentidão
+### Slowness
 
-7. **Limite do histórico só aplicado na inicialização.** `Evict` rodava só
-   no startup e ao fechar as configurações; durante a sessão o histórico
-   crescia sem limite (e as imagens órfãs ficavam no disco até reiniciar).
-8. **Varredura completa do histórico em caminhos quentes.** `List()` (todas
-   as linhas + parse de JSON por linha) a cada cópia (feedback), a cada
-   colagem (`PasteOrchestrator`, `CopiedFromHistory`, `ActivateAsync`) e a
-   cada abertura do popup (`EnsureLinkPreviewsForRecentItems`).
-9. **Preview de texto proporcional ao conteúdo inteiro.** `GetPreviewText`,
-   `GetTitle` e `CodeSyntaxTokenizer.Tokenize` faziam `Split` do conteúdo
-   todo para usar 1–8 linhas; `DetectLanguage` rodava uma regex com `.*` e
-   sem timeout sobre o texto inteiro (backtracking em textos minificados
-   grandes). Tudo na thread de UI, a cada card realizado. Linhas gigantes
-   (JSON/JS minificado) iam inteiras para o `TextBlock`.
-10. **Miniaturas decodificadas a cada realização de card.** O
-    `ImageThumbConverter` decodificava o PNG do disco na thread de UI sem
-    cache; os caches de miniatura do Shell e de metadados de mídia cresciam
-    sem limite.
-11. **Tempestade de refresh.** Cada favicon baixado fazia `Items.Refresh()`
-    e cada preview de link concluído recarregava o modelo e as duas janelas.
-12. **Tamanho em disco de cada arquivo de uma cópia múltipla.**
-    `FileDisplayHelper.GetFileDetails` fazia `File.Exists` + `FileInfo` para
-    todo caminho de um item "Arquivos" (4 conversores por card, thread de
-    UI), embora o tamanho só apareça para um arquivo único. Copiar 2000
-    arquivos no Explorer = ~16 mil syscalls por card; em caminhos de rede,
-    segundos de travamento.
+7. **History limit applied only at startup.** `Evict` ran only at startup
+   and when Settings closed; during the session the history grew without
+   bound (and orphaned images stayed on disk until restart).
+8. **Full history scan on hot paths.** `List()` (every row + a JSON parse
+   per row) on every copy (feedback), on every paste (`PasteOrchestrator`,
+   `CopiedFromHistory`, `ActivateAsync`) and on every popup open
+   (`EnsureLinkPreviewsForRecentItems`).
+9. **Text preview proportional to the whole content.** `GetPreviewText`,
+   `GetTitle` and `CodeSyntaxTokenizer.Tokenize` did a `Split` of the whole
+   content to use 1–8 lines; `DetectLanguage` ran a regex with `.*` and no
+   timeout over the whole text (backtracking on large minified texts). All
+   on the UI thread, for every realized card. Giant lines (minified JSON/JS)
+   went whole into the `TextBlock`.
+10. **Thumbnails decoded on every card realization.** The
+    `ImageThumbConverter` decoded the PNG from disk on the UI thread with no
+    cache; the Shell thumbnail and media metadata caches grew without bound.
+11. **Refresh storm.** Every downloaded favicon did an `Items.Refresh()` and
+    every completed link preview reloaded the model and both windows.
+12. **On-disk size of every file in a multi-file copy.**
+    `FileDisplayHelper.GetFileDetails` did `File.Exists` + `FileInfo` for
+    every path of a "Files" item (4 converters per card, UI thread), even
+    though the size only shows for a single file. Copying 2000 files in
+    Explorer = ~16,000 syscalls per card; on network paths, seconds-long
+    freezes.
 
-## Plano / solução
+## Plan / solution
 
-- `IHistoryStore.GetById` / `GetLatest` (consultas indexadas, com
-  implementação padrão para fakes) substituem `List()` nos caminhos quentes.
-- `IncognitoSessionCoordinator` serializa toda chamada encaminhada sob o
-  mesmo lock que troca/descarta o store efêmero.
-- `CaptureService` serializa captura/`CopiedFromHistory`/toggle e aplica os
-  limites do histórico (`CaptureOptions.HistoryMaxItems`, etc.) a cada item
-  gravado. Os arquivos de imagem de itens removidos continuam sendo limpos
-  pela varredura de órfãos do startup (limpar em tempo de execução disputaria
-  com a troca de sessão anônima e poderia apagar imagens da sessão errada).
-  Mudanças no slider de limite chegam à captura sem precisar fechar as
-  configurações.
-- `ClipboardMonitor` nunca deixa uma falha de leitura/captura escapar
-  (evento `CaptureFailed`); o `WndProc` do listener também captura tudo.
-- `ErrorLog` (Core) grava em `%LOCALAPPDATA%\WindowsCM\logs\windowscm.log`
-  com rotação por tamanho, sem conteúdo do clipboard. `UnhandledErrorPolicy`
-  mantém o app vivo em erros de UI isolados, mas deixa encerrar numa rajada
-  (evita loop infinito de erro por frame).
-- Previews limitados: `TextPreview` percorre só o começo do texto e corta
-  linhas longas; `DetectLanguage` usa uma fatia de 4000 caracteres com regex
-  compilada com timeout.
-- `LruCache` (Core) limita os caches de miniatura e metadados. Miniaturas de
-  imagem passam a ser cacheadas e pré-aquecidas em background (capturas novas
-  e itens de imagem do histórico no startup).
-- Refresh coalescido: previews de links e favicons agendam um único refresh
-  por janela de ~150–250 ms.
-- `GetFileDetails` só consulta o disco quando o item tem um único arquivo.
-- `Clipboard.SetText` da ação "Copiar" protegido, com balão localizado
-  (`TrayCopyFailedBalloon`, PT/EN) em vez de falhar em silêncio.
-- O listener encerra a si mesmo via `WM_CLOSE` postado para a própria janela.
+- `IHistoryStore.GetById` / `GetLatest` (indexed queries, with a default
+  implementation for fakes) replace `List()` on the hot paths.
+- `IncognitoSessionCoordinator` serializes every forwarded call under the
+  same lock that swaps/disposes of the ephemeral store.
+- `CaptureService` serializes capture/`CopiedFromHistory`/toggle and applies
+  the history limits (`CaptureOptions.HistoryMaxItems`, etc.) on every stored
+  item. Image files of removed items are still cleaned up by the startup
+  orphan sweep (cleaning up at runtime would race with the incognito session
+  swap and could delete images of the wrong session). Changes to the limit
+  slider reach capture without having to close Settings.
+- `ClipboardMonitor` never lets a read/capture failure escape
+  (`CaptureFailed` event); the listener's `WndProc` also catches everything.
+- `ErrorLog` (Core) writes to `%LOCALAPPDATA%\WindowsCM\logs\windowscm.log`
+  with size-based rotation, without clipboard content. `UnhandledErrorPolicy`
+  keeps the app alive on isolated UI errors, but lets it exit on a burst
+  (avoids an infinite error-per-frame loop).
+- Bounded previews: `TextPreview` walks only the start of the text and clips
+  long lines; `DetectLanguage` uses a 4000-character slice with a compiled
+  regex with a timeout.
+- `LruCache` (Core) bounds the thumbnail and metadata caches. Image
+  thumbnails are now cached and prewarmed in the background (new captures,
+  and the history's image items at startup).
+- Coalesced refresh: link previews and favicons schedule a single refresh
+  per ~150–250 ms window.
+- `GetFileDetails` only queries the disk when the item has a single file.
+- `Clipboard.SetText` in the "Copy" action is guarded, with a localized
+  balloon (`TrayCopyFailedBalloon`, PT/EN) instead of failing silently.
+- The listener shuts itself down via a `WM_CLOSE` posted to its own window.
 
-## Fora do escopo (achados para tickets futuros)
+## Out of scope (findings for future tickets)
 
-- **IDs ambíguos ao ver o histórico normal com o anônimo ativo.** Fixar,
-  excluir, editar e colar a partir dessa visão resolvem o id no store
-  *ativo* (o anônimo), então podem agir sobre outro item com o mesmo id.
-  Não é crash nem lentidão, mas é perda de dados — merece ticket próprio.
-- **Recopiar um item existente apaga título/metadados.** O "bump" do
-  `AddOrUpdate` sobrescreve `title`/`metadata` com os da nova captura (nulos).
-- **Miniatura do Shell (vídeos, PDFs) ainda é extraída na thread de UI** na
-  primeira exibição; um pré-aquecimento exigiria um worker STA dedicado.
-- **`VirtualizationMode=Recycling`** nas listas reduziria a criação de
-  containers ao rolar; não aplicado sem poder validar visualmente no Windows.
-- **`EmojiService`** cria uma factory Direct2D por emoji e não libera os
-  objetos COM (limitado pelo cache por emoji único).
+- **Ambiguous IDs when viewing the normal history with incognito mode
+  active.** Pinning, deleting, editing and pasting from that view resolve the
+  id in the *active* store (the incognito one), so they can act on another
+  item with the same id. It is neither a crash nor slowness, but it is data
+  loss — it deserves its own ticket.
+- **Re-copying an existing item wipes its title/metadata.** The
+  `AddOrUpdate` "bump" overwrites `title`/`metadata` with those of the new
+  capture (null).
+- **The Shell thumbnail (videos, PDFs) is still extracted on the UI thread**
+  on first display; prewarming it would require a dedicated STA worker.
+- **`VirtualizationMode=Recycling`** on the lists would reduce container
+  creation while scrolling; not applied without being able to validate it
+  visually on Windows.
+- **`EmojiService`** creates a Direct2D factory per emoji and does not
+  release the COM objects (bounded by the per-unique-emoji cache).
 
-## Verificação
+## Verification
 
-- Testes do Core (novos + existentes) no `dotnet test`: 1136 passam; as falhas
-  restantes são exatamente as do baseline (antes das mudanças) e só ocorrem
-  fora do Windows (caminhos `C:\`, pipes nomeados) — o CI Windows as cobre.
-- Build da solução inteira, incluindo o app WPF
-  (`dotnet build -p:EnableWindowsTargeting=true`), sem warnings.
-- CI Windows (build + testes) no PR. `scripts/build-dist.ps1` (portátil +
-  instalador) exige Windows + Inno Setup: roda no job de release do CI a cada
-  push verde na `main`.
+- Core tests (new + existing) in `dotnet test`: 1136 pass; the remaining
+  failures are exactly those of the baseline (before the changes) and only
+  occur outside Windows (`C:\` paths, named pipes) — the Windows CI covers
+  them.
+- Build of the whole solution, including the WPF app
+  (`dotnet build -p:EnableWindowsTargeting=true`), with no warnings.
+- Windows CI (build + tests) on the PR. `scripts/build-dist.ps1` (portable +
+  installer) requires Windows + Inno Setup: it runs in the CI release job on
+  every green push to `main`.

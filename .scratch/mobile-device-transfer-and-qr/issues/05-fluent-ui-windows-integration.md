@@ -2,25 +2,25 @@ Status: resolved
 Type: task
 
 ## Answer
-Implementado em `PopupWindow.xaml`, `PopupWindow.xaml.cs`, `CompactPopupWindow.xaml`, `CompactPopupWindow.xaml.cs` e `MobileTransferWindow.xaml/.cs`:
-- Adicionado botão `ReceiveMobileButton` com ícone de celular `\uE8EA` ao lado do botão de modo anônimo em ambas as interfaces.
-- Criada janela `MobileTransferWindow` com design Fluent, exibição de QR Code de alta qualidade, IP local, botão de copiar link e indicador de status com feedback em tempo real ao receber dados do celular.
-- Habilitada opção "Gerar código QR" no menu de contexto dos cards e atalho de ação rápida.
+Implemented in `PopupWindow.xaml`, `PopupWindow.xaml.cs`, `CompactPopupWindow.xaml`, `CompactPopupWindow.xaml.cs` and `MobileTransferWindow.xaml/.cs`:
+- Added the `ReceiveMobileButton` button with a phone icon `\uE8EA` next to the incognito mode button in both interfaces.
+- Created the `MobileTransferWindow` window with Fluent design, a high-quality QR Code display, the local IP, a copy-link button and a status indicator with real-time feedback when data is received from the phone.
+- Enabled the "Generate QR code" option in the card context menu and the quick-action shortcut.
 
-## Descrição
+## Description
 
-Adicionar na interface do `PopupWindow` e `CompactPopupWindow` o botão com ícone de celular para iniciar o recebimento de itens do smartphone, bem como criar a janela `MobileTransferWindow` com QR Code persistente e status em tempo real.
+Add the phone-icon button to the `PopupWindow` and `CompactPopupWindow` interfaces to start receiving items from the phone, and create the `MobileTransferWindow` window with a persistent QR Code and real-time status.
 
-## Requisitos
+## Requirements
 
 - `PopupWindow.xaml`:
-  - Ao lado de `IncognitoButton`, adicionar `ReceiveMobileButton` com ícone de smartphone (`\uE8EA`), tooltip "Enviar do celular para o computador" e evento de clique `OnReceiveMobileClicked`.
+  - Next to `IncognitoButton`, add `ReceiveMobileButton` with a phone icon (`\uE8EA`), the tooltip "Send from mobile to PC" and the click event `OnReceiveMobileClicked`.
 - `CompactPopupWindow.xaml`:
-  - No rodapé ao lado de `IncognitoButton`, adicionar o botão correspondente.
-- Criação de `MobileTransferWindow`:
-  - Visual Fluent Windows 11 com cantos arredondados, fundo escuro/claro com brushes dinâmicos.
-  - QR Code proeminente apontando para `http://<ip>:<porta>/`.
-  - Instrução clara: "Aponte a câmera do celular para este QR Code para enviar textos e arquivos para o computador."
-  - Seletor/Exibição de IP local com botão para copiar o link direto.
-  - Lista/Card de status com feedback em tempo real de itens recebidos ("Aguardando conexão...", "Recebido há pouco: foto.jpg").
-  - Botão "Abrir pasta de transferências" e "Concluído / Fechar".
+  - In the footer next to `IncognitoButton`, add the corresponding button.
+- Creation of `MobileTransferWindow`:
+  - Windows 11 Fluent look with rounded corners, dark/light background with dynamic brushes.
+  - Prominent QR Code pointing to `http://<ip>:<port>/`.
+  - Clear instruction: "Point the phone camera at this QR Code to send text and files to the computer."
+  - Local IP selector/display with a button to copy the direct link.
+  - Status list/card with real-time feedback on received items ("Waiting for connection...", "Received a moment ago: photo.jpg").
+  - "Open Transfers Folder" and "Done / Close" buttons.

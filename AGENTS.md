@@ -1,35 +1,40 @@
-# WindowsCM — Copyous para Windows
+# WindowsCM — Copyous for Windows
 
-Clone do Copyous (GNOME) para Windows. Ver vault Obsidian `WindowsCM` em `C:\Users\gabri\Documents\obsidian\WindowsCM` (espelho legível) e `CONTEXT.md` / `docs/adr/` (canônicos no repo quando criados).
+A clone of Copyous (GNOME) for Windows. See the `WindowsCM` Obsidian vault at `C:\Users\gabri\Documents\obsidian\WindowsCM` (readable mirror) and `CONTEXT.md` / `docs/adr/` (canonical in the repo once created).
 
 ## Agent skills
 
 ### Issue tracker
 
-Local markdown em `.scratch/`. See `docs/agents/issue-tracker.md`.
+Local markdown in `.scratch/`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Vocabulário padrão (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+Default vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context (`CONTEXT.md` + `docs/adr/` na raiz). See `docs/agents/domain.md`.
+Single-context (`CONTEXT.md` + `docs/adr/` at the root). See `docs/agents/domain.md`.
 
-## Regras de Entrega e Compilação
+## Delivery and Build Rules
 
-### Paridade Estrita de Localização (Português e Inglês)
-- **Zero Strings Hardcoded**: É expressamente proibido inserir textos visíveis ao usuário (títulos, botões, dicas/tooltips, descrições, itens de menu, alertas, badges de layout, formatos de tempo, etc.) hardcoded em código C# ou em arquivos XAML.
-- **Paridade Obrigatória**: Toda e qualquer feature nova ou alteração de interface DEVE implementar paridade absoluta (100%) entre Português e Inglês em `IAppStrings`, `PortugueseAppStrings` e `EnglishAppStrings`.
-- **Recursos Dinâmicos XAML**: No XAML, textos devem utilizar `{DynamicResource Loc_<Propriedade>}`. Ao alternar o idioma, o dicionário de recursos deve ser substituído em tempo de execução para invalidar dinamicamente todos os elementos de janelas abertas.
-- **Testes de Regressão Automatizados**: Novos textos adicionados a `IAppStrings` devem ser cobertos pelos testes em `LocalizationTests.cs`, garantindo que nenhuma propriedade retorne nulo ou vazio em nenhum dos dois idiomas.
+### English Only, in the Repository and on GitHub
+- **Everything is written in English**: code, comments, identifiers, docs (`CONTEXT.md`, `docs/`, `.scratch/`), file names, scripts and their output, commit messages, branch names, pull request titles and descriptions, review comments and release notes. Keep the existing style: Conventional Commits subjects (`fix(popup): ...`) and plain, factual bodies.
+- **Never mix Portuguese and English.** When referring to UI text, quote its English string.
+- **The only Portuguese allowed is product data**: the pt-BR UI strings (`PortugueseAppStrings` and the other localized branches) and the test fixtures that assert or feed them.
 
-### Compilação Obrigatória (Portátil e Instalador) Após Cada Tarefa
-Após concluir qualquer tarefa ou alteração no projeto, é obrigatório compilar e disponibilizar tanto a versão portátil quanto o instalador executável **sempre na mesma pasta** (`dist/`):
-- **Portátil**: `dist/WindowsCM-portable/` (executável single-file `WindowsCM.exe` + `LICENSE`) e arquivo zip `dist/WindowsCM-portable.zip`.
-- **Instalador**: `dist/WindowsCM-Setup-1.0.0.exe` (gerado via Inno Setup).
+### Strict Localization Parity (Portuguese and English)
+- **Zero Hardcoded Strings**: Hardcoding user-visible text (titles, buttons, hints/tooltips, descriptions, menu items, alerts, layout badges, time formats, etc.) in C# code or XAML files is expressly forbidden.
+- **Mandatory Parity**: Every new feature or UI change MUST implement absolute (100%) parity between Portuguese and English in `IAppStrings`, `PortugueseAppStrings` and `EnglishAppStrings`.
+- **XAML Dynamic Resources**: In XAML, text must use `{DynamicResource Loc_<Property>}`. When the language is switched, the resource dictionary must be replaced at runtime so that every element of the open windows is invalidated dynamically.
+- **Automated Regression Tests**: New strings added to `IAppStrings` must be covered by the tests in `LocalizationTests.cs`, ensuring that no property returns null or empty in either language.
 
-Para compilar ambos os alvos automaticamente em uma única etapa para a pasta `dist/`, execute:
+### Mandatory Build (Portable and Installer) After Every Task
+After finishing any task or change in the project, you must build and provide both the portable version and the installer executable, **always in the same folder** (`dist/`):
+- **Portable**: `dist/WindowsCM-portable/` (single-file executable `WindowsCM.exe` + `LICENSE`) and the zip file `dist/WindowsCM-portable.zip`.
+- **Installer**: `dist/WindowsCM-Setup-1.0.0.exe` (generated with Inno Setup).
+
+To build both targets into `dist/` automatically in a single step, run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build-dist.ps1
 ```

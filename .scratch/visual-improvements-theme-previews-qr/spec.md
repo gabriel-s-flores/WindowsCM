@@ -1,26 +1,26 @@
-# Spec: Pré-visualização Rica de Websites, Alternância de Temas (Escuro/Claro/Alto Contraste) e Botão de QR Code nos Cards
+# Spec: Rich Website Previews, Theme Switching (Dark/Light/High Contrast) and QR Code Button on Cards
 
 Status: ready-for-agent
 
 ## Problem Statement
 
-1. **Pré-visualizações de Websites**: Atualmente, links web copiados para o histórico do WindowsCM exibem apenas um ícone de favicon e o domínio textual, sem carregar a imagem de pré-visualização (thumbnail OpenGraph / Twitter Card / YouTube) e sem exibir a descrição ou título completo da página, divergindo do Copyous original onde vídeos do YouTube (como a imagem de referência do Rick Astley) e páginas web aparecem com cartões de visualização enriquecida contendo miniatura e detalhes bem definidos. Além disso, o serviço `LinkPreviewService` existente nunca era disparado em segundo plano durante a captura.
-2. **Temas (Modo Escuro, Claro e Alto Contraste)**: O WindowsCM não oferece uma opção na interface para o usuário alternar manualmente entre tema escuro e claro, tampouco possui um modo de Alto Contraste para acessibilidade visual e contraste acentuado (fundo preto `#000000`, bordas brancas `#FFFFFF` e realce de foco/seleção de alta visibilidade).
-3. **QR Code no Menu Rápido dos Cards**: Para gerar um código QR de um item, o usuário precisa abrir o menu secundário ("...") ou acionar o atalho `Ctrl+Q`. Não há um botão direto de QR Code no menu rápido da barra inferior de cada card.
+1. **Website Previews**: Currently, web links copied into the WindowsCM history show only a favicon icon and the domain as text, without loading the preview image (OpenGraph / Twitter Card / YouTube thumbnail) and without showing the page's description or full title, diverging from the original Copyous, where YouTube videos (such as the Rick Astley reference image) and web pages appear as rich preview cards with a thumbnail and well-defined details. In addition, the existing `LinkPreviewService` was never triggered in the background during capture.
+2. **Themes (Dark, Light and High Contrast Mode)**: WindowsCM does not offer an option in the interface for the user to manually switch between the dark and light themes, nor does it have a High Contrast mode for visual accessibility and heightened contrast (black `#000000` background, white `#FFFFFF` borders and high-visibility focus/selection highlighting).
+3. **QR Code in the Cards' Quick Menu**: To generate a QR code for an item, the user has to open the secondary menu ("...") or use the `Ctrl+Q` shortcut. There is no direct QR Code button in the quick menu on the bottom bar of each card.
 
 ## Solution
 
-1. **Serviço de Metadados e Pré-visualizações de Websites**:
-   - Integrar suporte a URLs do YouTube com extração de ID do vídeo (`watch?v=`, `youtu.be/`, `shorts/`), resolução direta de thumbnail de alta definição (`https://img.youtube.com/vi/{id}/hqdefault.jpg`) e fallback/oEmbed para títulos e autores.
-   - Atualizar `LinkPreviewHttpClient` com cabeçalhos de navegador modernos para evitar bloqueios em websites comuns e suportar download de imagens com headers adequados.
-   - Disparar o `LinkPreviewService` em segundo plano quando links forem copiados ou exibidos, salvando a imagem em cache de disco (`LinkImageCache`) e atualizando o `MetadataJson` e `Title` no banco de dados SQLite.
-2. **Suporte Completo a Alto Contraste e Alternância de Temas**:
-   - Implementar paleta de Alto Contraste em `PopupThemeBrushes` (preto absoluto, bordas brancas com espessura nítida, textos brancos de alto contraste, destaque ciano/amarelo para seleção e fixados).
-   - Adicionar controle de seleção de tema na tela de Configurações (`SettingsWindow`) com opções para Modo Escuro, Modo Claro, Alto Contraste e Seguir o Windows, com persistência e atualização dinâmica imediata em todas as janelas.
-3. **Botão de Ação Rápida de QR Code**:
-   - Incluir botão com o ícone oficial de QR Code (`\uED14`) na barra de ações rápidas de cada card no `PopupWindow` e `CompactPopupWindow`, acionando diretamente o diálogo do QR Code para itens compatíveis.
-4. **Build e Empacotamento**:
-   - Compilar publicação release `win-x64`, gerar arquivo zip portátil em `dist/` e compilar o instalador Inno Setup com `ISCC.exe`.
+1. **Website Metadata and Preview Service**:
+   - Integrate support for YouTube URLs with video ID extraction (`watch?v=`, `youtu.be/`, `shorts/`), direct resolution of the high-definition thumbnail (`https://img.youtube.com/vi/{id}/hqdefault.jpg`) and a fallback/oEmbed for titles and authors.
+   - Update `LinkPreviewHttpClient` with modern browser headers to avoid being blocked by common websites and to support downloading images with appropriate headers.
+   - Trigger `LinkPreviewService` in the background when links are copied or shown, saving the image to the disk cache (`LinkImageCache`) and updating `MetadataJson` and `Title` in the SQLite database.
+2. **Full High Contrast Support and Theme Switching**:
+   - Implement a High Contrast palette in `PopupThemeBrushes` (pure black, white borders with a crisp thickness, high-contrast white text, cyan/yellow highlight for selection and pinned items).
+   - Add a theme selection control to the Settings screen (`SettingsWindow`) with options for Dark Mode, Light Mode, High Contrast and Follow Windows, with persistence and immediate dynamic updating in all windows.
+3. **QR Code Quick Action Button**:
+   - Add a button with the official QR Code icon (`\uED14`) to the quick action bar of each card in `PopupWindow` and `CompactPopupWindow`, directly opening the QR Code dialog for compatible items.
+4. **Build and Packaging**:
+   - Build the release `win-x64` publish, generate the portable zip file in `dist/` and build the Inno Setup installer with `ISCC.exe`.
 
 ## User Stories
 

@@ -72,7 +72,7 @@
         <StackPanel Orientation="Horizontal">
           <TextBlock x:Name="FileIconGlyph" Text="&#xED43;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                      FontSize="12" Foreground="{DynamicResource CardAccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-          <TextBlock x:Name="FileNameText" Text="arquivo.ext" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" />
+          <TextBlock x:Name="FileNameText" Text="file.ext" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" />
           <TextBlock x:Name="FileSizeText" Text=" • 2.4 MB" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" VerticalAlignment="Center" />
         </StackPanel>
       </Border>

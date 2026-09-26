@@ -1,29 +1,29 @@
-# Issue 35: Modo Anônimo Efêmero, Limpeza Total e Feedback Visual Inconfundível
+# Issue 35: Ephemeral Incognito Mode, Full Cleanup and Unmistakable Visual Feedback
 
 Status: resolved
 Type: fix
 Blocked by: 34
 
-## Contexto
+## Context
 
-A funcionalidade de modo anônimo (incógnito) apresentava comportamentos disfuncionais:
-1. **Captura Descartada**: `CaptureService` retornava `null` imediatamente caso `IsIncognito` estivesse ativo. Os clipes copiados em modo anônimo não eram salvos nem podiam ser visualizados/colados pelo usuário.
-2. **Dessincronização de Estado**: Atalhos globais e opções de bandeja forçavam valores conflitantes no popup e no monitor.
-3. **Ausência de Repositório Efêmero**: Não havia isolamento entre armazenamento temporário e banco SQLite persistente em disco.
-4. **Feedback Visual Imperceptível**: O único indicador era a cor de um pequeno botão, sem avisos, banner ou destaque.
+The incognito (anonymous) mode feature showed dysfunctional behaviors:
+1. **Discarded Capture**: `CaptureService` returned `null` immediately if `IsIncognito` was active. Clips copied in incognito mode were not saved, nor could the user view/paste them.
+2. **State Desynchronization**: Hotkeys and tray options forced conflicting values on the popup and the monitor.
+3. **No Ephemeral Repository**: There was no isolation between temporary storage and the persistent on-disk SQLite database.
+4. **Imperceptible Visual Feedback**: The only indicator was the color of a small button, with no notices, banner or highlight.
 
-## Requisitos
+## Requirements
 
-1. **Sessão Efêmera em Memória**:
-   - As cópias realizadas durante o modo anônimo são armazenadas em um banco em memória (`:memory:`) e diretório temporário isolado.
-   - Os clipes da sessão anônima ficam disponíveis no popup para navegação, pesquisa e colagem.
-2. **Limpeza Irreversível ao Desativar**:
-   - Assim que o usuário desativa o modo anônimo, a sessão temporária é destruída, o banco em memória é descartado e todos os arquivos efêmeros de imagem são deletados do disco.
-   - Nenhum vestígio é gravado no banco SQLite persistente.
-3. **Feedback Visual Claro e Inconfundível**:
-   - Banner superior proeminente `MODO ANÔNIMO ATIVO` com botão de saída rápida ("Sair do anônimo").
-   - Acento roxo Fluent Windows 11 no popup (borda e topo).
-   - Botão destacado na barra de ferramentas e indicação no menu da bandeja (`✓ Modo anônimo (ativo)`).
-   - Estado vazio contextual caso não haja clipes copiados ainda na sessão.
-4. **Ciclo TDD**:
-   - Testes unitários cobrindo isolamento, captura efêmera, limpeza total e sincronização.
+1. **Ephemeral In-Memory Session**:
+   - Copies made during incognito mode are stored in an in-memory database (`:memory:`) and an isolated temporary directory.
+   - Clips from the incognito session are available in the popup for browsing, searching and pasting.
+2. **Irreversible Cleanup on Deactivation**:
+   - As soon as the user turns off incognito mode, the temporary session is destroyed, the in-memory database is discarded and all ephemeral image files are deleted from disk.
+   - No trace is written to the persistent SQLite database.
+3. **Clear and Unmistakable Visual Feedback**:
+   - Prominent top banner `INCOGNITO MODE ACTIVE` with a quick-exit button ("Exit incognito").
+   - Windows 11 Fluent purple accent on the popup (border and top).
+   - Highlighted button in the toolbar and an indication in the tray menu (`✓ Incognito mode (active)`).
+   - A contextual empty state when no clips have been copied in the session yet.
+4. **TDD Cycle**:
+   - Unit tests covering isolation, ephemeral capture, full cleanup and synchronization.

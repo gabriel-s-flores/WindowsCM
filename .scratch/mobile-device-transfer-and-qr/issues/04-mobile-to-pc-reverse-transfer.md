@@ -2,30 +2,30 @@ Status: resolved
 Type: task
 
 ## Answer
-Implementado em `MiniTransferHttpServer.cs` e `App.xaml.cs`:
-- Endpoint `/api/upload` processando JSON para textos e multipart/form-data para arquivos com proteção contra directory traversal e colisão de nomes.
-- `OnTransferPayloadReceived` em `App.xaml.cs`:
-  - Textos recebidos são copiados para a área de transferência do Windows (`System.Windows.Clipboard.SetText`) e gravados no histórico via `CaptureService`.
-  - Arquivos recebidos são salvos em `Downloads\WindowsCM Transfers\`, colocados no clipboard do Windows como `CF_HDROP` e gravados no histórico do WindowsCM.
-  - Notificações sutis (toasts) avisam o usuário em tempo real.
+Implemented in `MiniTransferHttpServer.cs` and `App.xaml.cs`:
+- `/api/upload` endpoint processing JSON for text and multipart/form-data for files, with protection against directory traversal and name collisions.
+- `OnTransferPayloadReceived` in `App.xaml.cs`:
+  - Received text is copied to the Windows clipboard (`System.Windows.Clipboard.SetText`) and written to the history via `CaptureService`.
+  - Received files are saved to `Downloads\WindowsCM Transfers\`, placed on the Windows clipboard as `CF_HDROP` and written to the WindowsCM history.
+  - Subtle notifications (toasts) alert the user in real time.
 
-## Descrição
+## Description
 
-Implementar o tratamento no servidor e na aplicação para receber uploads de textos e arquivos enviados do smartphone, gravando-os diretamente na área de transferência do Windows e no histórico do WindowsCM.
+Implement the handling in the server and in the application to receive uploads of text and files sent from the phone, writing them directly to the Windows clipboard and to the WindowsCM history.
 
-## Requisitos
+## Requirements
 
 - `LocalTransferServer`:
-  - Processador de upload multipart e JSON no endpoint `/api/upload`.
-  - Tratamento de textos: decodificação UTF-8, disparo de evento `TextReceived(string text)`.
-  - Tratamento de arquivos: streaming e gravação segura na pasta de destino `Downloads\WindowsCM Transfers\`, evitando colisões de nomes (ex.: `arquivo (1).ext`) e disparo de evento `FilesReceived(IReadOnlyList<string> savedPaths)`.
-- Integração com Windows Clipboard & Histórico (`App.xaml.cs`):
-  - Ao receber texto:
-    - Copiar para o clipboard do Windows (`Clipboard.SetText` ou `Win32ClipboardWriter`).
-    - Capturar no histórico do WindowsCM (`_capture.CaptureNow` / `_store.AddOrUpdate`).
-    - Exibir toast de notificação: "Texto recebido do celular e copiado para a área de transferência".
-  - Ao receber arquivo(s):
-    - Colocar no clipboard do Windows como `CF_HDROP` (lista de arquivos copiados).
-    - Capturar no histórico do WindowsCM com tipo `ItemKind.File` ou `ItemKind.Files` (ou `ItemKind.Image` se foto).
-    - Exibir toast de notificação: "Arquivo recebido do celular: [nome] ([tamanho])".
-    - Atualizar a lista de cards no popup para que o novo item apareça instantaneamente no topo.
+  - Multipart and JSON upload processor on the `/api/upload` endpoint.
+  - Text handling: UTF-8 decoding, raising the `TextReceived(string text)` event.
+  - File handling: streaming and safe writing to the destination folder `Downloads\WindowsCM Transfers\`, avoiding name collisions (e.g. `file (1).ext`) and raising the `FilesReceived(IReadOnlyList<string> savedPaths)` event.
+- Integration with the Windows Clipboard & History (`App.xaml.cs`):
+  - On receiving text:
+    - Copy to the Windows clipboard (`Clipboard.SetText` or `Win32ClipboardWriter`).
+    - Capture into the WindowsCM history (`_capture.CaptureNow` / `_store.AddOrUpdate`).
+    - Show a notification toast: "Text received from phone and copied to the clipboard".
+  - On receiving file(s):
+    - Place on the Windows clipboard as `CF_HDROP` (list of copied files).
+    - Capture into the WindowsCM history with type `ItemKind.File` or `ItemKind.Files` (or `ItemKind.Image` if it is a photo).
+    - Show a notification toast: "File received from phone: [name] ([size])".
+    - Refresh the card list in the popup so that the new item appears instantly at the top.

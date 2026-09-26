@@ -1,6 +1,6 @@
 # 05: Card Presentation for File Categories and Rich Thumbnails
 
-**What to build:** Update popup card converters and templates so that File/Files items display the specific accent color and category label (e.g. "Apresentação PowerPoint" in orange, "Vídeo MP4" in red), and render high-resolution thumbnails for any file where a thumbnail exists, falling back to system icon and details view when unavailable.
+**What to build:** Update popup card converters and templates so that File/Files items display the specific accent color and category label (e.g. "PowerPoint Presentation" in orange, "MP4 Video" in red), and render high-resolution thumbnails for any file where a thumbnail exists, falling back to system icon and details view when unavailable.
 
 **Blocked by:** 01, 03, 04
 

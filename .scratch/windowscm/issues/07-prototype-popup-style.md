@@ -1,4 +1,4 @@
-# Protótipo popup + estilo
+# Popup + style prototype
 
 Type: prototype
 Status: resolved
@@ -6,15 +6,15 @@ Blocked by: 01, 03
 
 ## Question
 
-Responder com código throwaway (branch `prototype/<nome>`): o popup WPF parece/comporta-se como o Copyous?
+Answer with throwaway code (branch `prototype/<name>`): does the WPF popup look/behave like Copyous?
 
-Escopo mínimo do protótipo:
-- Janela frameless posicionada no mouse, horizontal (cards 250x170) + toggle vertical
-- Header (settings + incognito + search pill + pin + Clear), lista de 8 cards (um por tipo), footer no modo vertical
-- 9 tags coloridas (#3584e4,#2190a4,#3a944a,#c88800,#ed5b00,#e62d42,#d56199,#9c3cbe,#6f8396), dark/light/high-contrast
-- Navegação teclado (setas/Tab/Home/End, Enter copia, Ctrl+Enter ação default) — sem persistência real (mock em memória)
+Minimum prototype scope:
+- Frameless window placed at the mouse, horizontal (250x170 cards) + vertical toggle
+- Header (settings + incognito + search pill + pin + Clear), list of 8 cards (one per type), footer in vertical mode
+- 9 colored tags (#3584e4,#2190a4,#3a944a,#c88800,#ed5b00,#e62d42,#d56199,#9c3cbe,#6f8396), dark/light/high-contrast
+- Keyboard navigation (arrows/Tab/Home/End, Enter copies, Ctrl+Enter default action) — no real persistence (in-memory mock)
 
-Só começar quando `01` e `03` estiverem `resolved`. Chamar Skill `prototype`. Linkar o protótipo como asset ao resolver.
+Only start when `01` and `03` are `resolved`. Call Skill `prototype`. Link the prototype as an asset when resolving.
 
 ## Answer
 

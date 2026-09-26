@@ -1,11 +1,11 @@
-# WindowsCM — Spec v1 (paridade total Copyous no Windows)
+# WindowsCM — Spec v1 (full Copyous parity on Windows)
 
 Status: ready-for-agent
 
-Fonte: mapa wayfinding (8/8 tickets resolved) + researchs `01`–`05` +
-`CONTEXT.md` + veredito do protótipo (branch `prototype/popup-wpf`,
-vencedor A · Cards). Vocabulário segue `CONTEXT.md`: **item** = domínio/UI,
-**entry** = só código/DB. UI em inglês na v1.
+Source: wayfinding map (8/8 tickets resolved) + research `01`–`05` +
+`CONTEXT.md` + prototype verdict (branch `prototype/popup-wpf`,
+winner A · Cards). Vocabulary follows `CONTEXT.md`: **item** = domain/UI,
+**entry** = code/DB only. English UI in v1.
 
 ## Problem Statement
 

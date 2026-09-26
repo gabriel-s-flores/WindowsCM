@@ -992,7 +992,7 @@ public partial class SettingsWindow : Window
 
         var entries = new List<UnifiedTypeEntry>();
 
-        // 1. Imagens (Unifica ItemKind.Image + Categoria images)
+        // 1. Images (unifies ItemKind.Image + the images category)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "images",
@@ -1020,7 +1020,7 @@ public partial class SettingsWindow : Window
             }
         });
 
-        // 2. Códigos e Scripts (Unifica ItemKind.Code + Categoria code)
+        // 2. Code and Scripts (unifies ItemKind.Code + the code category)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "code",
@@ -1048,7 +1048,7 @@ public partial class SettingsWindow : Window
             }
         });
 
-        // 3. Links e Páginas (ItemKind.Link)
+        // 3. Links and Pages (ItemKind.Link)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "link",
@@ -1062,7 +1062,7 @@ public partial class SettingsWindow : Window
             Reset = () => _settings.ItemColors.Reset(ItemKind.Link)
         });
 
-        // 4. Documentos (Categoria documents)
+        // 4. Documents (documents category)
         if (catDocuments != null)
         {
             entries.Add(new UnifiedTypeEntry
@@ -1084,7 +1084,7 @@ public partial class SettingsWindow : Window
             });
         }
 
-        // 5. Planilhas (Categoria spreadsheets)
+        // 5. Spreadsheets (spreadsheets category)
         if (catSpreadsheets != null)
         {
             entries.Add(new UnifiedTypeEntry
@@ -1106,7 +1106,7 @@ public partial class SettingsWindow : Window
             });
         }
 
-        // 6. Apresentações (Categoria presentations)
+        // 6. Presentations (presentations category)
         if (catPresentations != null)
         {
             entries.Add(new UnifiedTypeEntry
@@ -1128,7 +1128,7 @@ public partial class SettingsWindow : Window
             });
         }
 
-        // 7. Áudio (Categoria audio)
+        // 7. Audio (audio category)
         if (catAudio != null)
         {
             entries.Add(new UnifiedTypeEntry
@@ -1150,7 +1150,7 @@ public partial class SettingsWindow : Window
             });
         }
 
-        // 8. Vídeos (Categoria video)
+        // 8. Videos (video category)
         if (catVideo != null)
         {
             entries.Add(new UnifiedTypeEntry
@@ -1172,7 +1172,7 @@ public partial class SettingsWindow : Window
             });
         }
 
-        // 9. Compactados (Categoria archives)
+        // 9. Archives (archives category)
         if (catArchives != null)
         {
             entries.Add(new UnifiedTypeEntry
@@ -1194,7 +1194,7 @@ public partial class SettingsWindow : Window
             });
         }
 
-        // 10. Outros Arquivos e Pastas (Fallback geral)
+        // 10. Other Files and Folders (general fallback)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "file",
@@ -1208,7 +1208,7 @@ public partial class SettingsWindow : Window
             Reset = () => _settings.ItemColors.Reset(ItemKind.File)
         });
 
-        // 11. Textos Simples (ItemKind.Text)
+        // 11. Plain Text (ItemKind.Text)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "text",
@@ -1222,7 +1222,7 @@ public partial class SettingsWindow : Window
             Reset = () => _settings.ItemColors.Reset(ItemKind.Text)
         });
 
-        // 12. Caracteres / Emojis (ItemKind.Character)
+        // 12. Characters / Emojis (ItemKind.Character)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "character",
@@ -1236,7 +1236,7 @@ public partial class SettingsWindow : Window
             Reset = () => _settings.ItemColors.Reset(ItemKind.Character)
         });
 
-        // 13. Cores (Color) (ItemKind.Color)
+        // 13. Colors (ItemKind.Color)
         entries.Add(new UnifiedTypeEntry
         {
             Id = "color",
@@ -1250,7 +1250,7 @@ public partial class SettingsWindow : Window
             Reset = () => _settings.ItemColors.Reset(ItemKind.Color)
         });
 
-        // 14. Categorias customizadas criadas pelo usuário
+        // 14. Custom categories created by the user
         foreach (var customCat in _settings.FileCategories.Categories.Where(c => !c.IsBuiltIn).ToList())
         {
             entries.Add(new UnifiedTypeEntry

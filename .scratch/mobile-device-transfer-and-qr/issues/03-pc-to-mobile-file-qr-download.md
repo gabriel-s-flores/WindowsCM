@@ -2,24 +2,24 @@ Status: resolved
 Type: task
 
 ## Answer
-Implementado em `QrWindow.xaml`, `QrWindow.xaml.cs`, `PopupConverters.cs` e `App.xaml.cs`:
-- QR Code habilitado para todos os cards (`File`, `Files`, `Image`, etc.).
-- Geração de URLs de sessão efêmeras servidas pelo `MiniTransferHttpServer`.
-- `QrWindow` agora exibe metadados ricos do arquivo (título, tamanho, ícone), link local com botão de cópia e botão "Escolher outro arquivo..." para envio de qualquer arquivo do disco.
+Implemented in `QrWindow.xaml`, `QrWindow.xaml.cs`, `PopupConverters.cs` and `App.xaml.cs`:
+- QR Code enabled for all cards (`File`, `Files`, `Image`, etc.).
+- Generation of ephemeral session URLs served by `MiniTransferHttpServer`.
+- `QrWindow` now shows rich file metadata (title, size, icon), the local link with a copy button and a "Choose another file..." button to send any file from the disk.
 
-## Descrição
+## Description
 
-Expandir a política de QR Code (`QrActions`) e o diálogo `QrWindow` para suportar itens de todos os tipos (`ItemKind.File`, `ItemKind.Files`, `ItemKind.Image`, além dos tipos de texto), gerando URLs locais acessíveis pelo celular e permitindo também compartilhar qualquer arquivo arbitrário do disco.
+Expand the QR Code policy (`QrActions`) and the `QrWindow` dialog to support items of every type (`ItemKind.File`, `ItemKind.Files`, `ItemKind.Image`, in addition to the text types), generating local URLs reachable from the phone and also allowing any arbitrary file from the disk to be shared.
 
-## Requisitos
+## Requirements
 
-- Atualizar `QrActions.IsSupported`:
-  - Retornar `true` para todos os `ItemKind` que possuam conteúdo válido (incluindo `File`, `Files` e `Image`).
-- Gerador de URL de compartilhamento:
-  - Para arquivos/imagens: registrar um token efêmero ou ID no `LocalTransferServer` e gerar a URL correspondente: `http://<ip>:<porta>/d/{token}`.
-  - Para textos curtos: manter a opção de QR code com texto puro e/ou URL de transferência para facilidade de leitura.
-- Atualização do diálogo `QrWindow`:
-  - Exibir o código QR renderizado com `QRCoder`.
-  - Exibir informações amigáveis do arquivo (nome, extensão, tamanho formatado e miniatura quando disponível).
-  - Exibir a URL local completa com botão "Copiar Link".
-  - Adicionar botão "Escolher outro arquivo..." para permitir o envio de qualquer arquivo do computador mesmo que não esteja previamente na área de transferência.
+- Update `QrActions.IsSupported`:
+  - Return `true` for every `ItemKind` that has valid content (including `File`, `Files` and `Image`).
+- Share URL generator:
+  - For files/images: register an ephemeral token or ID in `LocalTransferServer` and generate the corresponding URL: `http://<ip>:<port>/d/{token}`.
+  - For short text: keep the option of a QR code with plain text and/or a transfer URL, for ease of reading.
+- `QrWindow` dialog update:
+  - Show the QR code rendered with `QRCoder`.
+  - Show friendly file information (name, extension, formatted size and thumbnail when available).
+  - Show the full local URL with a "Copy Link" button.
+  - Add a "Choose another file..." button to allow sending any file from the computer even if it is not already on the clipboard.

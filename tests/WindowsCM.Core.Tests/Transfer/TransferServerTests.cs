@@ -60,7 +60,7 @@ public sealed class TransferServerTests : IDisposable
             Token: "testaudio",
             ItemId: 1,
             Title: "Podcast Track.mp3",
-            KindLabel: "Áudio MP3",
+            KindLabel: "MP3 Audio",
             FilePath: @"C:\music\track.mp3",
             FilePaths: null,
             TextContent: null,
@@ -82,8 +82,8 @@ public sealed class TransferServerTests : IDisposable
         var session = new SharedItemSession(
             Token: "testimg",
             ItemId: 2,
-            Title: "Foto de férias",
-            KindLabel: "Imagem PNG",
+            Title: "Café photo",
+            KindLabel: "PNG Image",
             FilePath: @"C:\photos\vacation.png",
             FilePaths: null,
             TextContent: null,
@@ -95,7 +95,7 @@ public sealed class TransferServerTests : IDisposable
 
         var html = MobileWebTemplate.RenderDownloadPage(session, "192.168.1.8:58921");
         Assert.Contains("<img src=\"/file/testimg\"", html);
-        Assert.Contains("Foto de férias", html);
+        Assert.Contains("Café photo", html);
     }
 
     [Fact]
@@ -104,11 +104,11 @@ public sealed class TransferServerTests : IDisposable
         var session = new SharedItemSession(
             Token: "testtext",
             ItemId: 3,
-            Title: "Texto copiado",
-            KindLabel: "Texto",
+            Title: "Copied text",
+            KindLabel: "Text",
             FilePath: null,
             FilePaths: null,
-            TextContent: "Olá do WindowsCM!\nLinha 2",
+            TextContent: "Hello from the café!\nLine 2",
             RawBytes: null,
             FileName: "item.txt",
             ContentType: "text/plain; charset=utf-8",
@@ -116,7 +116,7 @@ public sealed class TransferServerTests : IDisposable
             CreatedAt: DateTime.UtcNow);
 
         var html = MobileWebTemplate.RenderDownloadPage(session, "192.168.1.8:58921");
-        Assert.Contains("Olá do WindowsCM!", html);
+        Assert.Contains("Hello from the café!", html);
         Assert.Contains("copyTextToClipboard()", html);
     }
 

@@ -1,82 +1,82 @@
-# 03 — Hotkeys globais + tray + popup (fontes primárias)
+# 03 — Global hotkeys + tray + popup (primary sources)
 
-Ticket: `.scratch/windowscm/issues/03-research-hotkeys-tray-popup.md` (não editado).
-Regra: apenas fontes primárias — Microsoft Learn (Win32 / WPF / .NET),
-`dotnet/wpf`, `microsoft/WPF-Samples`, repos oficiais `hardcodet/wpf-notifyicon`
-e `HavenDV/H.NotifyIcon`, docs oficiais VS Code (só §2, conflito de defaults).
-Cada claim termina com o link primário entre parênteses.
+Ticket: `.scratch/windowscm/issues/03-research-hotkeys-tray-popup.md` (not edited).
+Rule: primary sources only — Microsoft Learn (Win32 / WPF / .NET),
+`dotnet/wpf`, `microsoft/WPF-Samples`, the official repos `hardcodet/wpf-notifyicon`
+and `HavenDV/H.NotifyIcon`, official VS Code docs (§2 only, conflicting defaults).
+Each claim ends with the primary link in parentheses.
 
 ## 1. `RegisterHotKey` / `UnregisterHotKey` → `WM_HOTKEY`
 
-### 1.1 Assinatura
+### 1.1 Signature
 
 ```c
 BOOL RegisterHotKey(HWND hWnd, int id, UINT fsModifiers, UINT vk);
 BOOL UnregisterHotKey(HWND hWnd, int id);
 ```
 
-- `hWnd`: janela que recebe `WM_HOTKEY`. Se `NULL`, a mensagem vai para a fila
-  da thread chamadora e precisa ser tratada no loop de mensagens.
+- `hWnd`: window that receives `WM_HOTKEY`. If `NULL`, the message goes to the
+  calling thread's queue and must be handled in the message loop.
   ([RegisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey))
-- `UnregisterHotKey(hWnd, id)` libera hotkey registrada pela thread chamadora;
-  `hWnd` deve ser `NULL` se a hotkey não está associada a janela.
+- `UnregisterHotKey(hWnd, id)` frees a hotkey registered by the calling thread;
+  `hWnd` must be `NULL` if the hotkey is not associated with a window.
   ([UnregisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterhotkey))
-- Falha ao associar hotkey a janela criada por **outra thread**; nesse caso
-  (e se a combinação já estiver registrada) o retorno é zero e o detalhe sai
-  via `GetLastError`.
+- Associating a hotkey with a window created by **another thread** fails; in that
+  case (and if the combination is already registered) the return value is zero
+  and the details come from `GetLastError`.
   ([RegisterHotKey — Return value](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey))
 
-### 1.2 IDs por janela (faixa segura)
+### 1.2 Per-window IDs (safe range)
 
-- Aplicação usa `id` em `0x0000–0xBFFF`; DLL compartilhada usa
-  `0xC000–0xFFFF` (faixa do `GlobalAddAtom`); DLL deve obter o id via
-  `GlobalAddAtom` para não colidir com outras DLLs.
-  ([RegisterHotKey — Windows CE 3.0, arquivado, mesma semântica](https://learn.microsoft.com/en-us/previous-versions/ms961355(v=msdn.10)))
-- WindowsCM é app (não DLL): usar constantes pequenas por `HWND`
-  (ex. `1` = abrir, `2` = incognito). O `id` só precisa ser único **dentro do
-  par (`hWnd`, thread)** — é ele que chega em `wParam` de `WM_HOTKEY`.
+- An application uses an `id` in `0x0000–0xBFFF`; a shared DLL uses
+  `0xC000–0xFFFF` (the `GlobalAddAtom` range); a DLL should obtain the id via
+  `GlobalAddAtom` so it does not collide with other DLLs.
+  ([RegisterHotKey — Windows CE 3.0, archived, same semantics](https://learn.microsoft.com/en-us/previous-versions/ms961355(v=msdn.10)))
+- WindowsCM is an app (not a DLL): use small constants per `HWND`
+  (e.g. `1` = open, `2` = incognito). The `id` only needs to be unique **within
+  the (`hWnd`, thread) pair** — it is what arrives in the `wParam` of `WM_HOTKEY`.
   ([WM_HOTKEY — wParam](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-hotkey))
-- Atenção ao re-registrar: se já existe hotkey com mesmo `hWnd`+`id`, a antiga
-  é **mantida junto** da nova — o app precisa chamar `UnregisterHotKey`
-  explicitamente na antiga.
+- Careful when re-registering: if a hotkey with the same `hWnd`+`id` already
+  exists, the old one is **kept alongside** the new one — the app must call
+  `UnregisterHotKey` explicitly on the old one.
   ([RegisterHotKey — Remarks](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey))
 
-### 1.3 Modificadores
+### 1.3 Modifiers
 
-| Flag | Valor | Significado |
+| Flag | Value | Meaning |
 |---|---|---|
-| `MOD_ALT` | `0x0001` | Alt pressionado |
-| `MOD_CONTROL` | `0x0002` | Ctrl pressionado |
-| `MOD_SHIFT` | `0x0004` | Shift pressionado |
-| `MOD_WIN` | `0x0008` | Tecla Windows — **reservada para o SO** (ver §1.5) |
-| `MOD_NOREPEAT` | `0x4000` | Auto-repeat do teclado não gera múltiplas notificações |
+| `MOD_ALT` | `0x0001` | Alt held down |
+| `MOD_CONTROL` | `0x0002` | Ctrl held down |
+| `MOD_SHIFT` | `0x0004` | Shift held down |
+| `MOD_WIN` | `0x0008` | Windows key — **reserved for the OS** (see §1.5) |
+| `MOD_NOREPEAT` | `0x4000` | Keyboard auto-repeat does not generate multiple notifications |
 
-Tabela e reserva do `MOD_WIN` em
+Table and the `MOD_WIN` reservation in
 ([RegisterHotKey — fsModifiers](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey)).
-`vk` é um virtual-key code qualquer
+`vk` is any virtual-key code
 ([Virtual Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)).
 
-### 1.4 `MOD_NOREPEAT` — desde qual Windows
+### 1.4 `MOD_NOREPEAT` — since which Windows version
 
-- O flag existe com a ressalva **"Windows Vista: This flag is not supported"**,
-  ou seja, na prática usar a partir do **Windows 7+**.
+- The flag exists with the caveat **"Windows Vista: This flag is not supported"**,
+  i.e., in practice use it starting with **Windows 7+**.
   ([RegisterHotKey — fsModifiers](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey))
-- Exemplo oficial `ALT+b` com `MOD_ALT | MOD_NOREPEAT` registrado para a thread
-  (`hWnd = NULL`) e lido via `GetMessage`/`WM_HOTKEY` — mesma página e no
-  sample
+- Official example: `ALT+b` with `MOD_ALT | MOD_NOREPEAT` registered for the
+  thread (`hWnd = NULL`) and read via `GetMessage`/`WM_HOTKEY` — same page and in
+  the sample
   ([Windows-classic-samples RegisterHotKey.cpp](https://github.com/microsoft/Windows-classic-samples/blob/main/Samples/Win7Samples/winui/RegisterHotKey/RegisterHotKey.cpp)).
-- Recomendação: sempre combinar `MOD_NOREPEAT` nas hotkeys do WindowsCM
-  (abrir popup segurando teclas não deve disparar N vezes).
+- Recommendation: always combine `MOD_NOREPEAT` into WindowsCM's hotkeys
+  (opening the popup while holding the keys down must not fire N times).
 
-### 1.5 Erro `ERROR_HOTKEY_ALREADY_REGISTERED` — detectar e fallback
+### 1.5 `ERROR_HOTKEY_ALREADY_REGISTERED` error — detection and fallback
 
-- A doc só promete: retorna zero; "tipicamente, `RegisterHotKey` também falha
-  se as teclas já foram registradas por outra hotkey"; detalhe via
-  `GetLastError`.
+- The docs only promise: it returns zero; "Typically, `RegisterHotKey` also
+  fails if the keystrokes specified for the hot key have already been
+  registered for another hot key"; details via `GetLastError`.
   ([RegisterHotKey — Return value](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey))
-- Padrão de detecção em C# (nome simbólico `ERROR_HOTKEY_ALREADY_REGISTERED`;
-  **confirmar o valor numérico em `winerror.h` / "System Error Codes" no
-  momento da implementação** — lacuna §6.1):
+- Detection pattern in C# (symbolic name `ERROR_HOTKEY_ALREADY_REGISTERED`;
+  **confirm the numeric value in `winerror.h` / "System Error Codes" at
+  implementation time** — gap §6.1):
 
 ```csharp
 [DllImport("user32.dll", SetLastError = true)]
@@ -84,52 +84,52 @@ static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk
 
 if (!RegisterHotKey(hwnd, id, mods, vk))
 {
-    int err = Marshal.GetLastWin32Error(); // exige SetLastError = true
-    if (err == 1409 /* ERROR_HOTKEY_ALREADY_REGISTERED — confirmar em winerror.h */)
+    int err = Marshal.GetLastWin32Error(); // requires SetLastError = true
+    if (err == 1409 /* ERROR_HOTKEY_ALREADY_REGISTERED — confirm in winerror.h */)
     {
-        // Fallback: avisar no tray balloon + abrir tela de hotkeys pedindo outra combinação.
-        // Nunca tentar UnregisterHotKey da hotkey alheia: só a thread dona consegue liberar.
+        // Fallback: warn in a tray balloon + open the hotkeys screen asking for another combination.
+        // Never try UnregisterHotKey on someone else's hotkey: only the owning thread can free it.
     }
 }
 ```
 
-- Só a thread que registrou consegue liberar via `UnregisterHotKey`
-  (discussão oficial confirma a semântica por-thread).
-  ([MS Q&A — RegisterHotKey/UnregisterHotKey por thread](https://learn.microsoft.com/en-us/answers/questions/1343773/does-the-shortcut-key-registered-by-the-registerho))
+- Only the thread that registered it can free it via `UnregisterHotKey`
+  (an official discussion confirms the per-thread semantics).
+  ([MS Q&A — RegisterHotKey/UnregisterHotKey per thread](https://learn.microsoft.com/en-us/answers/questions/1343773/does-the-shortcut-key-registered-by-the-registerho))
 
-### 1.6 Por que `Win+V` / `Win+Shift+V` estão fora
+### 1.6 Why `Win+V` / `Win+Shift+V` are ruled out
 
-1. **Reserva genérica**: "Keyboard shortcuts that involve the WINDOWS key are
-   reserved for use by the operating system" e "Hotkeys that involve the
+1. **Generic reservation**: "Keyboard shortcuts that involve the WINDOWS key are
+   reserved for use by the operating system" and "Hotkeys that involve the
    Windows key are reserved for use by the operating system".
    ([RegisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey),
    [WM_HOTKEY](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-hotkey))
-2. **Conflito específico**: `Win+V` abre o histórico da área de transferência
-   do Windows ("Press Windows logo key + V").
+2. **Specific conflict**: `Win+V` opens the Windows clipboard history
+   ("Press Windows logo key + V").
    ([Clipboard History — Microsoft Windows](https://www.microsoft.com/en-gb/windows/tips/clipboard-history),
    [Using the clipboard — Microsoft Support](https://support.microsoft.com/en-us/windows/apps/using-the-clipboard))
-3. `Win+Shift+V` cai na mesma reserva (qualquer combo com `MOD_WIN`), então
-   `RegisterHotKey(MOD_WIN|MOD_SHIFT, 'V')` tende a falhar ou a brigar com o
-   SO — mesma base dos itens 1–2. Resposta oficial a caso análogo (`Win+D`)
-   recomenda não usar a tecla Windows como hotkey.
-   ([MS Q&A — hotkey com Windows key](https://learn.microsoft.com/en-us/answers/questions/1020405/error-while-registering-the-hotkey-in-c))
-4. Extra: `F12` é reservado ao debugger e não deve ser registrado como hotkey.
+3. `Win+Shift+V` falls under the same reservation (any combo with `MOD_WIN`), so
+   `RegisterHotKey(MOD_WIN|MOD_SHIFT, 'V')` tends to fail or to fight with the
+   OS — same basis as items 1–2. An official answer to an analogous case
+   (`Win+D`) recommends not using the Windows key as a hotkey.
+   ([MS Q&A — hotkey with Windows key](https://learn.microsoft.com/en-us/answers/questions/1020405/error-while-registering-the-hotkey-in-c))
+4. Extra: `F12` is reserved for the debugger and should not be registered as a hotkey.
    ([RegisterHotKey — Remarks](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey))
 
-### 1.7 Recebimento via `HwndSource.AddHook` em WPF (amostra mínima)
+### 1.7 Receiving via `HwndSource.AddHook` in WPF (minimal sample)
 
-- `HwndSource.AddHook(HwndSourceHook)` recebe **todas** as mensagens da janela;
-  é o caminho para mensagens sem equivalente WPF (como `WM_HOTKEY = 0x0312`).
+- `HwndSource.AddHook(HwndSourceHook)` receives **all** of the window's messages;
+  it is the path for messages with no WPF equivalent (such as `WM_HOTKEY = 0x0312`).
   ([HwndSource.AddHook](https://learn.microsoft.com/en-us/dotnet/api/system.windows.interop.hwndsource.addhook))
-- `HwndSource` embrulha conteúdo WPF numa `HWND`; `Handle` expõe o `HWND`
-  para P/Invoke; hook pode ser adicionado na construção ou depois via
+- `HwndSource` wraps WPF content in an `HWND`; `Handle` exposes the `HWND`
+  for P/Invoke; a hook can be added at construction or later via
   `AddHook`.
   ([HwndSource](https://learn.microsoft.com/en-us/dotnet/api/system.windows.interop.hwndsource?view=windowsdesktop-10.0),
   [WPF and Win32 interop](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/wpf-and-win32-interoperation),
-  [fonte dotnet/wpf](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/InterOp/HwndSource.cs))
+  [dotnet/wpf source](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/InterOp/HwndSource.cs))
 
 ```csharp
-// cs: HotkeyService.cs (mínimo, janela principal já criada)
+// cs: HotkeyService.cs (minimal, main window already created)
 using System;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -166,8 +166,8 @@ public sealed class HotkeyService : IDisposable
         if (msg == WM_HOTKEY)
         {
             handled = true;
-            if (wParam.ToInt32() == IdOpen) /* abrir popup */;
-            if (wParam.ToInt32() == IdIncognito) /* abrir incognito */;
+            if (wParam.ToInt32() == IdOpen) /* open popup */;
+            if (wParam.ToInt32() == IdIncognito) /* open incognito */;
         }
         return IntPtr.Zero;
     }
@@ -184,119 +184,119 @@ public sealed class HotkeyService : IDisposable
 }
 ```
 
-- `wParam` = id da hotkey; `lParam`: word baixa = modificadores, word alta =
+- `wParam` = hotkey id; `lParam`: low word = modifiers, high word =
   virtual-key code.
   ([WM_HOTKEY — Parameters](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-hotkey))
 
-## 2. Defaults `Ctrl+Shift+V` (abrir) e `Ctrl+Shift+Alt+V` (incognito)
+## 2. Defaults `Ctrl+Shift+V` (open) and `Ctrl+Shift+Alt+V` (incognito)
 
-### 2.1 Risco de conflito com apps comuns
+### 2.1 Risk of conflict with common apps
 
-- **Conflito real, documentado**: `Ctrl+Shift+V` = "paste as plain text"
-  (colar sem formatação) na lista oficial de atalhos do Windows.
+- **Real, documented conflict**: `Ctrl+Shift+V` = "paste as plain text"
+  (paste without formatting) in the official list of Windows shortcuts.
   ([Windows shortcuts — Microsoft](https://www.microsoft.com/en-us/windows/tips/windows-shortcuts))
-- **VS Code**: `Ctrl+Shift+V` é disputado — cola no terminal integrado **e**
-  abre Markdown preview (`markdown.showPreview` quando
-  `editorLangId == 'markdown'`); issue oficial mostra o choque e workaround
-  via `keybindings.json`.
+- **VS Code**: `Ctrl+Shift+V` is contested — it pastes in the integrated terminal
+  **and** opens the Markdown preview (`markdown.showPreview` when
+  `editorLangId == 'markdown'`); an official issue shows the clash and a
+  workaround via `keybindings.json`.
   ([VS Code — Default keybindings](https://code.visualstudio.com/docs/reference/default-keybindings),
   [microsoft/vscode#315171](https://github.com/microsoft/vscode/issues/315171))
--Natureza do choque: hotkey **global** (`RegisterHotKey`) dispara mesmo com
-  outro app em foco, então com WindowsCM rodando o `Ctrl+Shift+V` abre o popup
-  em vez de "colar sem formatação" no app focado. Para um clipboard manager é
-  aceitável como default (o usuário quer o popup sob o cursor), mas **precisa**
-  ser configurável + exibir o aviso de conflito — daí §2.2.
-- `Ctrl+Shift+Alt+V` (incognito): combinação quádrupla, sem default conhecido
-  nos apps pesquisados; risco baixo, mas mesma regra de configurabilidade
-  (qualquer app pode ter registrado antes → §1.5).
+-Nature of the clash: a **global** hotkey (`RegisterHotKey`) fires even with
+  another app in focus, so with WindowsCM running, `Ctrl+Shift+V` opens the popup
+  instead of "paste as plain text" in the focused app. For a clipboard manager it
+  is acceptable as a default (the user wants the popup under the cursor), but it
+  **must** be configurable + show the conflict warning — hence §2.2.
+- `Ctrl+Shift+Alt+V` (incognito): a four-key combination, with no known default
+  in the apps researched; low risk, but the same configurability rule
+  (any app may have registered it first → §1.5).
 
-### 2.2 Configurabilidade (persistir + re-registrar em runtime)
+### 2.2 Configurability (persist + re-register at runtime)
 
-- Persistir como **user-scoped settings**: `Properties.Settings.Default.<nome>`,
-  leitura via `Properties.Settings.Default`, escrita + `Save()` para durar
-  entre sessões (`user.config` criado sob demanda; defaults vivem no
+- Persist as **user-scoped settings**: `Properties.Settings.Default.<name>`,
+  read via `Properties.Settings.Default`, write + `Save()` so it lasts
+  across sessions (`user.config` created on demand; defaults live in
   `app.exe.config`).
   ([Using Application Settings and User Settings](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/advanced/using-application-settings-and-user-settings),
   [How To: Write User Settings at Run Time with C#](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/advanced/how-to-write-user-settings-at-run-time-with-csharp),
   [How To: Read Settings at Run Time With C#](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/advanced/how-to-read-settings-at-run-time-with-csharp),
   [Application Settings Architecture](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/advanced/application-settings-architecture))
-- Re-registro em runtime = `UnregisterHotKey(hWnd, idAntigo)` **antes** de
-  `RegisterHotKey(hWnd, idNovo, ...)` (a doc exige liberar a antiga
-  explicitamente — §1.2). Fluxo: falhou → checar `ERROR_HOTKEY_ALREADY_REGISTERED`
-  (§1.5) → toast/balloon + reabrir editor de hotkeys.
+- Re-registering at runtime = `UnregisterHotKey(hWnd, oldId)` **before**
+  `RegisterHotKey(hWnd, newId, ...)` (the docs require freeing the old one
+  explicitly — §1.2). Flow: failed → check `ERROR_HOTKEY_ALREADY_REGISTERED`
+  (§1.5) → toast/balloon + reopen the hotkey editor.
 
 ```csharp
-// cs: troca de hotkey em runtime (mesmo HWND/id — Unregister explícito, cf. §1.2)
+// cs: hotkey change at runtime (same HWND/id — explicit Unregister, cf. §1.2)
 UnregisterHotKey(hwnd, IdOpen);
 if (!RegisterHotKey(hwnd, IdOpen, newMods | MOD_NOREPEAT, newVk))
 {
     int err = Marshal.GetLastWin32Error();
-    // err == ERROR_HOTKEY_ALREADY_REGISTERED → reverter p/ default e notificar
+    // err == ERROR_HOTKEY_ALREADY_REGISTERED → revert to default and notify
 }
-Properties.Settings.Default.HotkeyOpen = gestureString; // ex. "Ctrl+Shift+V"
+Properties.Settings.Default.HotkeyOpen = gestureString; // e.g. "Ctrl+Shift+V"
 Properties.Settings.Default.Save();
 ```
 
-## 3. Tray em WPF
+## 3. Tray in WPF
 
-WPF não tem `NotifyIcon` próprio — as duas opções primárias:
+WPF has no `NotifyIcon` of its own — the two primary options:
 
-### 3.1 Opção A — `System.Windows.Forms.NotifyIcon`
+### 3.1 Option A — `System.Windows.Forms.NotifyIcon`
 
-- Componente WinForms para ícone de processo em background na área de
-  notificação; props-chave `Icon` + `Visible` (ícone só aparece com
+- WinForms component for the icon of a background process in the notification
+  area; key props `Icon` + `Visible` (the icon only appears with
   `Visible = true`).
   ([NotifyIcon Component Overview](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/notifyicon-component-overview-windows-forms),
   [NotifyIcon Class](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.notifyicon?view=windowsdesktop-10.0))
-- `Icon` é `System.Drawing.Icon` carregado de `.ico`; `Text` = tooltip ao
-  pairar; exemplo oficial usa `DoubleClick` para ativar o form e
-  `ContextMenu` com item Exit.
+- `Icon` is a `System.Drawing.Icon` loaded from an `.ico`; `Text` = tooltip on
+  hover; the official example uses `DoubleClick` to activate the form and a
+  `ContextMenu` with an Exit item.
   ([Add Icons to the TaskBar](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/app-icons-to-the-taskbar-with-wf-notifyicon),
   [NotifyIcon.Text](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.notifyicon.text?view=windowsdesktop-10.0))
 - Balloon: `ShowBalloonTip(timeout, title, text, icon)` + props
-  `BalloonTipText/Title/Icon`; se já houver balloon visível, o timeout é
-  ignorado (comportamento varia por SO/app).
+  `BalloonTipText/Title/Icon`; if a balloon is already visible, the timeout is
+  ignored (behavior varies by OS/app).
   ([NotifyIcon.ShowBalloonTip](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.notifyicon.showballoontip?view=windowsdesktop-10.0))
-- Prós: zero dependência externa, API estável do .NET, suficiente p/ ícone +
-  tooltip + menu + balloon. Contras (avaliação de engenharia, fatos de API nas
-  páginas acima): é WinForms (`ContextMenuStrip`, sem data binding WPF nativo,
-  sem `ICommand` do WPF, tooltip de texto simples sem rich tooltip XAML);
-  exige `Dispose()`/`Visible=false` ao sair senão o ícone fantasma fica até o
-  hover; precisa referenciar WinForms no projeto WPF.
+- Pros: zero external dependencies, stable .NET API, enough for icon +
+  tooltip + menu + balloon. Cons (engineering assessment, API facts on the
+  pages above): it is WinForms (`ContextMenuStrip`, no native WPF data binding,
+  no WPF `ICommand`, plain-text tooltip with no rich XAML tooltip);
+  requires `Dispose()`/`Visible=false` on exit, otherwise the ghost icon stays
+  until it is hovered; the WPF project must reference WinForms.
 
 ```csharp
-// cs: wiring mínimo WinForms dentro do App WPF
+// cs: minimal WinForms wiring inside the WPF App
 _notifyIcon = new System.Windows.Forms.NotifyIcon
 {
     Icon = new System.Drawing.Icon("Assets/app.ico"),
     Text = "WindowsCM",
     Visible = true,
-    ContextMenuStrip = menu, // Abrir / Incognito / Limpar (manter pins+tags) / Configs / Sair
+    ContextMenuStrip = menu, // Open / Incognito / Clear (keep pins+tags) / Settings / Exit
 };
 _notifyIcon.MouseClick += (_, e) =>
 {
     if (e.Button == System.Windows.Forms.MouseButtons.Left) TogglePopup();
-    // botão direito: ContextMenuStrip abre sozinho
+    // right button: ContextMenuStrip opens by itself
 };
-_notifyIcon.DoubleClick += (_, _) => TogglePopup(); // amostra oficial usa DoubleClick p/ ativar
+_notifyIcon.DoubleClick += (_, _) => TogglePopup(); // the official sample uses DoubleClick to activate
 ```
 
-### 3.2 Opção B — `H.NotifyIcon.WPF` (`TaskbarIcon`) — recomendada
+### 3.2 Option B — `H.NotifyIcon.WPF` (`TaskbarIcon`) — recommended
 
-- Controle WPF puro (não embrulha o WinForms): rich tooltips, popups,
-  context menus, balloons e **suporte a comandos em single/double-click**;
-  `MenuActivation`/`PopupActivation` configuram qual clique abre menu vs popup.
+- Pure WPF control (does not wrap WinForms): rich tooltips, popups,
+  context menus, balloons and **command support on single/double-click**;
+  `MenuActivation`/`PopupActivation` configure which click opens the menu vs the popup.
   ([hardcodet/wpf-notifyicon — README](https://github.com/hardcodet/wpf-notifyicon),
   [H.NotifyIcon — readme](https://github.com/HavenDV/H.NotifyIcon/blob/master/readme.md))
-- `H.NotifyIcon` é a continuação ativa do projeto base inativo, p/
-  .NET 6+ WPF/WinUI/Uno/Console; pacotes `H.NotifyIcon.Wpf` etc.
+- `H.NotifyIcon` is the active continuation of the inactive base project, for
+  .NET 6+ WPF/WinUI/Uno/Console; packages `H.NotifyIcon.Wpf` etc.
   ([H.NotifyIcon — readme](https://github.com/HavenDV/H.NotifyIcon/blob/master/readme.md))
-- **Licença MIT** (confirmada no arquivo).
+- **MIT license** (confirmed in the file).
   ([H.NotifyIcon — LICENSE.md](https://github.com/HavenDV/H.NotifyIcon/blob/master/LICENSE.md))
-- Amostra XAML canônica (mesma nos dois repos):
+- Canonical XAML sample (the same in both repos):
 
 ```xml
-<!-- XAML: TaskbarIcon com menu + comandos (adaptar p/ WindowsCM) -->
+<!-- XAML: TaskbarIcon with menu + commands (adapt for WindowsCM) -->
 <Window xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf" ...>
   <tb:TaskbarIcon x:Name="Tray"
                   ToolTipText="WindowsCM"
@@ -309,49 +309,49 @@ _notifyIcon.DoubleClick += (_, _) => TogglePopup(); // amostra oficial usa Doubl
 ```
 
 ```xml
-<!-- XAML: menu Abrir/Incognito/Limpar(manter pins+tags)/Configs/Sair -->
+<!-- XAML: menu Open/Incognito/Clear(keep pins+tags)/Settings/Exit -->
 <ContextMenu x:Key="TrayMenu">
-  <MenuItem Header="Abrir" Command="{Binding OpenCommand}" />
-  <MenuItem Header="Abrir incógnito" Command="{Binding OpenIncognitoCommand}" />
-  <MenuItem Header="Limpar (mantém pins e tags)" Command="{Binding ClearUnpinnedCommand}" />
+  <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+  <MenuItem Header="Open incognito" Command="{Binding OpenIncognitoCommand}" />
+  <MenuItem Header="Clear (keeps pins and tags)" Command="{Binding ClearUnpinnedCommand}" />
   <Separator />
-  <MenuItem Header="Configurações" Command="{Binding OpenSettingsCommand}" />
-  <MenuItem Header="Sair" Command="{Binding ExitCommand}" />
+  <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}" />
+  <MenuItem Header="Exit" Command="{Binding ExitCommand}" />
 </ContextMenu>
 ```
 
-- Extras úteis já no repo: `TrayPopup`/`TrayToolTip` (popup/tooltip ricos em
-  XAML com data binding), `GeneratedIconSource` (ícone dinâmico, ex. contador
-  — útil p/ badge), `ForceCreate()` (cria ícone mesmo windowless) e
-  Efficiency Mode, recriação automática se o Explorer reiniciar
+- Useful extras already in the repo: `TrayPopup`/`TrayToolTip` (rich XAML
+  popup/tooltip with data binding), `GeneratedIconSource` (dynamic icon, e.g. a
+  counter — useful for a badge), `ForceCreate()` (creates the icon even when
+  windowless) and Efficiency Mode, automatic re-creation if Explorer restarts
   (`TaskbarCreated`).
   ([H.NotifyIcon — readme](https://github.com/HavenDV/H.NotifyIcon/blob/master/readme.md),
   [TaskbarIcon.cs](https://github.com/HavenDV/H.NotifyIcon/blob/master/src/libs/H.NotifyIcon.Shared/TaskbarIcon.cs))
-- Decisão: **Opção B**. Motivo: popup rico + `ICommand` + binding com o
-  ViewModel do WindowsCM sem camada WinForms; MIT permite uso comercial.
+- Decision: **Option B**. Reason: rich popup + `ICommand` + binding to
+  WindowsCM's ViewModel with no WinForms layer; MIT allows commercial use.
 
-### 3.3 Comportamento: single vs double-click, tooltip, balloon, ícone
+### 3.3 Behavior: single vs double-click, tooltip, balloon, icon
 
-- Especificar `LeftClick` = abre/toggle popup, `RightClick` = menu de contexto
-  (convenção Windows atual; `DoubleClick` herdado da amostra WinForms antiga —
-  manter como alias de abrir, nunca como único caminho: touch e descoberta
-  penalizam double-click). `H.NotifyIcon` permite declarar isso
+- Specify `LeftClick` = open/toggle popup, `RightClick` = context menu
+  (current Windows convention; `DoubleClick` inherited from the old WinForms
+  sample — keep it as an alias for open, never as the only path: touch and
+  discoverability penalize double-click). `H.NotifyIcon` lets you declare this
   (`MenuActivation`/`PopupActivation`/`LeftClickCommand`).
   ([hardcodet/wpf-notifyicon — README](https://github.com/hardcodet/wpf-notifyicon),
-  [Add Icons to the TaskBar — amostra DoubleClick](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/app-icons-to-the-taskbar-with-wf-notifyicon))
-- Tooltip: texto curto de fallback (`ToolTipText`); balloon padrão do Windows
-  para avisos (ex. hotkey ocupada §1.5) via `ShowBalloonTip`.
+  [Add Icons to the TaskBar — DoubleClick sample](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/app-icons-to-the-taskbar-with-wf-notifyicon))
+- Tooltip: short fallback text (`ToolTipText`); standard Windows balloon
+  for warnings (e.g. hotkey already taken §1.5) via `ShowBalloonTip`.
   ([NotifyIcon Component Overview](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/notifyicon-component-overview-windows-forms),
   [NotifyIcon.ShowBalloonTip](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.notifyicon.showballoontip?view=windowsdesktop-10.0))
-- Ícone: `.ico` multi-tamanho (16/24/32/48/256); `IconSource` aceita `.ico`
+- Icon: multi-size `.ico` (16/24/32/48/256); `IconSource` accepts `.ico`
   ([H.NotifyIcon — readme](https://github.com/HavenDV/H.NotifyIcon/blob/master/readme.md)).
-  Dark/light: prover variantes do `.ico` e trocar `IconSource` na mudança de
-  tema do app (o `ContextMenuThemeMode` Light/Dark do H.NotifyIcon cobre o
-  menu nativo no modo `PopupMenu` — ver seção WinUI context menu do readme).
+  Dark/light: provide `.ico` variants and swap `IconSource` when the app theme
+  changes (H.NotifyIcon's Light/Dark `ContextMenuThemeMode` covers the
+  native menu in `PopupMenu` mode — see the readme's WinUI context menu section).
 
 ## 4. Popup
 
-### 4.1 Janela: `ShowActivated=false` + `Topmost`
+### 4.1 Window: `ShowActivated=false` + `Topmost`
 
 ```xml
 <!-- XAML -->
@@ -366,85 +366,85 @@ _notifyIcon.DoubleClick += (_, _) => TogglePopup(); // amostra oficial usa Doubl
         PreviewKeyDown="Popup_PreviewKeyDown" />
 ```
 
-- `ShowActivated` = se a janela é ativada ao ser mostrada pela primeira vez;
-  `false` + amostra dedicada "abrir sem ativar".
+- `ShowActivated` = whether the window is activated when it is first shown;
+  `false` + a dedicated "open without activating" sample.
   ([Window Class — ShowActivated](https://learn.microsoft.com/en-us/dotnet/api/system.windows.window?view=windowsdesktop-10.0),
   [WPF-Samples ShowWindowWithoutActivation](https://github.com/microsoft/WPF-Samples/blob/main/Windows/ShowWindowWithoutActivation/README.md))
-- `Topmost=true` = acima de todas as janelas com `Topmost=false` (dentro do
-  grupo topmost, a ativa fica no topo).
+- `Topmost=true` = above all windows with `Topmost=false` (within the
+  topmost group, the active one is on top).
   ([Window.Topmost](https://learn.microsoft.com/en-us/dotnet/api/system.windows.window.topmost?view=windowsdesktop-10.0))
-- Perda de foco → auto-hide: tratar `Deactivated` (dispara ao desativar;
-  `IsActive` diz o estado).
+- Focus loss → auto-hide: handle `Deactivated` (fires on deactivation;
+  `IsActive` reports the state).
   ([Window.Deactivated](https://learn.microsoft.com/en-us/dotnet/api/system.windows.window.deactivated?view=windowsdesktop-10.0),
   [Application Management Overview — Activated/Deactivated](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/app-development/application-management-overview))
-  Decisão de produto (paridade Copyous): `Deactivated → Hide()` com exceção
-  configurável futura; `Esc` fecha (`Key.Escape → Hide()` no `PreviewKeyDown`).
-- Animação ~150 ms: `Popup`/`Window` com `Storyboard` (`DoubleAnimation` em
-  `Opacity` + `TranslateTransform`), equivalente ao close-animation do Copyous;
-  base em
+  Product decision (Copyous parity): `Deactivated → Hide()` with a future
+  configurable exception; `Esc` closes (`Key.Escape → Hide()` in `PreviewKeyDown`).
+- ~150 ms animation: `Popup`/`Window` with a `Storyboard` (`DoubleAnimation` on
+  `Opacity` + `TranslateTransform`), equivalent to Copyous's close-animation;
+  based on
   ([Popup — WPF](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/popup),
   [Animate a Popup](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/popup)).
-  Duração exata é decisão de paridade, não de API.
+  The exact duration is a parity decision, not an API one.
 
-### 4.2 Posição: `GetCursorPos` (mouse) vs caret (texto)
+### 4.2 Position: `GetCursorPos` (mouse) vs caret (text)
 
-- `GetCursorPos` retorna a posição do mouse **em screen coordinates**
-  (não afetada por mapping mode).
+- `GetCursorPos` returns the mouse position **in screen coordinates**
+  (not affected by the mapping mode).
   ([GetCursorPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getcursorpos))
-  → default v1 do WindowsCM: abrir sob o cursor. Simples, global, sem
-  permissão especial além de `WINSTA_READATTRIBUTES`/input desktop
-  (mesma página, Remarks).
-- `GetCaretPos` retorna o caret **em client coordinates da janela que contém
-  o caret** e **não participa de DPI virtualization** (valores lógicos da
-  janela dona; thread chamadora ignorada).
+  → WindowsCM's v1 default: open under the cursor. Simple, global, no
+  special permission beyond `WINSTA_READATTRIBUTES`/input desktop
+  (same page, Remarks).
+- `GetCaretPos` returns the caret **in client coordinates of the window that
+  contains the caret** and **does not participate in DPI virtualization**
+  (logical values of the owning window; the calling thread is ignored).
   ([GetCaretPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getcaretpos))
-  Na prática só serve para o caret da própria thread → para caret **global**
-  usar `GetGUIThreadInfo`.
-- `GetGUIThreadInfo(idThread, &gui)`: com `idThread = NULL` retorna info da
-  **foreground thread**; funciona mesmo se a janela ativa é de outro processo;
-  entrega `hwndCaret` + `rcCaret` (bounding rect do caret, em client coords de
-  `hwndCaret`) — converter com `ClientToScreen`.
+  In practice it only works for the thread's own caret → for a **global** caret
+  use `GetGUIThreadInfo`.
+- `GetGUIThreadInfo(idThread, &gui)`: with `idThread = NULL` it returns info for
+  the **foreground thread**; it works even if the active window belongs to
+  another process; it provides `hwndCaret` + `rcCaret` (the caret's bounding
+  rect, in client coords of `hwndCaret`) — convert with `ClientToScreen`.
   ([GetGUIThreadInfo](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getguithreadinfo),
   [GUITHREADINFO](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-guithreadinfo))
-  Ressalvas da própria doc: pode não retornar handles válidos enquanto a janela
-  perde ativação; para edit control, `rcCaret` inclui direção de texto/padding
-  (posição exata pode exigir ajuste).
+  Caveats from the docs themselves: it may not return valid handles while the
+  window is losing activation; for an edit control, `rcCaret` includes text
+  direction/padding (the exact position may need adjusting).
   ([GetGUIThreadInfo — Remarks](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getguithreadinfo))
-- Alternativa moderna: UI Automation — `AutomationElement.FocusedElement`
+- Modern alternative: UI Automation — `AutomationElement.FocusedElement`
   ([FocusedElement](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.automationelement.focusedelement?view=windowsdesktop-10.0)) /
   `IUIAutomation::GetFocusedElement`
   ([Win32](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/nf-uiautomationclient-iuiautomation-getfocusedelement))
-  + `TextPattern` do elemento
+  + the element's `TextPattern`
   ([TextPattern](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.textpattern?view=windowsdesktop-10.0)).
-  Faixa de caret via `IUIAutomationTextPattern2::GetCaretRange` **não verificada
-  nesta pesquisa** (lacuna §6.3).
-- Decisão: v1 = cursor (`GetCursorPos`); v2 = tentar caret via
-  `GetGUIThreadInfo(0)` + `ClientToScreen`, com fallback para cursor quando
-  inválido. UIA fica como evolução.
+  Caret range via `IUIAutomationTextPattern2::GetCaretRange` **not verified
+  in this research** (gap §6.3).
+- Decision: v1 = cursor (`GetCursorPos`); v2 = try the caret via
+  `GetGUIThreadInfo(0)` + `ClientToScreen`, with a fallback to the cursor when
+  invalid. UIA is left as a future evolution.
 
-### 4.3 Multi-monitor + per-monitor DPI (amostra com DPI)
+### 4.3 Multi-monitor + per-monitor DPI (sample with DPI)
 
-- Monitores: `MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST)` devolve o
-  `HMONITOR` do ponto em virtual-screen coordinates.
+- Monitors: `MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST)` returns the
+  `HMONITOR` of the point in virtual-screen coordinates.
   ([MonitorFromPoint](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-monitorfrompoint))
-  Métricas do desktop virtual: `SM_X/Y/CX/CYVIRTUALSCREEN`, `SM_CMONITORS`.
+  Virtual desktop metrics: `SM_X/Y/CX/CYVIRTUALSCREEN`, `SM_CMONITORS`.
   ([Multiple Monitor System Metrics](https://learn.microsoft.com/en-us/windows/win32/gdi/multiple-monitor-system-metrics))
-  Lado gerenciado: `Screen.FromPoint` devolve a tela do ponto (ou a mais
-  próxima) com `Bounds`/`WorkingArea` para clampar o popup.
+  Managed side: `Screen.FromPoint` returns the screen of the point (or the
+  nearest one) with `Bounds`/`WorkingArea` to clamp the popup.
   ([Screen.FromPoint](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.screen.frompoint?view=windowsdesktop-10.0))
-- DPI: declarar per-monitor no manifesto (`dpiAwareness` PerMonitor) —
-  WPF é system-DPI-aware por default e precisa opt-in.
+- DPI: declare per-monitor in the manifest (`dpiAwareness` PerMonitor) —
+  WPF is system-DPI-aware by default and needs an opt-in.
   ([WPF-Samples PerMonitorDPI](https://github.com/microsoft/WPF-Samples/blob/main/PerMonitorDPI/readme.md))
-  Para processo já criado, `SetProcessDpiAwarenessContext` (recomendado via
-  manifesto; chamar antes de qualquer UI; PerMonitorV2 = Win10 1703+).
+  For an already-created process, `SetProcessDpiAwarenessContext` (recommended
+  via the manifest; call it before any UI; PerMonitorV2 = Win10 1703+).
   ([SetProcessDpiAwarenessContext](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext),
   [DPI_AWARENESS_CONTEXT](https://learn.microsoft.com/en-us/windows/win32/hidpi/dpi-awareness-context))
-  Conversão px→DIPs no ponto de posicionamento:
+  px→DIPs conversion at the placement point:
   `VisualTreeHelper.GetDpi(visual)` → `DpiScale`.
   ([VisualTreeHelper.GetDpi](https://learn.microsoft.com/en-us/dotnet/api/system.windows.media.visualtreehelper.getdpi?view=windowsdesktop-10.0))
 
 ```csharp
-// cs: posicionar popup no cursor, com DPI e clamp no monitor (mínimo)
+// cs: place the popup at the cursor, with DPI and monitor clamping (minimal)
 [DllImport("user32.dll", SetLastError = true)]
 static extern bool GetCursorPos(out POINT lpPoint);
 [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
@@ -454,15 +454,15 @@ void PlaceAtCursor(Window popup)
     GetCursorPos(out var pt); // screen px — https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getcursorpos
     var src = PresentationSource.FromVisual(popup);
     double dx = 1, dy = 1;
-    if (src?.CompositionTarget != null) // px físicos → DIPs
+    if (src?.CompositionTarget != null) // physical px → DIPs
     {
         var m = src.CompositionTarget.TransformFromDevice;
         dx = m.M11; dy = m.M22;
     }
-    // Alternativa por-visual: VisualTreeHelper.GetDpi(popup).DpiScaleX/Y
+    // Per-visual alternative: VisualTreeHelper.GetDpi(popup).DpiScaleX/Y
     // https://learn.microsoft.com/en-us/dotnet/api/system.windows.media.visualtreehelper.getdpi?view=windowsdesktop-10.0
     var area = System.Windows.Forms.Screen.FromPoint(
-        new System.Drawing.Point(pt.X, pt.Y)).WorkingArea; // monitor do ponto
+        new System.Drawing.Point(pt.X, pt.Y)).WorkingArea; // the point's monitor
     // https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.screen.frompoint?view=windowsdesktop-10.0
     popup.Left = Math.Min(pt.X * dx, (area.Right - popup.Width) * dx);
     popup.Top = Math.Min(pt.Y * dy, (area.Bottom - popup.Height) * dy);
@@ -471,50 +471,50 @@ void PlaceAtCursor(Window popup)
 }
 ```
 
-## 5. Atalhos internos do Copyous → WPF (`KeyBinding`/`InputBinding`)
+## 5. Copyous internal shortcuts → WPF (`KeyBinding`/`InputBinding`)
 
-Base WPF: `KeyBinding` liga `KeyGesture` a `ICommand`
+WPF basis: `KeyBinding` binds a `KeyGesture` to an `ICommand`
 ([KeyBinding](https://learn.microsoft.com/en-us/dotnet/api/system.windows.input.keybinding?view=windowsdesktop-10.0),
-sintaxe `Gesture="CTRL+R"` ou `Key`+`Modifiers`)
-em `Window.InputBindings`/`UIElement.InputBindings`
+syntax `Gesture="CTRL+R"` or `Key`+`Modifiers`)
+in `Window.InputBindings`/`UIElement.InputBindings`
 ([InputBinding](https://learn.microsoft.com/en-us/dotnet/api/system.windows.input.inputbinding?view=windowsdesktop-10.0)).
-Eventos preview tunelam (raiz→alvo) antes dos bubbling — `PreviewKeyDown` no
-container externo roda antes do controle focado; controles compostos podem
-marcar bubbling como handled (ex. `ButtonBase` marca `MouseLeftButtonDown` e
-sobe `Click`).
+Preview events tunnel (root→target) before the bubbling ones — `PreviewKeyDown`
+on the outer container runs before the focused control; composite controls can
+mark the bubbling event as handled (e.g. `ButtonBase` marks `MouseLeftButtonDown`
+and raises `Click`).
 ([Input Overview](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/input-overview),
 [Preview events](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/events/preview-events)).
-Comandos roteados têm bindings default (ex. `CTRL+C` vem junto com Copy) e
-`TextBox` já traz `CommandBinding` interno para edição (Paste/Copy/Cut/Undo…).
+Routed commands have default bindings (e.g. `CTRL+C` comes with Copy) and
+`TextBox` already ships an internal `CommandBinding` for editing (Paste/Copy/Cut/Undo…).
 ([Commanding Overview](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/commanding-overview),
 [Hook Up a Command](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/how-to-hook-up-a-command-to-a-control-with-command-support)).
 
-| Copyous | Proposta WPF | Colisão / resolução |
+| Copyous | WPF proposal | Collision / resolution |
 |---|---|---|
-| `Enter`/`Space` copy-vs-paste, `Shift` inverte, `swap-copy-shortcut` | `PreviewKeyDown` no `Window`/lista; setting bool inverte | `TextBox` não suporta comandos de formatação mas suporta básicos como `MoveToLineEnd` ([TextBox](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/textbox)); `TextEditor` interno trata `Space`/`Shift+Space` antes do `KeyDown` ([dotnet/wpf#8249](https://github.com/dotnet/wpf/issues/8249)). Só tratar Enter/Space quando o foco **não** está na caixa de busca (`Keyboard.FocusedElement is not TextBox`) |
-| `Ctrl+Enter` ação default | `KeyBinding Ctrl+Enter` no `Window` | Em `TextBox` multilinha (`AcceptsReturn`) Enter insere quebra; popup usa busca single-line → seguro; reforçar com `PreviewKeyDown` se precisar |
-| `Ctrl+S` pin | `KeyBinding Ctrl+S` | Sem binding de edição padrão no `TextBox`; seguro em escopo de janela |
-| `Delete` (＋`Shift` força) | `PreviewKeyDown` (Delete/Shift+Delete) | `Shift+Delete` = Cut em controles de texto (gesto default Cut); `Delete` apaga char na busca. Escopar à lista focada, nunca global |
-| `Ctrl+E` editar | `KeyBinding Ctrl+E` | `TextBox` não implementa comandos de formatação (`ToggleBold` etc.) ([TextBox](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/textbox)); livre |
-| `Ctrl+T` título | `KeyBinding Ctrl+T` | Sem default conhecido; livre |
-| `Ctrl+A` menu | `PreviewKeyDown` escopado à lista | `Ctrl+A` = SelectAll dentro de `TextBox` (binding default da família ApplicationCommands — **confirmar gesto exato na página do comando**, lacuna §6.4). Não sequestrar quando a busca tem foco |
-| `Ctrl+0..9` jump | `KeyBinding` ×10 no `Window` | Sem defaults; atenção: `Key.D0..D9` + também numpad (`NumPad0..9`) se quiser cobrir |
-| `Alt` (sozinho) toggle pinned | **Recomendado trocar por `Alt+P`** | Tecla Alt sozinha gera `Key.System` e aciona modo menu/foco de menu ([Input Overview — Key.System / TextInput](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/input-overview)); Alt puro rouba foco e quebra acessibilidade |
-| `Ctrl+F` busca | `KeyBinding Ctrl+F` → foco na busca | `Find` existe na família ApplicationCommands mas sem UI embutida no `TextBox` ([Commanding Overview](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/commanding-overview)); seguro |
-| `Ctrl+Tab` tipo | `KeyBinding` ou `PreviewKeyDown` | Tab navega foco; `Ctrl+Tab` em `TextBox` com `AcceptsTab` insere tab. Busca com `AcceptsTab=false` → seguro |
-| `Ctrl+\`` tag | `KeyBinding Key=Oem3` (ou `OemBackquote` conforme layout) | Sem default; notar dependência de layout (`` ` `` varia por teclado ABNT/US) — expor no editor de hotkeys |
-| `Ctrl+Shift+0..9` tag | `KeyBinding` ×10 | Sem defaults; livre |
-| Scroll | manter `ScrollViewer` default | Nenhum binding custom; paridade = não interceptar wheel |
+| `Enter`/`Space` copy-vs-paste, `Shift` inverts, `swap-copy-shortcut` | `PreviewKeyDown` on the `Window`/list; a bool setting inverts | `TextBox` does not support formatting commands but supports basic ones such as `MoveToLineEnd` ([TextBox](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/textbox)); the internal `TextEditor` handles `Space`/`Shift+Space` before `KeyDown` ([dotnet/wpf#8249](https://github.com/dotnet/wpf/issues/8249)). Only handle Enter/Space when focus is **not** in the search box (`Keyboard.FocusedElement is not TextBox`) |
+| `Ctrl+Enter` default action | `KeyBinding Ctrl+Enter` on the `Window` | In a multiline `TextBox` (`AcceptsReturn`) Enter inserts a line break; the popup uses a single-line search box → safe; reinforce with `PreviewKeyDown` if needed |
+| `Ctrl+S` pin | `KeyBinding Ctrl+S` | No standard editing binding in `TextBox`; safe at window scope |
+| `Delete` (＋`Shift` forces) | `PreviewKeyDown` (Delete/Shift+Delete) | `Shift+Delete` = Cut in text controls (default Cut gesture); `Delete` deletes a char in the search box. Scope to the focused list, never global |
+| `Ctrl+E` edit | `KeyBinding Ctrl+E` | `TextBox` does not implement formatting commands (`ToggleBold` etc.) ([TextBox](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/textbox)); free |
+| `Ctrl+T` title | `KeyBinding Ctrl+T` | No known default; free |
+| `Ctrl+A` menu | `PreviewKeyDown` scoped to the list | `Ctrl+A` = SelectAll inside `TextBox` (default binding of the ApplicationCommands family — **confirm the exact gesture on the command's page**, gap §6.4). Do not hijack it when the search box has focus |
+| `Ctrl+0..9` jump | `KeyBinding` ×10 on the `Window` | No defaults; note: `Key.D0..D9` + also the numpad (`NumPad0..9`) if you want to cover it |
+| `Alt` (alone) toggle pinned | **Recommended: replace with `Alt+P`** | The Alt key alone generates `Key.System` and triggers menu mode/menu focus ([Input Overview — Key.System / TextInput](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/input-overview)); a bare Alt steals focus and breaks accessibility |
+| `Ctrl+F` search | `KeyBinding Ctrl+F` → focus on the search box | `Find` exists in the ApplicationCommands family but with no built-in UI in `TextBox` ([Commanding Overview](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/commanding-overview)); safe |
+| `Ctrl+Tab` type | `KeyBinding` or `PreviewKeyDown` | Tab moves focus; `Ctrl+Tab` in a `TextBox` with `AcceptsTab` inserts a tab. Search box with `AcceptsTab=false` → safe |
+| `Ctrl+\`` tag | `KeyBinding Key=Oem3` (or `OemBackquote` depending on layout) | No default; note the layout dependency (`` ` `` varies by ABNT/US keyboard) — expose it in the hotkey editor |
+| `Ctrl+Shift+0..9` tag | `KeyBinding` ×10 | No defaults; free |
+| Scroll | keep the default `ScrollViewer` | No custom binding; parity = do not intercept the wheel |
 
-Regra geral: o que é **global-no-popup** (`Ctrl+S/E/T/F`, `Ctrl+0..9`,
-`Ctrl+Shift+0..9`, `Ctrl+Enter`) vai em `Window.InputBindings`; o que depende
-de **onde está o foco** (`Enter`, `Space`, `Delete`, `Ctrl+A`) vai em
-`PreviewKeyDown` tunelado no `Window` checando `Keyboard.FocusedElement`,
-porque preview roda antes do controle e `e.Handled = true` impede o
-comportamento default.
+General rule: whatever is **global-in-the-popup** (`Ctrl+S/E/T/F`, `Ctrl+0..9`,
+`Ctrl+Shift+0..9`, `Ctrl+Enter`) goes in `Window.InputBindings`; whatever depends
+on **where the focus is** (`Enter`, `Space`, `Delete`, `Ctrl+A`) goes in a
+tunneled `PreviewKeyDown` on the `Window` checking `Keyboard.FocusedElement`,
+because preview runs before the control and `e.Handled = true` prevents the
+default behavior.
 
 ```xml
-<!-- XAML: bindings globais-no-popup -->
+<!-- XAML: global-in-the-popup bindings -->
 <Window.InputBindings>
   <KeyBinding Gesture="CTRL+S" Command="{Binding TogglePinCommand}" />
   <KeyBinding Gesture="CTRL+E" Command="{Binding EditCommand}" />
@@ -526,34 +526,34 @@ comportamento default.
 ```
 
 ```csharp
-// cs: sensível-ao-foco (Enter/Space/Delete/Ctrl+A) — preview tunela antes do TextBox
+// cs: focus-sensitive (Enter/Space/Delete/Ctrl+A) — preview tunnels before the TextBox
 // https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/input-overview
 void Popup_PreviewKeyDown(object sender, KeyEventArgs e)
 {
     bool inSearch = Keyboard.FocusedElement is System.Windows.Controls.TextBox;
-    if (inSearch) return; // busca mantém comportamento de edição default
+    if (inSearch) return; // the search box keeps the default editing behavior
     bool swap = Properties.Settings.Default.SwapCopyShortcut;
-    if (e.Key == Key.Enter) { /* Enter=copy / Shift+Enter=paste (ou invertido) */ e.Handled = true; }
-    else if (e.Key == Key.Space) { /* idem */ e.Handled = true; }
-    else if (e.Key == Key.Delete) { /* Delete / Shift+Delete=força */ e.Handled = true; }
+    if (e.Key == Key.Enter) { /* Enter=copy / Shift+Enter=paste (or inverted) */ e.Handled = true; }
+    else if (e.Key == Key.Space) { /* ditto */ e.Handled = true; }
+    else if (e.Key == Key.Delete) { /* Delete / Shift+Delete=force */ e.Handled = true; }
     else if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control) { /* menu */ e.Handled = true; }
     else if (e.Key == Key.Escape) { Hide(); e.Handled = true; }
 }
 ```
 
-## 6. Lacunas (a confirmar na implementação)
+## 6. Gaps (to confirm during implementation)
 
-1. Valor numérico de `ERROR_HOTKEY_ALREADY_REGISTERED` (citar `winerror.h` /
-   "System Error Codes (1300-1699)"; usamos 1409 como hipótese a verificar).
-2. Versão corrente do pacote `H.NotifyIcon.Wpf` no NuGet e TFMs suportados
-   (.NET 8/9) — checar no nuget.org na hora de referenciar.
-3. `IUIAutomationTextPattern2::GetCaretRange` para caret global via UIA —
-   alternativa não verificada; v1 fica em `GetGUIThreadInfo`.
-4. Gestos default exatos de `ApplicationCommands`/`EditingCommands`
-   (`SelectAll`, `Delete`, `Find`) nas páginas de cada comando — checar antes
-   de finalizar a tabela de colisões §5.
-5. Limite de chars do tooltip do tray (`NOTIFYICONDATA.szTip`) e comportamento
-   do balloon no Win11 atual — confirmar em `NOTIFYICONDATA` + teste manual.
-6. `Ctrl+Shift+V` em browsers (colar sem formatação) não verificado em doc
-   primária de cada browser — impacto prático igual ao VS Code (§2.1), mas sem
-   link primário coletado.
+1. Numeric value of `ERROR_HOTKEY_ALREADY_REGISTERED` (cite `winerror.h` /
+   "System Error Codes (1300-1699)"; we use 1409 as a hypothesis to verify).
+2. Current version of the `H.NotifyIcon.Wpf` package on NuGet and the supported
+   TFMs (.NET 8/9) — check on nuget.org at the time of referencing it.
+3. `IUIAutomationTextPattern2::GetCaretRange` for a global caret via UIA —
+   unverified alternative; v1 stays on `GetGUIThreadInfo`.
+4. Exact default gestures of `ApplicationCommands`/`EditingCommands`
+   (`SelectAll`, `Delete`, `Find`) on each command's page — check before
+   finalizing the §5 collision table.
+5. Tray tooltip character limit (`NOTIFYICONDATA.szTip`) and balloon behavior
+   on current Win11 — confirm in `NOTIFYICONDATA` + manual test.
+6. `Ctrl+Shift+V` in browsers (paste without formatting) not verified in each
+   browser's primary docs — practical impact the same as VS Code (§2.1), but no
+   primary link collected.

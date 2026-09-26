@@ -55,7 +55,7 @@ internal sealed class TitleLineConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Subtitle/Kind label: human-readable type description (e.g. "Imagem PNG", "Código C#", "Documento PDF").
+// Subtitle/Kind label: human-readable type description (e.g. "PNG Image", "C# Code", "PDF Document").
 internal sealed class KindLabelConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -239,7 +239,7 @@ internal sealed class TextPreviewVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Relative time string in Portuguese (e.g. "agora", "há 5 min", "há 2 h").
+// Relative time string in the UI language (e.g. "just now", "5 min ago", "2h ago").
 internal sealed class RelativeTimeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

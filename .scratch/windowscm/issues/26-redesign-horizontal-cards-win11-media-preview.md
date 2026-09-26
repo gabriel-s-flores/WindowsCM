@@ -1,4 +1,4 @@
-# 26: Redesign com Cards Horizontais, Identidade Windows 11 e Previews Expandidos
+# 26: Redesign with Horizontal Cards, Windows 11 Identity and Expanded Previews
 
 **Type:** task
 
@@ -7,27 +7,27 @@
 **Blocked by:** 21, 23
 
 **What to build:**
-1. Formatação limpa de itens de arquivo e mídia: extrair apenas o nome do arquivo (`Path.GetFileName`) e tipo descritivo ("Imagem PNG", "Vídeo MP4", "Código C#"), nunca expondo o caminho absoluto ou `file:///...`.
-2. Habilitar carregamento de miniaturas para arquivos de imagem copiados do Explorer (`ItemKind.File`).
-3. Layout horizontal com cards (250x230px) no popup (880x320px) em container de rolagem horizontal com suporte a scroll do mouse e setas do teclado.
-4. Preview ampliado para código e texto com fonte monoespaçada (`Cascadia Code` / `Consolas`) permitindo visualização de 6 a 8 linhas.
-5. Botões de ação da barra superior com ícones nativos `Segoe Fluent Icons` / `Segoe MDL2 Assets` (32x32px), estados acentuados para Pinned e Incognito, e ToolTips informativos com atalhos.
-6. Atualização dos testes unitários de sizing, placement e criação de novos testes para o `ItemDisplayFormatter`.
+1. Clean formatting of file and media items: extract only the file name (`Path.GetFileName`) and a descriptive type ("PNG Image", "MP4 Video", "C# Code"), never exposing the absolute path or `file:///...`.
+2. Enable thumbnail loading for image files copied from Explorer (`ItemKind.File`).
+3. Horizontal card layout (250x230px) in the popup (880x320px), in a horizontal scroll container with support for the mouse wheel and the keyboard arrow keys.
+4. Enlarged preview for code and text in a monospaced font (`Cascadia Code` / `Consolas`), allowing 6 to 8 lines to be viewed.
+5. Top bar action buttons with native `Segoe Fluent Icons` / `Segoe MDL2 Assets` icons (32x32px), accented states for Pinned and Incognito, and informative ToolTips with shortcuts.
+6. Update the sizing and placement unit tests and create new tests for `ItemDisplayFormatter`.
 
-- [x] Formatação de arquivos/mídias sem caminhos absolutos e com miniaturas ativas
-- [x] Previews de código e texto expandidos em cards horizontais
-- [x] Botões da barra com glifos Segoe Fluent Icons e sem cortes de texto
-- [x] Identidade visual Windows 11 Fluent Design
-- [x] Suíte de testes unitários 100% verde
+- [x] File/media formatting without absolute paths and with thumbnails enabled
+- [x] Expanded code and text previews in horizontal cards
+- [x] Bar buttons with Segoe Fluent Icons glyphs and no clipped text
+- [x] Windows 11 Fluent Design visual identity
+- [x] Unit test suite 100% green
 
 ## Answer
-Implementado em 2026-09-12. Todos os requisitos atendidos:
-1. `ItemDisplayFormatter` criado em `WindowsCM.Core.Popup` com lógica pura e 100% testada (10 novos testes): extração de nomes de arquivos, identificação de tipos/extensões (PNG, JPEG, GIF, MP4, MP3, PDF, C#, etc.), preview de múltiplas linhas e glifos do Segoe Fluent Icons.
-2. `PopupConverters.cs` atualizado:
-   - `TitleLineConverter` delega para `ItemDisplayFormatter.GetTitle` (nunca expõe caminhos absolutos nem `file:///...`).
-   - `KindLabelConverter` exibe tipos humanizados.
-   - `ImageThumbConverter` agora carrega tanto imagens salvas em cache quanto arquivos locais de imagem do Windows Explorer com resolução ampliada (`DecodePixelHeight = 180`).
-   - Conversores de visibilidade e previews dedicados adicionados.
-3. `PopupWindow.xaml` redesenhado para 880x320px com cards horizontais (250x240px), rolagem horizontal fluida (suporte ao scroll do mouse e setas do teclado), barra de busca Windows 11 Fluent com ícone de lupa e botões compactos de 32x32px com ícones Segoe Fluent Icons (`\uE718` Pin, `\uE727` Incognito, `\uE74D` Clear, `\uE713` Settings) e estados acentuados.
-4. Testes unitários atualizados em `PopupSizingTests` (880x320) e `PopupPlacementTests` (clamping 1080p horizontal). Suíte completa com 746 testes verdes e zero warnings/erros.
-5. ADR 0001 registrado em `docs/adr/0001-horizontal-cards-layout-windows11.md`.
+Implemented on 2026-09-12. All requirements met:
+1. `ItemDisplayFormatter` created in `WindowsCM.Core.Popup` with pure, 100% tested logic (10 new tests): file name extraction, type/extension identification (PNG, JPEG, GIF, MP4, MP3, PDF, C#, etc.), multi-line preview and Segoe Fluent Icons glyphs.
+2. `PopupConverters.cs` updated:
+   - `TitleLineConverter` delegates to `ItemDisplayFormatter.GetTitle` (never exposes absolute paths or `file:///...`).
+   - `KindLabelConverter` shows human-readable types.
+   - `ImageThumbConverter` now loads both cached images and local image files from Windows Explorer at a higher resolution (`DecodePixelHeight = 180`).
+   - Visibility converters and dedicated previews added.
+3. `PopupWindow.xaml` redesigned to 880x320px with horizontal cards (250x240px), fluid horizontal scrolling (mouse wheel and keyboard arrow key support), a Windows 11 Fluent search bar with a magnifier icon, and compact 32x32px buttons with Segoe Fluent Icons (`\uE718` Pin, `\uE727` Incognito, `\uE74D` Clear, `\uE713` Settings) and accented states.
+4. Unit tests updated in `PopupSizingTests` (880x320) and `PopupPlacementTests` (horizontal 1080p clamping). Full suite with 746 green tests and zero warnings/errors.
+5. ADR 0001 recorded in `docs/adr/0001-horizontal-cards-layout-windows11.md`.
