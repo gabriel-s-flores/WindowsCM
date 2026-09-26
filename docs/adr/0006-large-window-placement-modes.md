@@ -1,23 +1,23 @@
-# 6. Modos de posicionamento da janela grande: monitor fixo e livre
+# 6. Large window placement modes: fixed monitor and free
 
-Data: 2026-09-25
+Date: 2026-09-25
 
-## Contexto
+## Context
 
-A janela grande (`PopupWindow`) só podia ser ancorada numa borda (em cima/embaixo na horizontal, esquerda/direita na vertical, ADR 0005) do monitor onde estivesse o mouse. Em mesas com vários monitores o usuário quer que ela abra sempre no mesmo monitor, independentemente de onde está o mouse; e há quem prefira uma janela solta, posicionada e dimensionada à mão.
+The large window (`PopupWindow`) could only be docked to an edge (top/bottom when horizontal, left/right when vertical, ADR 0005) of the monitor the mouse was on. On desks with several monitors the user wants it to always open on the same monitor, regardless of where the mouse is; and some prefer an undocked window, positioned and sized by hand.
 
-"Modo para múltiplos monitores" foi decidido como **escolher um monitor fixo** (não estender a barra por todas as telas, nem seguir a janela ativa). O modo livre permite **arrastar e redimensionar**.
+"A mode for multiple monitors" was decided as **picking a fixed monitor** (not stretching the window across all screens, nor following the active window). Free mode allows **dragging and resizing**.
 
-## Decisão
+## Decision
 
-1. **`DialogSettings.LargePlacement`** (`FollowMouse` padrão, `FixedMonitor`, `Free`). Os dois modos ancorados continuam usando `LargeHorizontalPosition` / `LargeVerticalPosition`; no modo livre as bordas não se aplicam.
-2. **Monitor fixo por `Screen.DeviceName`** (`LargeMonitor`, vazio = principal). É a identidade que o Windows mantém entre sessões; índice ou coordenadas mudariam ao reorganizar as telas. Com o monitor desconectado, o principal assume, mas a escolha fica salva e volta a valer quando ele reaparece (`MonitorLayout.Resolve`).
-3. **Numeração na ordem da mesa** (esquerda→direita, depois cima→baixo, `MonitorLayout.Ordered`) na lista das Configurações e no overlay **Identificar**, que mostra o número no centro de cada monitor por 2 s (sem capturar foco nem cliques).
-4. **Modo livre com um retângulo por orientação** (`LargeFreeBoundsHorizontal` / `LargeFreeBoundsVertical`, em DIPs do WPF — o mesmo espaço de `Window.Left/Top`). Uma faixa larga e uma coluna alta são formas diferentes; trocar a orientação não espreme uma na outra. Sem retângulo salvo, a janela abre flutuando no centro do monitor do mouse.
-5. **Nunca fora da tela** (`PopupPlacement.PlaceFree`): o retângulo salvo é puxado inteiro para dentro da área de trabalho com a qual mais se sobrepõe (e reduzido se o monitor ficou menor); se não se sobrepõe a nenhuma (monitor removido), recomeça centralizado. Tamanho mínimo por orientação garante que o cabeçalho caiba.
-6. **Redimensionar pela resposta a `WM_NCHITTEST`** (`ResizeHitTest.EdgeAt` → `HTLEFT`…`HTBOTTOMRIGHT`) só no modo livre, deixando o Windows conduzir o laço nativo de redimensionamento da janela sem borda; **arrastar com `DragMove`** a partir da alça no topo e de qualquer área que não seja controle. `WM_EXITSIZEMOVE` grava o retângulo ao soltar. Não se usa `WindowChrome`, para não alterar a janela nos modos ancorados.
+1. **`DialogSettings.LargePlacement`** (`FollowMouse` as the default, `FixedMonitor`, `Free`). The two docked modes keep using `LargeHorizontalPosition` / `LargeVerticalPosition`; in free mode the edges do not apply.
+2. **Fixed monitor by `Screen.DeviceName`** (`LargeMonitor`, empty = primary). It is the identity Windows keeps across sessions; an index or coordinates would change when the screens are rearranged. While the monitor is disconnected, the primary takes over, but the choice stays saved and applies again when it reappears (`MonitorLayout.Resolve`).
+3. **Numbering in desk order** (left→right, then top→bottom, `MonitorLayout.Ordered`) in the Settings list and in the **Identify** overlay, which shows the number in the center of each monitor for 2 s (without capturing focus or clicks).
+4. **Free mode with one rectangle per orientation** (`LargeFreeBoundsHorizontal` / `LargeFreeBoundsVertical`, in WPF DIPs — the same space as `Window.Left/Top`). A wide strip and a tall column are different shapes; switching the orientation does not squeeze one into the other. With no saved rectangle, the window opens floating in the center of the monitor under the mouse.
+5. **Never off-screen** (`PopupPlacement.PlaceFree`): the saved rectangle is pulled entirely into the working area it overlaps the most (and shrunk if the monitor got smaller); if it overlaps none (monitor removed), it starts over centered. A minimum size per orientation ensures the header fits.
+6. **Resize by answering `WM_NCHITTEST`** (`ResizeHitTest.EdgeAt` → `HTLEFT`…`HTBOTTOMRIGHT`) only in free mode, letting Windows drive the native resize loop of the borderless window; **drag with `DragMove`** from the handle at the top and from any area that is not a control. `WM_EXITSIZEMOVE` saves the rectangle on release. `WindowChrome` is not used, so that the window does not change in the docked modes.
 
-## Consequências
+## Consequences
 
-- **Positivas:** as regras de monitor e de posição livre são puras e testadas no Core; configurações antigas carregam `FollowMouse` (comportamento de antes); nada muda para quem não mexer na opção.
-- **Negativas / desafios:** a validação de arrastar/redimensionar e do overlay é manual (smoke no Windows); a precisão com escalas de DPI diferentes entre monitores depende do modo de DPI do processo (o WPF sem manifesto roda "system aware", em que os DIPs são consistentes entre telas).
+- **Positive:** the monitor and free-position rules are pure and tested in Core; old settings load `FollowMouse` (the previous behavior); nothing changes for anyone who does not touch the option.
+- **Negative / challenges:** validating drag/resize and the overlay is manual (smoke on Windows); accuracy with different DPI scales across monitors depends on the process's DPI mode (WPF without a manifest runs "system aware", in which DIPs are consistent across screens).

@@ -1,41 +1,41 @@
-# 1. Layout de Cards Horizontais e Identidade Visual Windows 11
+# 1. Horizontal Cards Layout and Windows 11 Visual Identity
 
-Data: 2026-09-12
+Date: 2026-09-12
 
-## Contexto
+## Context
 
-O WindowsCM foi concebido com paridade ao gerenciador de área de transferência Copyous (GNOME). Durante o protótipo inicial (Variante A - Cards), validou-se que o formato de cards horizontais (250x170px) proporcionava excelente densidade e área de preview para inspecionar grandes blocos de código e imagens. No entanto, a primeira implementação do popup restringiu o layout a uma janela vertical estreita (380x520px), truncando o preview a uma única linha de 40px e limitando os botões da barra superior a textos literais que sofriam cortes em diferentes resoluções.
+WindowsCM was conceived for parity with the Copyous clipboard manager (GNOME). During the initial prototype (Variant A - Cards), the horizontal card format (250x170px) was validated as providing excellent density and preview area for inspecting large blocks of code and images. However, the first popup implementation restricted the layout to a narrow vertical window (380x520px), truncating the preview to a single 40px line and limiting the top bar buttons to literal text labels that got cut off at different resolutions.
 
-Além disso, a exibição de itens do tipo arquivo e imagem expunha caminhos absolutos do sistema operacional (`C:\Users\...` ou `file:///C:/Users/.../AppData/Local/.../hash.png`), gerando poluição visual e prejudicando a usabilidade.
+In addition, the display of file and image items exposed absolute operating system paths (`C:\Users\...` or `file:///C:/Users/.../AppData/Local/.../hash.png`), creating visual clutter and hurting usability.
 
-## Decisão
+## Decision
 
-1. **Retomada do Layout de Cards Horizontais (Variante A do Copyous):**
-   - O popup passa a adotar largura de 880px e altura de 320px.
-   - A lista de histórico exibe cards horizontais (`Width="250"`, `Height="230"`) alinhados lado a lado, com suporte a rolagem horizontal suave pelo scroll do mouse e pelas setas de navegação (Esquerda/Direita).
+1. **Return to the Horizontal Cards Layout (Copyous Variant A):**
+   - The popup now uses a width of 880px and a height of 320px.
+   - The history list shows horizontal cards (`Width="250"`, `Height="230"`) aligned side by side, with support for smooth horizontal scrolling via the mouse scroll wheel and the navigation arrows (Left/Right).
 
-2. **Isolamento da Lógica de Exibição (`ItemDisplayFormatter`):**
-   - Criação de um formatador puro em `WindowsCM.Core.Popup` para isolar e testar unitariamente:
-     - Títulos: oculta caminhos absolutos e URIs internas, exibindo apenas o nome do arquivo (`Path.GetFileName`) para arquivos e "Imagem" para capturas diretas.
-     - Tipos: classifica extensões em categorias amigáveis ("Imagem PNG", "Vídeo MP4", "Áudio MP3", "Código C#", "Documento PDF").
-     - Previews multilinhas: permite exibir 6 a 8 linhas de código ou texto com fonte monoespaçada (`Cascadia Code` / `Consolas`).
-     - Resolução de caminhos de miniaturas: suporta tanto imagens cacheadas quanto arquivos de imagem copiados do Windows Explorer.
+2. **Isolation of the Display Logic (`ItemDisplayFormatter`):**
+   - Creation of a pure formatter in `WindowsCM.Core.Popup` to isolate and unit test:
+     - Titles: hides absolute paths and internal URIs, showing only the file name (`Path.GetFileName`) for files and "Image" for direct captures.
+     - Types: classifies extensions into friendly categories ("PNG Image", "MP4 Video", "MP3 Audio", "C# Code", "PDF Document").
+     - Multi-line previews: allows showing 6 to 8 lines of code or text in a monospaced font (`Cascadia Code` / `Consolas`).
+     - Thumbnail path resolution: supports both cached images and image files copied from Windows Explorer.
 
-3. **Botões de Ação com Ícones Segoe Fluent (Windows 11):**
-   - Substituição dos botões com texto por botões icônicos compactos (32x32px) utilizando a tipografia nativa `Segoe Fluent Icons` (com fallback para `Segoe MDL2 Assets`).
-   - Cada botão possui ToolTip com descrição da ação e respectivo atalho de teclado (`Alt+P`, `Ctrl+Shift+Alt+V`, etc.).
+3. **Action Buttons with Segoe Fluent Icons (Windows 11):**
+   - Replacement of the text buttons with compact icon buttons (32x32px) using the native `Segoe Fluent Icons` typeface (with fallback to `Segoe MDL2 Assets`).
+   - Each button has a ToolTip with a description of the action and its keyboard shortcut (`Alt+P`, `Ctrl+Shift+Alt+V`, etc.).
 
-4. **Identidade Visual Fluent Design:**
-   - Superfície escura (`#202020`), bordas sutis (`#383838`), cantos arredondados (`CornerRadius="8"`) e sombras suaves.
-   - Destaque ativo para seleção de card e filtros com a cor de acento do sistema (`#0078D4` / `#ED5B00`).
+4. **Fluent Design Visual Identity:**
+   - Dark surface (`#202020`), subtle borders (`#383838`), rounded corners (`CornerRadius="8"`) and soft shadows.
+   - Active highlight for card selection and filters with the system accent color (`#0078D4` / `#ED5B00`).
 
-## Consequências
+## Consequences
 
-- **Positivas:**
-  - Código fonte e textos copiados tornam-se imediatamente legíveis no preview antes de colar.
-  - Usuário identifica rapidamente arquivos e fotos pelo nome e miniatura, sem visualização confusa de caminhos do sistema.
-  - Interface alinhada às diretrizes estéticas do Windows 11.
-  - Zero corte de texto em botões, melhorando a consistência internacional e ergonomia.
-  - Lógica 100% coberta por testes automatizados.
-- **Negativas / Desafios:**
-  - O popup ocupa maior largura de tela (880px), requerendo clamping determinístico próximo às bordas do monitor (mantido e testado em `PopupPlacement`).
+- **Positive:**
+  - Copied source code and text become immediately readable in the preview before pasting.
+  - The user quickly identifies files and photos by name and thumbnail, without a confusing display of system paths.
+  - Interface aligned with the Windows 11 aesthetic guidelines.
+  - Zero text clipping on buttons, improving international consistency and ergonomics.
+  - Logic 100% covered by automated tests.
+- **Negative / Challenges:**
+  - The popup takes up more screen width (880px), requiring deterministic clamping near the monitor edges (kept and tested in `PopupPlacement`).

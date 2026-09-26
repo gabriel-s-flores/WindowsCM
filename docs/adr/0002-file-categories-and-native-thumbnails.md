@@ -1,38 +1,38 @@
-# 2. Categorias Semânticas de Arquivos, Customização de Extensões e Miniaturas Nativas do Windows
+# 2. Semantic File Categories, Extension Customization and Native Windows Thumbnails
 
-Data: 2026-09-13
+Date: 2026-09-13
 
-## Contexto
+## Context
 
-Originalmente, o WindowsCM herdou do Copyous um mecanismo de "Tags", no qual o usuário podia atribuir manualmente uma de nove cores pré-definidas a qualquer item da área de transferência pelo menu de clique direito. Com o uso prático, essa abordagem provou-se redundante e pouco intuitiva para o gerenciamento de arquivos. Ao mesmo tempo, todos os arquivos copiados do sistema compartilhavam a mesma cor genérica ("File"), independentemente de serem imagens, músicas, vídeos, planilhas ou documentos do Office, e a pré-visualização no card de arquivo se restringia a um ícone estático genérico de 40x40px (exceto para imagens raster básicas já salvas localmente).
+Originally, WindowsCM inherited a "Tags" mechanism from Copyous, in which the user could manually assign one of nine predefined colors to any clipboard item through the right-click menu. In practical use, this approach proved redundant and unintuitive for managing files. At the same time, all files copied from the system shared the same generic color ("File"), regardless of whether they were images, music, videos, spreadsheets or Office documents, and the preview on the file card was limited to a generic static 40x40px icon (except for basic raster images already saved locally).
 
-O Windows já possui uma base sólida de classificação semântica no Registro (`HKEY_CLASSES_ROOT\<ext>\PerceivedType` e associações com aplicativos padrão como Word, Excel, PowerPoint, Players de Mídia), além de uma infraestrutura madura de geração de miniaturas ricas (`IShellItemImageFactory` / Thumbnail Cache do Explorer) capaz de gerar previews visuais de fotos, quadros de vídeos, capas de álbuns de música e capas de apresentações/documentos.
+Windows already has a solid semantic classification base in the Registry (`HKEY_CLASSES_ROOT\<ext>\PerceivedType` and associations with default apps such as Word, Excel, PowerPoint, Media Players), as well as a mature infrastructure for generating rich thumbnails (`IShellItemImageFactory` / Explorer Thumbnail Cache) capable of generating visual previews of photos, video frames, music album covers and presentation/document covers.
 
-## Decisão
+## Decision
 
-1. **Aposentadoria de Tags na Interface do Usuário**:
-   - Remoção do submenu "Tags" do menu de clique direito dos cards no popup.
-   - Desativação dos atalhos de atribuição rápida de tags (`Ctrl+Shift+1..9` e `Ctrl+\``).
-   - Preservação da coluna `tag` no esquema SQLite para compatibilidade com registros existentes, sem impacto visual.
+1. **Retirement of Tags from the User Interface**:
+   - Removal of the "Tags" submenu from the right-click menu of the cards in the popup.
+   - Deactivation of the quick tag-assignment shortcuts (`Ctrl+Shift+1..9` and `Ctrl+\``).
+   - Preservation of the `tag` column in the SQLite schema for compatibility with existing items, with no visual impact.
 
-2. **Categorias Semânticas de Arquivo Configuráveis**:
-   - Criação do modelo `FileCategorySettings`, permitindo agrupar extensões em categorias (ex.: Imagens, Vídeos, Áudio, Documentos, Planilhas, Apresentações, Código/Scripts, Compactados).
-   - Cada categoria possui seu próprio rótulo exibido no card, lista de extensões mapeadas e cor de acento dedicada.
-   - O usuário pode criar novas categorias, alterar cores e editar livremente quais extensões pertencem a quais tipos na aba de Cores das Configurações.
-   - Integração com `WindowsFileTypeResolver`: fallback dinâmico que consulta o `PerceivedType` do Windows e associações ativas para classificar extensões que ainda não foram customizadas pelo usuário.
+2. **Configurable Semantic File Categories**:
+   - Creation of the `FileCategorySettings` model, allowing extensions to be grouped into categories (e.g. Images, Videos, Audio, Documents, Spreadsheets, Presentations, Code/Scripts, Archives).
+   - Each category has its own label shown on the card, a list of mapped extensions and a dedicated accent color.
+   - The user can create new categories, change colors and freely edit which extensions belong to which types on the Colors tab of Settings.
+   - Integration with `WindowsFileTypeResolver`: a dynamic fallback that queries the Windows `PerceivedType` and active associations to classify extensions that the user has not customized yet.
 
-3. **Miniaturas Ricas Nativas via `IShellItemImageFactory`**:
-   - Introdução de um serviço nativo `ThumbnailService` que extrai miniaturas de alta resolução (250x160) diretamente do subsistema de Shell do Windows.
-   - Quando um arquivo copiado possui miniatura gerada pelo Windows (fotos, vídeos, capas de áudio, PDFs, slides de apresentação), o card horizontal do popup exibe essa miniatura em destaque no corpo do card.
-   - Quando o arquivo não possui miniatura disponível, mantém-se a visualização elegante com ícone do sistema e resumo descritivo (nome, extensão, tamanho).
-   - Execução assíncrona com cache em memória (`ConcurrentDictionary`) para garantir 60fps sem bloquear a renderização da janela do popup.
+3. **Native Rich Thumbnails via `IShellItemImageFactory`**:
+   - Introduction of a native `ThumbnailService` service that extracts high-resolution thumbnails (250x160) directly from the Windows Shell subsystem.
+   - When a copied file has a thumbnail generated by Windows (photos, videos, audio covers, PDFs, presentation slides), the popup's horizontal card shows that thumbnail prominently in the card body.
+   - When the file has no thumbnail available, the elegant display with the system icon and a descriptive summary (name, extension, size) is kept.
+   - Asynchronous execution with an in-memory cache (`ConcurrentDictionary`) to guarantee 60fps without blocking the rendering of the popup window.
 
-## Consequências
+## Consequences
 
-- **Positivas**:
-  - Distinção visual imediata entre vídeos, músicas, planilhas, apresentações e documentos pelo card e pela cor de destaque.
-  - O usuário ganha controle total para organizar suas próprias extensões e preferências de cor.
-  - Pré-visualizações visuais nativas de arquivos (fotos, vídeos e documentos) sem depender de bibliotecas pesadas de terceiros.
-  - Remoção de complexidade desnecessária com a eliminação do submenu de tags.
-- **Negativas / Desafios**:
-  - Extração de miniaturas do Shell requer chamadas COM Win32 e gerenciamento cuidadoso de handles `HBITMAP` e bitmaps WPF congelados (`Freeze()`).
+- **Positive**:
+  - Immediate visual distinction between videos, music, spreadsheets, presentations and documents through the card and the highlight color.
+  - The user gains full control to organize their own extensions and color preferences.
+  - Native visual file previews (photos, videos and documents) without depending on heavy third-party libraries.
+  - Removal of unnecessary complexity by eliminating the tags submenu.
+- **Negative / Challenges**:
+  - Extracting thumbnails from the Shell requires Win32 COM calls and careful management of `HBITMAP` handles and frozen WPF bitmaps (`Freeze()`).

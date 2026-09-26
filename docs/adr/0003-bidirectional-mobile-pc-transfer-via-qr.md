@@ -1,56 +1,56 @@
-# 3. Transferência Bidirecional de Arquivos e Clipboard entre PC e Dispositivos Móveis via QR Code e Servidor HTTP Local
+# 3. Bidirectional File and Clipboard Transfer between PC and Mobile Devices via QR Code and a Local HTTP Server
 
-Data: 2026-09-13
+Date: 2026-09-13
 
-## Contexto
+## Context
 
-O WindowsCM possuía suporte a QR Code limitado estritamente a textos curtos (`Text`, `Code`, `Link`, `Character`, `Color`). Para itens de arquivo (`File`, `Files`) e imagens (`Image`), o QR Code não estava disponível porque um código QR óptico padrão possui limite físico de capacidade (~2-3 KB), impossibilitando a codificação direta de arquivos de mídia (como áudios MP3, gravações, fotos, vídeos ou documentos).
+WindowsCM's QR Code support was strictly limited to short texts (`Text`, `Code`, `Link`, `Character`, `Color`). For file items (`File`, `Files`) and images (`Image`), the QR Code was not available because a standard optical QR code has a physical capacity limit (~2-3 KB), which makes it impossible to encode media files directly (such as MP3 audio, recordings, photos, videos or documents).
 
-Além disso, não existia uma forma direta de o usuário enviar dados do smartphone para o computador (fluxo reverso), forçando o uso de aplicativos terceiros (WhatsApp Web, e-mails para si mesmo ou nuvens externas) para transferir um simples texto, link ou arquivo do celular para a área de transferência do Windows.
+In addition, there was no direct way for the user to send data from the phone to the computer (reverse flow), forcing the use of third-party apps (WhatsApp Web, emails to oneself or external clouds) to transfer a simple text, link or file from the phone to the Windows clipboard.
 
-No ecossistema Windows, a API nativa `System.Net.HttpListener` baseia-se no driver de kernel `http.sys`, o qual exige privilégios de Administrador (`netsh http add urlacl`) para vincular portas a endereços IP de rede externa ou curingas (`+` / `*`), gerando a exceção `Acesso negado` quando executado em aplicativos padrão de usuário como o WindowsCM.
+In the Windows ecosystem, the native `System.Net.HttpListener` API is built on the `http.sys` kernel driver, which requires Administrator privileges (`netsh http add urlacl`) to bind ports to external network IP addresses or wildcards (`+` / `*`), throwing an `Access is denied` exception when run in standard user apps such as WindowsCM.
 
-## Decisão
+## Decision
 
-1. **Servidor HTTP Local Assíncrono via `TcpListener`**:
-   - Implementação de um servidor HTTP/1.1 ultra-leve e assíncrono em `WindowsCM.Core.Transfer` utilizando `System.Net.Sockets.TcpListener`.
-   - Dispensa privilégios de Administrador, elevação UAC ou comandos manuais de firewall.
-   - Escuta em `0.0.0.0` com detecção automática do IP da interface de rede física ativa (Wi-Fi ou Ethernet com Gateway Padrão).
-   - Gerenciamento de rotas para servir a aplicação web móvel, downloads de arquivos/mídias e recepção de uploads.
+1. **Asynchronous Local HTTP Server via `TcpListener`**:
+   - Implementation of an ultra-lightweight, asynchronous HTTP/1.1 server in `WindowsCM.Core.Transfer` using `System.Net.Sockets.TcpListener`.
+   - Needs no Administrator privileges, UAC elevation or manual firewall commands.
+   - Listens on `0.0.0.0` with automatic detection of the IP of the active physical network interface (Wi-Fi or Ethernet with a Default Gateway).
+   - Route handling to serve the mobile web app, file/media downloads and upload reception.
 
-2. **Geração Universal de QR Code para Itens de Histórico (PC -> Celular)**:
-   - Extensão do `QrActions` para que itens `File`, `Files` e `Image` também sejam elegíveis para geração de QR Code.
-   - Quando o usuário clica no botão de QR Code de um card (seja áudio, imagem, documento ou texto longo), o aplicativo gera uma URL efêmera protegida no servidor local (`http://<ip>:<porta>/d/{token}`) e desenha o código QR correspondente.
-   - Ao escanear com o celular, abre-se uma página web móvel responsiva (Fluent Design) com player de áudio integrado (para músicas/áudios), visualizador de fotos (para imagens) ou botão direto de download do arquivo com cabeçalhos MIME e `Content-Disposition` adequados.
-   - O diálogo do QR Code no Windows também oferece um botão para escolher qualquer arquivo do computador para envio imediato.
+2. **Universal QR Code Generation for History Items (PC -> Phone)**:
+   - Extension of `QrActions` so that `File`, `Files` and `Image` items are also eligible for QR Code generation.
+   - When the user clicks the QR Code button of a card (whether audio, image, document or long text), the app generates a protected ephemeral URL on the local server (`http://<ip>:<port>/d/{token}`) and draws the corresponding QR code.
+   - Scanning it with the phone opens a responsive mobile web page (Fluent Design) with a built-in audio player (for music/audio), a photo viewer (for images) or a direct file download button with the proper MIME and `Content-Disposition` headers.
+   - The QR Code dialog on Windows also offers a button to choose any file on the computer for immediate sending.
 
-3. **Fluxo Reverso com Botão "Enviar do celular" (Celular -> PC)**:
-   - Adição de um botão dedicado com ícone de celular (`\uE8EA`) na barra superior do `PopupWindow` (imediatamente ao lado do botão de Modo Anônimo) e no rodapé do `CompactPopupWindow`.
-   - Ao ser clicado, abre a janela `MobileTransferWindow` exibindo o QR Code para conexão do smartphone à página de envio (`http://<ip>:<porta>/`).
-   - Na página web móvel aberta no celular, o usuário pode:
-     - Colar ou digitar textos e links e enviá-los ao PC com um clique.
-     - Selecionar fotos, gravações de áudio ou arquivos do dispositivo móvel e enviá-los com progresso visual.
-   - O servidor local recebe o conteúdo e automaticamente:
-     - Grava o texto ou arquivo na área de transferência do Windows (`Win32ClipboardWriter` / `CF_UNICODETEXT` ou `CF_HDROP`).
-     - Insere o registro no histórico do WindowsCM via `CaptureService`.
-     - Exibe feedback imediato (toast do WindowsCM e atualização na janela aberta).
+3. **Reverse Flow with a "Send from mobile to PC" Button (Phone -> PC)**:
+   - Addition of a dedicated button with a phone icon (`\uE8EA`) in the top bar of `PopupWindow` (right next to the Incognito Mode button) and in the footer of `CompactPopupWindow`.
+   - When clicked, it opens the `MobileTransferWindow` window showing the QR Code for connecting the phone to the upload page (`http://<ip>:<port>/`).
+   - On the mobile web page opened on the phone, the user can:
+     - Paste or type texts and links and send them to the PC with one click.
+     - Select photos, audio recordings or files from the mobile device and send them with visual progress.
+   - The local server receives the content and automatically:
+     - Writes the text or file to the Windows clipboard (`Win32ClipboardWriter` / `CF_UNICODETEXT` or `CF_HDROP`).
+     - Inserts the item into the WindowsCM history via `CaptureService`.
+     - Shows immediate feedback (a WindowsCM toast and an update in the open window).
 
-## Consequências
+## Consequences
 
-- **Positivas**:
-  - Transferência direta, instantânea e privada de arquivos e texto entre computador e celular sem depender da internet ou de servidores externos.
-  - Suporte completo a áudio, vídeo, imagens, documentos e textos.
-  - Zero dependências pesadas externas e zero necessidade de privilégios de Administrador.
-  - Experiência de usuário fluida em smartphones iOS e Android apenas apontando a câmera nativa para o QR Code.
-  - Total integração com o histórico do WindowsCM e a área de transferência do Windows.
-- **Desafios / Limitações**:
-  - Requer que o computador e o smartphone estejam conectados à mesma rede local (Wi-Fi ou LAN).
+- **Positive**:
+  - Direct, instant and private transfer of files and text between computer and phone without depending on the internet or on external servers.
+  - Full support for audio, video, images, documents and text.
+  - Zero heavy external dependencies and zero need for Administrator privileges.
+  - Smooth user experience on iOS and Android phones just by pointing the native camera at the QR Code.
+  - Full integration with the WindowsCM history and the Windows clipboard.
+- **Challenges / Limitations**:
+  - Requires the computer and the phone to be connected to the same local network (Wi-Fi or LAN).
 
-## Revisão (2026-09-26): chave de envio, início sob demanda e limites
+## Revision (2026-09-26): upload key, on-demand start and limits
 
-A auditoria de estabilidade encontrou o servidor aberto a toda a rede local desde a inicialização, sem autenticação nos envios:
+The stability audit found the server open to the whole local network from startup, with no authentication on uploads:
 
-- **Chave de envio**: `/api/upload` aceitava texto e arquivos de qualquer aparelho da mesma rede (um Wi-Fi público) e os colocava direto na área de transferência. Agora cada execução do app gera uma chave aleatória de 128 bits. Ela viaja só no QR Code de "Enviar do celular" (`/u/{chave}`), e o envio vai para `/api/upload/{chave}`. Sem a chave, a resposta é 403 e a página orienta a escanear o QR de novo.
-- **Início sob demanda**: o servidor sobe no primeiro uso (QR de arquivo/imagem/texto longo, "Enviar do celular"), não na inicialização. Quem nunca usa a função não vê o alerta do firewall nem fica com uma porta aberta. Se não houver porta disponível, um balão explica e o app segue sem a função.
-- **Compartilhamentos efêmeros de fato**: tokens de 128 bits, válidos por 24 horas (antes: 32 bits e para sempre, com o texto retido na memória).
-- **Limites**: arquivos recebidos vão direto para o disco (antes o corpo inteiro ficava na memória e era copiado de novo: um vídeo de 1,5 GB chegava a ~3,5 GB no processo). Textos acima de 16 MB são recusados, conexões ociosas caem após 30 s, há no máximo 16 conexões simultâneas e os nomes de arquivo são saneados para o Windows (`:` virava um fluxo NTFS oculto).
+- **Upload key**: `/api/upload` accepted text and files from any device on the same network (a public Wi-Fi) and put them straight onto the clipboard. Now each run of the app generates a random 128-bit key. It travels only in the "Send from mobile to PC" QR Code (`/u/{key}`), and the upload goes to `/api/upload/{key}`. Without the key, the response is 403 and the page tells the user to scan the QR again.
+- **On-demand start**: the server starts on first use (QR for a file/image/long text, "Send from mobile to PC"), not at startup. Anyone who never uses the feature never sees the firewall alert and is not left with an open port. If no port is available, a balloon explains and the app carries on without the feature.
+- **Truly ephemeral shares**: 128-bit tokens, valid for 24 hours (before: 32 bits and forever, with the text held in memory).
+- **Limits**: received files go straight to disk (before, the whole body stayed in memory and was copied again: a 1.5 GB video reached ~3.5 GB in the process). Texts over 16 MB are rejected, idle connections are dropped after 30 s, there are at most 16 simultaneous connections and file names are sanitized for Windows (`:` became a hidden NTFS stream).
