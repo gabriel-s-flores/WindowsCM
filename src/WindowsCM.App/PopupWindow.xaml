@@ -18,6 +18,7 @@
     <local:ImageThumbConverter x:Key="ImageThumb" />
     <local:ImagePreviewVisibilityConverter x:Key="ImagePreviewVisibility" />
     <local:CodePreviewVisibilityConverter x:Key="CodePreviewVisibility" />
+    <local:CodeContentConverter x:Key="CodeContent" />
     <local:FilePreviewVisibilityConverter x:Key="FilePreviewVisibility" />
     <local:FileIconConverter x:Key="FileIcon" />
     <local:FileDisplayNameConverter x:Key="FileDisplayName" />
@@ -456,590 +457,598 @@
       <VirtualizingStackPanel Orientation="Vertical" />
     </ItemsPanelTemplate>
   </Window.Resources>
-  <Border x:Name="WindowRootBorder" Background="{DynamicResource PopupBackgroundBrush}" CornerRadius="8"
-          BorderBrush="{DynamicResource PopupBorderBrush}"
-          BorderThickness="1" Padding="12" HorizontalAlignment="Stretch"
-          MouseLeftButtonDown="OnRootMouseLeftButtonDown">
-    <Border.Effect>
-      <DropShadowEffect BlurRadius="20" ShadowDepth="2"
-                        Opacity="{DynamicResource PopupShadowOpacity}"
-                        Color="{DynamicResource PopupShadowColor}" />
-    </Border.Effect>
-    <DockPanel LastChildFill="True">
-      <!-- Free placement: drag handle (the edges resize; see PopupWindow.WndProc) -->
-      <Border x:Name="FreeDragHandle" DockPanel.Dock="Top" Height="12" Margin="0,-8,0,2"
-              Background="Transparent" Cursor="SizeAll" Visibility="Collapsed"
-              ToolTip="{DynamicResource Loc_PopupDragHandleTooltip}">
-        <Border Width="44" Height="4" CornerRadius="2" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Background="{DynamicResource ScrollBarThumbBrush}" />
-      </Border>
-      <!-- Incognito Top Accent Stripe -->
-      <Border x:Name="IncognitoTopAccent" DockPanel.Dock="Top" Height="3" CornerRadius="1.5"
-              Background="{DynamicResource IncognitoBorderGlowBrush}" Margin="0,0,0,8" Visibility="Collapsed" />
+  <Grid>
+    <!-- The shadow comes from an empty twin of the root border, behind it.
+         With the Effect on the root itself, every mouse hit test under it
+         measured the bounds of the whole card list (the effect's input),
+         once per scroll frame: the largest cost of scrolling. -->
+    <Border Background="{DynamicResource PopupBackgroundBrush}" CornerRadius="8" IsHitTestVisible="False">
+      <Border.Effect>
+        <DropShadowEffect BlurRadius="20" ShadowDepth="2"
+                          Opacity="{DynamicResource PopupShadowOpacity}"
+                          Color="{DynamicResource PopupShadowColor}" />
+      </Border.Effect>
+    </Border>
+    <Border x:Name="WindowRootBorder" Background="{DynamicResource PopupBackgroundBrush}" CornerRadius="8"
+            BorderBrush="{DynamicResource PopupBorderBrush}"
+            BorderThickness="1" Padding="12" HorizontalAlignment="Stretch"
+            MouseLeftButtonDown="OnRootMouseLeftButtonDown">
+      <DockPanel LastChildFill="True">
+        <!-- Free placement: drag handle (the edges resize; see PopupWindow.WndProc) -->
+        <Border x:Name="FreeDragHandle" DockPanel.Dock="Top" Height="12" Margin="0,-8,0,2"
+                Background="Transparent" Cursor="SizeAll" Visibility="Collapsed"
+                ToolTip="{DynamicResource Loc_PopupDragHandleTooltip}">
+          <Border Width="44" Height="4" CornerRadius="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Background="{DynamicResource ScrollBarThumbBrush}" />
+        </Border>
+        <!-- Incognito Top Accent Stripe -->
+        <Border x:Name="IncognitoTopAccent" DockPanel.Dock="Top" Height="3" CornerRadius="1.5"
+                Background="{DynamicResource IncognitoBorderGlowBrush}" Margin="0,0,0,8" Visibility="Collapsed" />
 
-      <!-- Top Bar with adaptive horizontal and vertical mode -->
-      <Grid x:Name="TopBarGrid" DockPanel.Dock="Top" Margin="0,0,0,12">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="1*" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="1*" />
-        </Grid.ColumnDefinitions>
+        <!-- Top Bar with adaptive horizontal and vertical mode -->
+        <Grid x:Name="TopBarGrid" DockPanel.Dock="Top" Margin="0,0,0,12">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="1*" />
+          </Grid.ColumnDefinitions>
 
-        <!-- Left Column: Settings, Incognito, Receive Mobile -->
-        <StackPanel x:Name="LeftActionsPanel" Grid.Row="0" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
-          <Button x:Name="SettingsButton" Content="&#xE713;" Style="{StaticResource FluentRoundIconButton}"
-                  Margin="0,0,8,0" ToolTip="{DynamicResource Loc_SettingsTitle}" Click="OnSettingsClicked" />
-          <Button x:Name="IncognitoButton" Style="{StaticResource FluentRoundIconButton}"
-                  ToolTip="{DynamicResource Loc_PopupIncognitoTooltipInactive}" Click="OnIncognitoClicked">
-            <Path Data="{StaticResource IncognitoHatAndGlassesGeometry}"
-                  Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
-                  Stretch="Uniform" Width="17" Height="17" />
-          </Button>
-          <Button x:Name="ReceiveMobileButton" Content="&#xE8EA;" Style="{StaticResource FluentRoundIconButton}"
-                  Margin="8,0,0,0" ToolTip="{DynamicResource Loc_CompactMobileTransferTooltip}" Click="OnReceiveMobileClicked" />
-        </StackPanel>
+          <!-- Left Column: Settings, Incognito, Receive Mobile -->
+          <StackPanel x:Name="LeftActionsPanel" Grid.Row="0" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+            <Button x:Name="SettingsButton" Content="&#xE713;" Style="{StaticResource FluentRoundIconButton}"
+                    Margin="0,0,8,0" ToolTip="{DynamicResource Loc_SettingsTitle}" Click="OnSettingsClicked" />
+            <Button x:Name="IncognitoButton" Style="{StaticResource FluentRoundIconButton}"
+                    ToolTip="{DynamicResource Loc_PopupIncognitoTooltipInactive}" Click="OnIncognitoClicked">
+              <Path Data="{StaticResource IncognitoHatAndGlassesGeometry}"
+                    Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                    Stretch="Uniform" Width="17" Height="17" />
+            </Button>
+            <Button x:Name="ReceiveMobileButton" Content="&#xE8EA;" Style="{StaticResource FluentRoundIconButton}"
+                    Margin="8,0,0,0" ToolTip="{DynamicResource Loc_CompactMobileTransferTooltip}" Click="OnReceiveMobileClicked" />
+          </StackPanel>
 
-        <!-- Center Column: Centered Search Capsule -->
-        <Border x:Name="SearchCapsuleBorder" Grid.Row="0" Grid.Column="1" Background="{DynamicResource SearchBackgroundBrush}"
-                BorderBrush="{DynamicResource SearchBorderBrush}" BorderThickness="1"
-                CornerRadius="17" Height="34" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Padding="6,0,6,0">
-          <Grid VerticalAlignment="Center">
+          <!-- Center Column: Centered Search Capsule -->
+          <Border x:Name="SearchCapsuleBorder" Grid.Row="0" Grid.Column="1" Background="{DynamicResource SearchBackgroundBrush}"
+                  BorderBrush="{DynamicResource SearchBorderBrush}" BorderThickness="1"
+                  CornerRadius="17" Height="34" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Padding="6,0,6,0">
+            <Grid VerticalAlignment="Center">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+
+              <!-- Search Filter Dropdown Button: 🔍 ▾ -->
+              <Button x:Name="SearchFilterButton" Grid.Column="0" Style="{StaticResource SearchDropdownButton}"
+                      ToolTip="{DynamicResource Loc_PopupFilterTooltip}" Click="OnSearchFilterClicked">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="3,0,4,0">
+                  <TextBlock x:Name="SearchFilterIcon" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="12" Foreground="{DynamicResource SearchIconBrush}" VerticalAlignment="Center" />
+                  <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="7" Foreground="{DynamicResource SearchIconBrush}" VerticalAlignment="Center"
+                             Margin="4,1,0,0" />
+                </StackPanel>
+              </Button>
+
+              <!-- Search Input with Watermark Placeholder -->
+              <Grid Grid.Column="1" VerticalAlignment="Center" Margin="4,0">
+                <TextBlock x:Name="SearchPlaceholder" Text="{DynamicResource Loc_PopupSearchPlaceholder}"
+                           FontSize="13" Foreground="{DynamicResource SearchPlaceholderBrush}"
+                           VerticalAlignment="Center" IsHitTestVisible="False" />
+                <TextBox x:Name="SearchBox" Background="Transparent"
+                         BorderThickness="0" Foreground="{DynamicResource SearchForegroundBrush}" FontSize="13"
+                         VerticalAlignment="Center" CaretBrush="{DynamicResource SearchCaretBrush}"
+                         ToolTip="{DynamicResource Loc_PopupSearchTooltip}"
+                         TextChanged="OnSearchChanged" />
+              </Grid>
+
+              <!-- Pins Filter Toggle Button embedded inside Search Capsule -->
+              <Button x:Name="PinsButton" Grid.Column="2" Content="&#xE718;"
+                      Style="{StaticResource SearchCapsulePinButton}"
+                      ToolTip="{DynamicResource Loc_PopupPinsTooltip}" Click="OnPinsClicked" />
+            </Grid>
+          </Border>
+
+          <!-- Right Column: Pill Clear Button -->
+          <StackPanel x:Name="RightActionsPanel" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Button x:Name="ClearButton" Style="{StaticResource FluentPillButton}"
+                    ToolTip="{DynamicResource Loc_PopupClearTooltip}" Click="OnClearClicked">
+              <TextBlock Text="{DynamicResource Loc_PopupClearButton}" FontWeight="SemiBold" FontSize="12" />
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <!-- Incognito Status Banner (Visible only when IsIncognito is true) -->
+        <Border x:Name="IncognitoBanner" DockPanel.Dock="Top" Visibility="Collapsed"
+                Background="{DynamicResource IncognitoBannerBackgroundBrush}"
+                BorderBrush="{DynamicResource IncognitoBannerBorderBrush}"
+                BorderThickness="1" CornerRadius="8"
+                Margin="0,0,0,10" Padding="12,7">
+          <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Search Filter Dropdown Button: 🔍 ▾ -->
-            <Button x:Name="SearchFilterButton" Grid.Column="0" Style="{StaticResource SearchDropdownButton}"
-                    ToolTip="{DynamicResource Loc_PopupFilterTooltip}" Click="OnSearchFilterClicked">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="3,0,4,0">
-                <TextBlock x:Name="SearchFilterIcon" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="12" Foreground="{DynamicResource SearchIconBrush}" VerticalAlignment="Center" />
-                <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="7" Foreground="{DynamicResource SearchIconBrush}" VerticalAlignment="Center"
-                           Margin="4,1,0,0" />
+            <!-- Icon Badge with Hat & Glasses glyph -->
+            <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                    Background="{DynamicResource IncognitoBadgeBackgroundBrush}"
+                    VerticalAlignment="Center" Margin="0,0,10,0">
+              <Path Data="{StaticResource IncognitoHatAndGlassesGeometry}"
+                    Fill="{DynamicResource IncognitoAccentBrush}"
+                    Stretch="Uniform" Width="16" Height="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
+            <!-- Status texts -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="IncognitoBannerTitle" Text="{DynamicResource Loc_IncognitoBannerTitle}" FontWeight="Bold" FontSize="11.5"
+                           Foreground="{DynamicResource IncognitoAccentBrush}" />
+                <TextBlock x:Name="IncognitoBannerSubtitle" Text="{DynamicResource Loc_IncognitoBannerSubtitle}" FontSize="11" Opacity="0.8"
+                           Foreground="{DynamicResource IncognitoTextBrush}" Margin="6,0,0,0" />
               </StackPanel>
-            </Button>
+              <TextBlock x:Name="IncognitoBannerDescription" Text="{DynamicResource Loc_IncognitoBannerDescription}"
+                         FontSize="10.5" Foreground="{DynamicResource IncognitoTextBrush}" Opacity="0.85"
+                         TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+            </StackPanel>
 
-            <!-- Search Input with Watermark Placeholder -->
-            <Grid Grid.Column="1" VerticalAlignment="Center" Margin="4,0">
-              <TextBlock x:Name="SearchPlaceholder" Text="{DynamicResource Loc_PopupSearchPlaceholder}"
-                         FontSize="13" Foreground="{DynamicResource SearchPlaceholderBrush}"
-                         VerticalAlignment="Center" IsHitTestVisible="False" />
-              <TextBox x:Name="SearchBox" Background="Transparent"
-                       BorderThickness="0" Foreground="{DynamicResource SearchForegroundBrush}" FontSize="13"
-                       VerticalAlignment="Center" CaretBrush="{DynamicResource SearchCaretBrush}"
-                       ToolTip="{DynamicResource Loc_PopupSearchTooltip}"
-                       TextChanged="OnSearchChanged" />
-            </Grid>
+            <!-- Action Buttons: Switch History View + Exit Incognito Button -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button x:Name="SwitchHistoryButton"
+                      Style="{StaticResource FluentPillButton}"
+                      Background="{DynamicResource SearchBoxBackgroundBrush}"
+                      BorderBrush="{DynamicResource IncognitoExitButtonBorderBrush}"
+                      VerticalAlignment="Center" Padding="10,4" Margin="0,0,8,0"
+                      ToolTip="{DynamicResource Loc_IncognitoSwitchTooltip}"
+                      Click="OnSwitchHistoryClicked">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock x:Name="SwitchHistoryIcon" Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"
+                             Foreground="{DynamicResource IncognitoAccentBrush}" />
+                  <Path x:Name="SwitchHistoryIncognitoIcon" Data="{StaticResource IncognitoHatAndGlassesGeometry}"
+                        Fill="{DynamicResource IncognitoAccentBrush}"
+                        Stretch="Uniform" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center"
+                        Visibility="Collapsed" />
+                  <TextBlock x:Name="SwitchHistoryText" Text="{DynamicResource Loc_IncognitoSwitchToNormal}" FontWeight="SemiBold" FontSize="11"
+                             Foreground="{DynamicResource IncognitoAccentBrush}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
 
-            <!-- Pins Filter Toggle Button embedded inside Search Capsule -->
-            <Button x:Name="PinsButton" Grid.Column="2" Content="&#xE718;"
-                    Style="{StaticResource SearchCapsulePinButton}"
-                    ToolTip="{DynamicResource Loc_PopupPinsTooltip}" Click="OnPinsClicked" />
+              <Button x:Name="ExitIncognitoButton"
+                      Style="{StaticResource FluentPillButton}"
+                      Background="{DynamicResource IncognitoExitButtonBackgroundBrush}"
+                      BorderBrush="{DynamicResource IncognitoExitButtonBorderBrush}"
+                      VerticalAlignment="Center" Padding="10,4"
+                      ToolTip="{DynamicResource Loc_IncognitoExitTooltip}"
+                      Click="OnExitIncognitoClicked">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="9" Margin="0,0,5,0" VerticalAlignment="Center"
+                             Foreground="{DynamicResource IncognitoAccentBrush}" />
+                  <TextBlock Text="{DynamicResource Loc_IncognitoExitButton}" FontWeight="SemiBold" FontSize="11"
+                             Foreground="{DynamicResource IncognitoAccentBrush}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
           </Grid>
         </Border>
 
-        <!-- Right Column: Pill Clear Button -->
-        <StackPanel x:Name="RightActionsPanel" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-          <Button x:Name="ClearButton" Style="{StaticResource FluentPillButton}"
-                  ToolTip="{DynamicResource Loc_PopupClearTooltip}" Click="OnClearClicked">
-            <TextBlock Text="{DynamicResource Loc_PopupClearButton}" FontWeight="SemiBold" FontSize="12" />
-          </Button>
-        </StackPanel>
-      </Grid>
+        <!-- Content Area: Cards List or Incognito Empty State -->
+        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+          <!-- Horizontal Cards List -->
+          <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
+                 SelectionMode="Single"
+                 HorizontalAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 PreviewMouseWheel="OnItemsListPreviewMouseWheel"
+                 PreviewMouseLeftButtonUp="OnItemClicked"
+                 MouseDoubleClick="OnItemDoubleClicked">
+          <ListBox.ItemsPanel>
+            <StaticResource ResourceKey="HorizontalItemsPanelTemplate" />
+          </ListBox.ItemsPanel>
+          <ListBox.ItemContainerStyle>
+            <StaticResource ResourceKey="HorizontalCardItemStyle" />
+          </ListBox.ItemContainerStyle>
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type core:ClipboardItem}">
+              <DockPanel LastChildFill="True">
+                <!-- Top: Card Header (Indicator, Kind Icon, Pinned Badge, Title, and Timestamp) -->
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
+                  <Rectangle DockPanel.Dock="Left" Width="3" Height="14" RadiusX="1.5" RadiusY="1.5"
+                             Margin="0,0,6,0" VerticalAlignment="Center"
+                             Fill="{Binding Converter={StaticResource CardIndicatorBrush}}" />
+                  <TextBlock DockPanel.Dock="Left" Text="{Binding Converter={StaticResource KindIcon}}"
+                             FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="12" Foreground="{Binding Converter={StaticResource KindBrush}}" VerticalAlignment="Center"
+                             Margin="0,0,6,0" />
+                  <TextBlock DockPanel.Dock="Left" Text="&#xE840;"
+                             FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="11" Foreground="{DynamicResource CardPinnedBadgeBrush}"
+                             VerticalAlignment="Center" Margin="0,0,6,0"
+                             Visibility="{Binding Pinned, Converter={StaticResource PinnedVisibility}}"
+                             ToolTip="{DynamicResource Loc_PopupPinnedBadgeTooltip}" />
 
-      <!-- Incognito Status Banner (Visible only when IsIncognito is true) -->
-      <Border x:Name="IncognitoBanner" DockPanel.Dock="Top" Visibility="Collapsed"
-              Background="{DynamicResource IncognitoBannerBackgroundBrush}"
-              BorderBrush="{DynamicResource IncognitoBannerBorderBrush}"
-              BorderThickness="1" CornerRadius="8"
-              Margin="0,0,0,10" Padding="12,7">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
+                  <!-- Right Side: Relative time (Timestamp occupying top-right) -->
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding CapturedAt, Converter={StaticResource RelativeTime}}"
+                             Foreground="{DynamicResource CardTimeBrush}" FontSize="10" VerticalAlignment="Center"
+                             Margin="4,0,0,0" />
 
-          <!-- Icon Badge with Hat & Glasses glyph -->
-          <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
-                  Background="{DynamicResource IncognitoBadgeBackgroundBrush}"
-                  VerticalAlignment="Center" Margin="0,0,10,0">
-            <Path Data="{StaticResource IncognitoHatAndGlassesGeometry}"
-                  Fill="{DynamicResource IncognitoAccentBrush}"
-                  Stretch="Uniform" Width="16" Height="16"
-                  HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Border>
+                  <!-- Title text occupies all remaining space -->
+                  <TextBlock Text="{Binding Converter={StaticResource TitleLine}}"
+                             Foreground="{DynamicResource CardTitleBrush}" FontSize="12" FontWeight="SemiBold"
+                             VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
 
-          <!-- Status texts -->
-          <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock x:Name="IncognitoBannerTitle" Text="{DynamicResource Loc_IncognitoBannerTitle}" FontWeight="Bold" FontSize="11.5"
-                         Foreground="{DynamicResource IncognitoAccentBrush}" />
-              <TextBlock x:Name="IncognitoBannerSubtitle" Text="{DynamicResource Loc_IncognitoBannerSubtitle}" FontSize="11" Opacity="0.8"
-                         Foreground="{DynamicResource IncognitoTextBrush}" Margin="6,0,0,0" />
-            </StackPanel>
-            <TextBlock x:Name="IncognitoBannerDescription" Text="{DynamicResource Loc_IncognitoBannerDescription}"
-                       FontSize="10.5" Foreground="{DynamicResource IncognitoTextBrush}" Opacity="0.85"
-                       TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
-          </StackPanel>
+                <!-- Bottom: File/Content Type on the left, Quick Actions menu on the right -->
+                <DockPanel DockPanel.Dock="Bottom" Margin="0,5,0,0" LastChildFill="False">
+                  <!-- Left: Card Subtitle / Type with Subtle Fluent Pill Badge -->
+                  <Border DockPanel.Dock="Left" HorizontalAlignment="Left" VerticalAlignment="Center"
+                          Background="{Binding Converter={StaticResource KindBackgroundBrush}}"
+                          CornerRadius="4" Padding="6,2">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Rectangle Width="6" Height="6" RadiusX="3" RadiusY="3"
+                                 Fill="{Binding Converter={StaticResource KindBrush}}"
+                                 Margin="0,0,5,0" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Converter={StaticResource KindLabel}}"
+                                 Foreground="{Binding Converter={StaticResource KindBrush}}"
+                                 FontSize="10" FontWeight="SemiBold"
+                                 TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Border>
 
-          <!-- Action Buttons: Switch History View + Exit Incognito Button -->
-          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button x:Name="SwitchHistoryButton"
-                    Style="{StaticResource FluentPillButton}"
-                    Background="{DynamicResource SearchBoxBackgroundBrush}"
-                    BorderBrush="{DynamicResource IncognitoExitButtonBorderBrush}"
-                    VerticalAlignment="Center" Padding="10,4" Margin="0,0,8,0"
-                    ToolTip="{DynamicResource Loc_IncognitoSwitchTooltip}"
-                    Click="OnSwitchHistoryClicked">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock x:Name="SwitchHistoryIcon" Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"
-                           Foreground="{DynamicResource IncognitoAccentBrush}" />
-                <Path x:Name="SwitchHistoryIncognitoIcon" Data="{StaticResource IncognitoHatAndGlassesGeometry}"
-                      Fill="{DynamicResource IncognitoAccentBrush}"
-                      Stretch="Uniform" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center"
-                      Visibility="Collapsed" />
-                <TextBlock x:Name="SwitchHistoryText" Text="{DynamicResource Loc_IncognitoSwitchToNormal}" FontWeight="SemiBold" FontSize="11"
-                           Foreground="{DynamicResource IncognitoAccentBrush}" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-
-            <Button x:Name="ExitIncognitoButton"
-                    Style="{StaticResource FluentPillButton}"
-                    Background="{DynamicResource IncognitoExitButtonBackgroundBrush}"
-                    BorderBrush="{DynamicResource IncognitoExitButtonBorderBrush}"
-                    VerticalAlignment="Center" Padding="10,4"
-                    ToolTip="{DynamicResource Loc_IncognitoExitTooltip}"
-                    Click="OnExitIncognitoClicked">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="9" Margin="0,0,5,0" VerticalAlignment="Center"
-                           Foreground="{DynamicResource IncognitoAccentBrush}" />
-                <TextBlock Text="{DynamicResource Loc_IncognitoExitButton}" FontWeight="SemiBold" FontSize="11"
-                           Foreground="{DynamicResource IncognitoAccentBrush}" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
-        </Grid>
-      </Border>
-
-      <!-- Content Area: Cards List or Incognito Empty State -->
-      <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-        <!-- Horizontal Cards List -->
-        <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
-               SelectionMode="Single"
-               HorizontalAlignment="Stretch"
-               ScrollViewer.HorizontalScrollBarVisibility="Auto"
-               ScrollViewer.VerticalScrollBarVisibility="Disabled"
-               VirtualizingPanel.ScrollUnit="Pixel"
-               PreviewMouseWheel="OnItemsListPreviewMouseWheel"
-               PreviewMouseLeftButtonUp="OnItemClicked"
-               MouseDoubleClick="OnItemDoubleClicked">
-        <ListBox.ItemsPanel>
-          <StaticResource ResourceKey="HorizontalItemsPanelTemplate" />
-        </ListBox.ItemsPanel>
-        <ListBox.ItemContainerStyle>
-          <StaticResource ResourceKey="HorizontalCardItemStyle" />
-        </ListBox.ItemContainerStyle>
-        <ListBox.ItemTemplate>
-          <DataTemplate DataType="{x:Type core:ClipboardItem}">
-            <DockPanel LastChildFill="True">
-              <!-- Top: Card Header (Indicator, Kind Icon, Pinned Badge, Title, and Timestamp) -->
-              <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
-                <Rectangle DockPanel.Dock="Left" Width="3" Height="14" RadiusX="1.5" RadiusY="1.5"
-                           Margin="0,0,6,0" VerticalAlignment="Center"
-                           Fill="{Binding Converter={StaticResource CardIndicatorBrush}}" />
-                <TextBlock DockPanel.Dock="Left" Text="{Binding Converter={StaticResource KindIcon}}"
-                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="12" Foreground="{Binding Converter={StaticResource KindBrush}}" VerticalAlignment="Center"
-                           Margin="0,0,6,0" />
-                <TextBlock DockPanel.Dock="Left" Text="&#xE840;"
-                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="11" Foreground="{DynamicResource CardPinnedBadgeBrush}"
-                           VerticalAlignment="Center" Margin="0,0,6,0"
-                           Visibility="{Binding Pinned, Converter={StaticResource PinnedVisibility}}"
-                           ToolTip="{DynamicResource Loc_PopupPinnedBadgeTooltip}" />
-
-                <!-- Right Side: Relative time (Timestamp occupying top-right) -->
-                <TextBlock DockPanel.Dock="Right" Text="{Binding CapturedAt, Converter={StaticResource RelativeTime}}"
-                           Foreground="{DynamicResource CardTimeBrush}" FontSize="10" VerticalAlignment="Center"
-                           Margin="4,0,0,0" />
-
-                <!-- Title text occupies all remaining space -->
-                <TextBlock Text="{Binding Converter={StaticResource TitleLine}}"
-                           Foreground="{DynamicResource CardTitleBrush}" FontSize="12" FontWeight="SemiBold"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              </DockPanel>
-
-              <!-- Bottom: File/Content Type on the left, Quick Actions menu on the right -->
-              <DockPanel DockPanel.Dock="Bottom" Margin="0,5,0,0" LastChildFill="False">
-                <!-- Left: Card Subtitle / Type with Subtle Fluent Pill Badge -->
-                <Border DockPanel.Dock="Left" HorizontalAlignment="Left" VerticalAlignment="Center"
-                        Background="{Binding Converter={StaticResource KindBackgroundBrush}}"
-                        CornerRadius="4" Padding="6,2">
-                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Rectangle Width="6" Height="6" RadiusX="3" RadiusY="3"
-                               Fill="{Binding Converter={StaticResource KindBrush}}"
-                               Margin="0,0,5,0" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Converter={StaticResource KindLabel}}"
-                               Foreground="{Binding Converter={StaticResource KindBrush}}"
-                               FontSize="10" FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis" />
+                  <!-- Right Side: Quick Actions Menu (QR Code, Pin, More options, Delete) -->
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="&#xED14;"
+                            Style="{StaticResource CardActionButton}"
+                            Visibility="{Binding Converter={StaticResource QrButtonVisibility}}"
+                            ToolTip="{DynamicResource Loc_PopupQrTooltip}"
+                            Click="OnCardQrButtonClicked" />
+                    <Button Content="{Binding Pinned, Converter={StaticResource CardPinIcon}}"
+                            Foreground="{Binding Pinned, Converter={StaticResource CardPinBrush}}"
+                            Style="{StaticResource CardActionButton}"
+                            ToolTip="{DynamicResource Loc_PopupPinTooltip}"
+                            Click="OnCardPinButtonClicked" />
+                    <Button Content="&#xE712;"
+                            Style="{StaticResource CardActionButton}"
+                            ToolTip="{DynamicResource Loc_PopupMoreOptionsTooltip}"
+                            Click="OnCardMenuButtonClicked" />
+                    <Button Content="&#xE74D;"
+                            Style="{StaticResource CardActionButton}"
+                            ToolTip="{DynamicResource Loc_PopupDeleteTooltip}"
+                            Click="OnCardDeleteButtonClicked" />
                   </StackPanel>
-                </Border>
 
-                <!-- Right Side: Quick Actions Menu (QR Code, Pin, More options, Delete) -->
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Button Content="&#xED14;"
-                          Style="{StaticResource CardActionButton}"
-                          Visibility="{Binding Converter={StaticResource QrButtonVisibility}}"
-                          ToolTip="{DynamicResource Loc_PopupQrTooltip}"
-                          Click="OnCardQrButtonClicked" />
-                  <Button Content="{Binding Pinned, Converter={StaticResource CardPinIcon}}"
-                          Foreground="{Binding Pinned, Converter={StaticResource CardPinBrush}}"
-                          Style="{StaticResource CardActionButton}"
-                          ToolTip="{DynamicResource Loc_PopupPinTooltip}"
-                          Click="OnCardPinButtonClicked" />
-                  <Button Content="&#xE712;"
-                          Style="{StaticResource CardActionButton}"
-                          ToolTip="{DynamicResource Loc_PopupMoreOptionsTooltip}"
-                          Click="OnCardMenuButtonClicked" />
-                  <Button Content="&#xE74D;"
-                          Style="{StaticResource CardActionButton}"
-                          ToolTip="{DynamicResource Loc_PopupDeleteTooltip}"
-                          Click="OnCardDeleteButtonClicked" />
-                </StackPanel>
+                </DockPanel>
 
-              </DockPanel>
+                <!-- Center: Card Body Preview -->
+                <Grid VerticalAlignment="Stretch">
+                  <!-- Case 1: Image / Video Preview (Direct image, local image file or video frame) -->
+                  <Border Visibility="{Binding Converter={StaticResource ImagePreviewVisibility}}"
+                          Background="{DynamicResource PreviewImageBackgroundBrush}" CornerRadius="6" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                      <Image Source="{Binding Converter={StaticResource ImageThumb}}"
+                             Stretch="Uniform" MaxHeight="145" HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
 
-              <!-- Center: Card Body Preview -->
-              <Grid VerticalAlignment="Stretch">
-                <!-- Case 1: Image / Video Preview (Direct image, local image file or video frame) -->
-                <Border Visibility="{Binding Converter={StaticResource ImagePreviewVisibility}}"
-                        Background="{DynamicResource PreviewImageBackgroundBrush}" CornerRadius="6" HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
-                  <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <Image Source="{Binding Converter={StaticResource ImageThumb}}"
-                           Stretch="Uniform" MaxHeight="145" HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
-
-                    <!-- Video Duration & Size Overlay Badge (Bottom-Right corner) -->
-                    <Border Visibility="{Binding Converter={StaticResource VideoOverlayVisibility}}"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                            Margin="0,0,6,6"
-                            Background="#D8000000" CornerRadius="4" Padding="6,2">
-                      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE714;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                   FontSize="8" Foreground="#E0E0E0"
-                                   Margin="0,0,4,0" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding Converter={StaticResource VideoOverlayBadge}}"
-                                   FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                   FontSize="9.5" FontWeight="SemiBold"
-                                   Foreground="#FFFFFF" VerticalAlignment="Center" />
-                      </StackPanel>
-                    </Border>
-                  </Grid>
-                </Border>
-
-                <!-- Case 2: Code Preview (Dark editor style or clean light code box with syntax highlighting) -->
-                <Border Visibility="{Binding Converter={StaticResource CodePreviewVisibility}}"
-                        Background="{DynamicResource PreviewCodeBackgroundBrush}"
-                        BorderBrush="{DynamicResource PreviewCodeBorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
-                  <TextBlock local:SyntaxHighlightHelper.CodeContent="{Binding Content}"
-                             FontFamily="Cascadia Code, Consolas, Courier New, Segoe UI Emoji"
-                             FontSize="11" Foreground="{DynamicResource PreviewCodeForegroundBrush}" TextWrapping="NoWrap"
-                             LineHeight="16" LineStackingStrategy="BlockLineHeight"
-                             MaxHeight="145" TextTrimming="CharacterEllipsis" />
-                </Border>
-
-                <!-- Case 3: Character / Emoji Preview (Prominent full-color emoji thumbnail) -->
-                <Border Visibility="{Binding Converter={StaticResource CharacterPreviewVisibility}}"
-                        Background="{DynamicResource PreviewCharBackgroundBrush}"
-                        BorderBrush="{DynamicResource PreviewCharBorderBrush}" BorderThickness="1"
-                        CornerRadius="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                  <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="195">
-                      <!-- Native Windows 11 Full-Color Fluent Emoji Thumbnail (Direct2D / DirectWrite) -->
-                      <Image Source="{Binding Converter={StaticResource EmojiThumbnail}}"
-                             MaxWidth="190" MaxHeight="85"
-                             RenderOptions.BitmapScalingMode="HighQuality"
-                             HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                      <!-- Fallback TextBlock for non-emoji characters (e.g. letters, symbols) -->
-                      <TextBlock Text="{Binding Content}"
-                                 Visibility="{Binding Converter={StaticResource CharacterFallbackVisibility}}"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                 FontSize="44" FontWeight="SemiBold"
-                                 Foreground="{DynamicResource PreviewCharTextBrush}"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                      <!-- Unicode Code Point or Emoji Count Summary -->
-                      <TextBlock Text="{Binding Converter={StaticResource CharacterCode}}"
-                                 FontFamily="Cascadia Code, Consolas" FontSize="11"
-                                 Foreground="{DynamicResource PreviewCharTextBrush}"
-                                 HorizontalAlignment="Center" Margin="0,6,0,0"
-                                 TextTrimming="CharacterEllipsis" MaxWidth="190" />
-                    </StackPanel>
-                  </Grid>
-                </Border>
-
-                <!-- Case 4: File / Files Preview (Windows System Icon + File details) -->
-                <Border Visibility="{Binding Converter={StaticResource FilePreviewVisibility}}"
-                        Background="{DynamicResource PreviewFileBackgroundBrush}"
-                        BorderBrush="{DynamicResource PreviewFileBorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="10,8" HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
-                  <Grid VerticalAlignment="Center" HorizontalAlignment="Stretch">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="190">
-                      <!-- Windows System Icon (Large 32x32 / 48x48) -->
-                      <Image Source="{Binding Converter={StaticResource FileIcon}}"
-                             Width="40" Height="40" HorizontalAlignment="Center"
-                             RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,6" />
-
-                      <!-- Clean File Name or File Count -->
-                      <TextBlock Text="{Binding Converter={StaticResource FileDisplayName}}"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                 FontSize="12" FontWeight="SemiBold"
-                                 Foreground="{DynamicResource CardTitleBrush}"
-                                 TextAlignment="Center" HorizontalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" MaxWidth="180" />
-
-                      <!-- File Details (Type + Size or Count) -->
-                      <TextBlock Text="{Binding Converter={StaticResource FileDetailsSummary}}"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                 FontSize="11"
-                                 Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
-                                 TextAlignment="Center" HorizontalAlignment="Center"
-                                 Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="180" />
-
-                      <!-- Optional Multi-file list preview or Directory indicator -->
-                      <TextBlock Text="{Binding Converter={StaticResource FileListSummary}}"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                 FontSize="10"
-                                 Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
-                                 TextAlignment="Center" HorizontalAlignment="Center"
-                                 Margin="0,4,0,0" LineHeight="14" LineStackingStrategy="BlockLineHeight"
-                                 TextTrimming="CharacterEllipsis" MaxWidth="180" />
-                    </StackPanel>
-                  </Grid>
-                </Border>
-
-                <!-- Case 5: Link / Website Preview (Rich preview with thumbnail or clean favicon fallback) -->
-                <Border Visibility="{Binding Converter={StaticResource LinkPreviewVisibility}}"
-                        Background="{DynamicResource PreviewLinkBackgroundBrush}"
-                        BorderBrush="{DynamicResource PreviewLinkBorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="8,7" HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
-                  <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <!-- 5A: Rich Website Preview with Banner Thumbnail -->
-                    <Grid Visibility="{Binding Converter={StaticResource LinkHasPreviewImageVisibility}}">
-                      <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                      </Grid.RowDefinitions>
-
-                      <!-- Thumbnail Banner (Dynamic 16:9 filling vertical space) -->
-                      <Border Grid.Row="0" CornerRadius="5" ClipToBounds="True" Background="{DynamicResource PreviewImageBackgroundBrush}"
-                              Margin="0,0,0,5">
-                        <Image Source="{Binding Converter={StaticResource LinkPreviewImage}}"
-                               Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               RenderOptions.BitmapScalingMode="HighQuality" />
-                      </Border>
-
-                      <!-- Title, Description & Domain -->
-                      <StackPanel Grid.Row="1" VerticalAlignment="Bottom">
-                        <TextBlock Text="{Binding Converter={StaticResource LinkTitleOrPath}}"
-                                   FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                   FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource CardTitleBrush}"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Converter={StaticResource LinkDescription}}"
-                                   Visibility="{Binding Converter={StaticResource LinkHasDescriptionVisibility}}"
-                                   FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                   FontSize="10" Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
-                                   TextWrapping="Wrap" MaxHeight="28" LineHeight="14" LineStackingStrategy="BlockLineHeight"
-                                   TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
-                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0" VerticalAlignment="Center">
-                          <Image Source="{Binding Converter={StaticResource LinkFavicon}}"
-                                 Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center"
-                                 RenderOptions.BitmapScalingMode="HighQuality" />
-                          <TextBlock Text="{Binding Converter={StaticResource LinkDomain}}"
+                      <!-- Video Duration & Size Overlay Badge (Bottom-Right corner) -->
+                      <Border Visibility="{Binding Converter={StaticResource VideoOverlayVisibility}}"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                              Margin="0,0,6,6"
+                              Background="#D8000000" CornerRadius="4" Padding="6,2">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                          <TextBlock Text="&#xE714;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                     FontSize="8" Foreground="#E0E0E0"
+                                     Margin="0,0,4,0" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Converter={StaticResource VideoOverlayBadge}}"
                                      FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                     FontSize="10" Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
-                                     Opacity="0.8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                     FontSize="9.5" FontWeight="SemiBold"
+                                     Foreground="#FFFFFF" VerticalAlignment="Center" />
                         </StackPanel>
+                      </Border>
+                    </Grid>
+                  </Border>
+
+                  <!-- Case 2: Code Preview (Dark editor style or clean light code box with syntax highlighting) -->
+                  <Border Visibility="{Binding Converter={StaticResource CodePreviewVisibility}}"
+                          Background="{DynamicResource PreviewCodeBackgroundBrush}"
+                          BorderBrush="{DynamicResource PreviewCodeBorderBrush}" BorderThickness="1"
+                          CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                    <TextBlock local:SyntaxHighlightHelper.CodeContent="{Binding Converter={StaticResource CodeContent}}"
+                               FontFamily="Cascadia Code, Consolas, Courier New, Segoe UI Emoji"
+                               FontSize="11" Foreground="{DynamicResource PreviewCodeForegroundBrush}" TextWrapping="NoWrap"
+                               LineHeight="16" LineStackingStrategy="BlockLineHeight"
+                               MaxHeight="145" TextTrimming="CharacterEllipsis" />
+                  </Border>
+
+                  <!-- Case 3: Character / Emoji Preview (Prominent full-color emoji thumbnail) -->
+                  <Border Visibility="{Binding Converter={StaticResource CharacterPreviewVisibility}}"
+                          Background="{DynamicResource PreviewCharBackgroundBrush}"
+                          BorderBrush="{DynamicResource PreviewCharBorderBrush}" BorderThickness="1"
+                          CornerRadius="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="195">
+                        <!-- Native Windows 11 Full-Color Fluent Emoji Thumbnail (Direct2D / DirectWrite) -->
+                        <Image Source="{Binding Converter={StaticResource EmojiThumbnail}}"
+                               MaxWidth="190" MaxHeight="85"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                        <!-- Fallback TextBlock for non-emoji characters (e.g. letters, symbols) -->
+                        <TextBlock Text="{Binding Content}"
+                                   Visibility="{Binding Converter={StaticResource CharacterFallbackVisibility}}"
+                                   FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                   FontSize="44" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PreviewCharTextBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                        <!-- Unicode Code Point or Emoji Count Summary -->
+                        <TextBlock Text="{Binding Converter={StaticResource CharacterCode}}"
+                                   FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                   Foreground="{DynamicResource PreviewCharTextBrush}"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="190" />
                       </StackPanel>
                     </Grid>
+                  </Border>
 
-                    <!-- 5B: Fallback Favicon / Clean Link View -->
-                    <Grid Visibility="{Binding Converter={StaticResource LinkHasPreviewImageVisibility}, ConverterParameter=Invert}"
-                          VerticalAlignment="Center" HorizontalAlignment="Stretch">
-                      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="195">
-                        <!-- Website Favicon or Fluent Web Glyphs -->
-                        <Border Width="46" Height="46" CornerRadius="10"
-                                Background="{DynamicResource FaviconContainerBackgroundBrush}"
-                                BorderBrush="{DynamicResource FaviconContainerBorderBrush}" BorderThickness="1"
-                                HorizontalAlignment="Center" Margin="0,0,0,7">
-                          <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <!-- Fallback Fluent Web Globe glyph -->
-                            <TextBlock Text="&#xE774;"
-                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="22" Foreground="{DynamicResource KindLinkBrush}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            <!-- Favicon Image from CDN/Cache -->
-                            <Image Source="{Binding Converter={StaticResource LinkFavicon}}"
-                                   Width="32" Height="32" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   RenderOptions.BitmapScalingMode="HighQuality" />
-                          </Grid>
-                        </Border>
+                  <!-- Case 4: File / Files Preview (Windows System Icon + File details) -->
+                  <Border Visibility="{Binding Converter={StaticResource FilePreviewVisibility}}"
+                          Background="{DynamicResource PreviewFileBackgroundBrush}"
+                          BorderBrush="{DynamicResource PreviewFileBorderBrush}" BorderThickness="1"
+                          CornerRadius="6" Padding="10,8" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                    <Grid VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="190">
+                        <!-- Windows System Icon (Large 32x32 / 48x48) -->
+                        <Image Source="{Binding Converter={StaticResource FileIcon}}"
+                               Width="40" Height="40" HorizontalAlignment="Center"
+                               RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,6" />
 
-                        <!-- Clean Domain Name (e.g. "github.com") -->
-                        <TextBlock Text="{Binding Converter={StaticResource LinkDomain}}"
+                        <!-- Clean File Name or File Count -->
+                        <TextBlock Text="{Binding Converter={StaticResource FileDisplayName}}"
                                    FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                   FontSize="13" FontWeight="SemiBold"
+                                   FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource CardTitleBrush}"
                                    TextAlignment="Center" HorizontalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="185" />
+                                   TextTrimming="CharacterEllipsis" MaxWidth="180" />
 
-                        <!-- Clean Title or Path -->
-                        <TextBlock Text="{Binding Converter={StaticResource LinkTitleOrPath}}"
+                        <!-- File Details (Type + Size or Count) -->
+                        <TextBlock Text="{Binding Converter={StaticResource FileDetailsSummary}}"
                                    FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
                                    FontSize="11"
-                                   Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
+                                   Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
                                    TextAlignment="Center" HorizontalAlignment="Center"
-                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="185" />
+                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="180" />
 
-                        <!-- Clean Display URL -->
-                        <TextBlock Text="{Binding Converter={StaticResource LinkDisplayUrl}}"
+                        <!-- Optional Multi-file list preview or Directory indicator -->
+                        <TextBlock Text="{Binding Converter={StaticResource FileListSummary}}"
                                    FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
                                    FontSize="10"
-                                   Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
-                                   Opacity="0.8"
+                                   Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
                                    TextAlignment="Center" HorizontalAlignment="Center"
-                                   Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="185" />
+                                   Margin="0,4,0,0" LineHeight="14" LineStackingStrategy="BlockLineHeight"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="180" />
                       </StackPanel>
                     </Grid>
-                  </Grid>
-                </Border>
+                  </Border>
 
-                <!-- Case 6: Text / Other Preview (Wrapped text with color emoji support) -->
-                <Border Visibility="{Binding Converter={StaticResource TextPreviewVisibility}}"
-                        Background="{DynamicResource PreviewTextBackgroundBrush}"
-                        BorderBrush="{DynamicResource PreviewTextBorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
-                  <TextBlock Text="{Binding Converter={StaticResource PreviewText}}"
-                             FontFamily="Segoe UI Variable Text, Segoe UI Emoji, Segoe UI, sans-serif"
-                             FontSize="12" Foreground="{DynamicResource PreviewTextForegroundBrush}" TextWrapping="Wrap"
-                             LineHeight="17" LineStackingStrategy="BlockLineHeight"
-                             MaxHeight="145" TextTrimming="CharacterEllipsis" />
-                </Border>
+                  <!-- Case 5: Link / Website Preview (Rich preview with thumbnail or clean favicon fallback) -->
+                  <Border Visibility="{Binding Converter={StaticResource LinkPreviewVisibility}}"
+                          Background="{DynamicResource PreviewLinkBackgroundBrush}"
+                          BorderBrush="{DynamicResource PreviewLinkBorderBrush}" BorderThickness="1"
+                          CornerRadius="6" Padding="8,7" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                      <!-- 5A: Rich Website Preview with Banner Thumbnail -->
+                      <Grid Visibility="{Binding Converter={StaticResource LinkHasPreviewImageVisibility}}">
+                        <Grid.RowDefinitions>
+                          <RowDefinition Height="*" />
+                          <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                <!-- Case 7: Dedicated Audio Preview (Album Cover or Fluent Music Art + Song Title + Artist • Album + Duration • Size) -->
-                <Border Visibility="{Binding Converter={StaticResource AudioPreviewVisibility}}"
-                        Background="{DynamicResource PreviewFileBackgroundBrush}"
-                        BorderBrush="{DynamicResource PreviewFileBorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="8,7" HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
-                  <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <Grid.RowDefinitions>
-                      <RowDefinition Height="Auto" />
-                      <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                        <!-- Thumbnail Banner (Dynamic 16:9 filling vertical space) -->
+                        <Border Grid.Row="0" CornerRadius="5" ClipToBounds="True" Background="{DynamicResource PreviewImageBackgroundBrush}"
+                                Margin="0,0,0,5">
+                          <Image Source="{Binding Converter={StaticResource LinkPreviewImage}}"
+                                 Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 RenderOptions.BitmapScalingMode="HighQuality" />
+                        </Border>
 
-                    <!-- Top: Album Cover (or Stylized Fluent Audio Art) -->
-                    <Grid Grid.Row="0" HorizontalAlignment="Center" Margin="0,2,0,5">
-                      <!-- 7A: Real Album Cover Thumbnail -->
-                      <Border Visibility="{Binding Converter={StaticResource AudioHasCoverVisibility}}"
-                              Width="72" Height="72" CornerRadius="6" ClipToBounds="True"
-                              Background="{DynamicResource PreviewImageBackgroundBrush}"
-                              BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
-                        <Image Source="{Binding Converter={StaticResource AudioCoverImage}}"
-                               Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               RenderOptions.BitmapScalingMode="HighQuality" />
-                      </Border>
-
-                      <!-- 7B: Stylized Fluent Music Artwork Fallback when no cover is embedded -->
-                      <Border Visibility="{Binding Converter={StaticResource AudioHasCoverVisibility}, ConverterParameter=Invert}"
-                              Width="56" Height="56" CornerRadius="28"
-                              Background="{Binding Converter={StaticResource KindBackgroundBrush}}"
-                              BorderBrush="{Binding Converter={StaticResource KindBrush}}" BorderThickness="1"
-                              HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="&#xEC4F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                   FontSize="22" Foreground="{Binding Converter={StaticResource KindBrush}}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      </Border>
-                    </Grid>
-
-                    <!-- Bottom: Track Title, Artist • Album, and Duration • Size Pill -->
-                    <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="210">
-                      <!-- Track / Song Title -->
-                      <TextBlock Text="{Binding Converter={StaticResource AudioTrackTitle}}"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                 FontSize="11.5" FontWeight="SemiBold"
-                                 Foreground="{DynamicResource CardTitleBrush}"
-                                 TextAlignment="Center" HorizontalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" MaxWidth="200" />
-
-                      <!-- Artist • Album (if metadata present) -->
-                      <TextBlock Text="{Binding Converter={StaticResource AudioArtistAlbum}}"
-                                 Visibility="{Binding Converter={StaticResource AudioHasArtistOrAlbumVisibility}}"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                 FontSize="10"
-                                 Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
-                                 TextAlignment="Center" HorizontalAlignment="Center"
-                                 Margin="0,1,0,0" TextTrimming="CharacterEllipsis" MaxWidth="200" />
-
-                      <!-- Duration • File Size Chip/Pill -->
-                      <Border HorizontalAlignment="Center" Margin="0,3,0,0"
-                              Background="{DynamicResource SearchBoxBackgroundBrush}"
-                              BorderBrush="{DynamicResource SearchBoxBorderBrush}" BorderThickness="1"
-                              CornerRadius="9" Padding="7,2">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                          <TextBlock Text="&#xEC4F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                     FontSize="9" Foreground="{Binding Converter={StaticResource KindBrush}}"
-                                     Margin="0,0,4,0" VerticalAlignment="Center" />
-                          <TextBlock Text="{Binding Converter={StaticResource AudioDurationAndSize}}"
+                        <!-- Title, Description & Domain -->
+                        <StackPanel Grid.Row="1" VerticalAlignment="Bottom">
+                          <TextBlock Text="{Binding Converter={StaticResource LinkTitleOrPath}}"
                                      FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-                                     FontSize="10" FontWeight="Medium"
-                                     Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
-                                     VerticalAlignment="Center" />
+                                     FontSize="11" FontWeight="SemiBold"
+                                     Foreground="{DynamicResource CardTitleBrush}"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Converter={StaticResource LinkDescription}}"
+                                     Visibility="{Binding Converter={StaticResource LinkHasDescriptionVisibility}}"
+                                     FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                     FontSize="10" Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
+                                     TextWrapping="Wrap" MaxHeight="28" LineHeight="14" LineStackingStrategy="BlockLineHeight"
+                                     TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                          <StackPanel Orientation="Horizontal" Margin="0,3,0,0" VerticalAlignment="Center">
+                            <Image Source="{Binding Converter={StaticResource LinkFavicon}}"
+                                   Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                            <TextBlock Text="{Binding Converter={StaticResource LinkDomain}}"
+                                       FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                       FontSize="10" Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
+                                       Opacity="0.8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                          </StackPanel>
                         </StackPanel>
-                      </Border>
-                    </StackPanel>
-                  </Grid>
-                </Border>
-              </Grid>
-            </DockPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+                      </Grid>
 
-        <!-- Incognito Empty State -->
-        <Border x:Name="IncognitoEmptyState" Visibility="Collapsed"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Padding="32,24" MaxWidth="520">
-          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBlock Text="🕶" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10" />
-            <TextBlock Text="{DynamicResource Loc_PopupIncognitoEmptyTitle}" FontSize="16" FontWeight="SemiBold"
-                       Foreground="{DynamicResource CardTitleBrush}" HorizontalAlignment="Center" />
-            <TextBlock Text="{DynamicResource Loc_PopupIncognitoEmptyDesc}"
-                       FontSize="12" Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
-                       TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="18" />
-          </StackPanel>
-        </Border>
-      </Grid>
-    </DockPanel>
-  </Border>
+                      <!-- 5B: Fallback Favicon / Clean Link View -->
+                      <Grid Visibility="{Binding Converter={StaticResource LinkHasPreviewImageVisibility}, ConverterParameter=Invert}"
+                            VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="195">
+                          <!-- Website Favicon or Fluent Web Glyphs -->
+                          <Border Width="46" Height="46" CornerRadius="10"
+                                  Background="{DynamicResource FaviconContainerBackgroundBrush}"
+                                  BorderBrush="{DynamicResource FaviconContainerBorderBrush}" BorderThickness="1"
+                                  HorizontalAlignment="Center" Margin="0,0,0,7">
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                              <!-- Fallback Fluent Web Globe glyph -->
+                              <TextBlock Text="&#xE774;"
+                                         FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                         FontSize="22" Foreground="{DynamicResource KindLinkBrush}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              <!-- Favicon Image from CDN/Cache -->
+                              <Image Source="{Binding Converter={StaticResource LinkFavicon}}"
+                                     Width="32" Height="32" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                     RenderOptions.BitmapScalingMode="HighQuality" />
+                            </Grid>
+                          </Border>
+
+                          <!-- Clean Domain Name (e.g. "github.com") -->
+                          <TextBlock Text="{Binding Converter={StaticResource LinkDomain}}"
+                                     FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                     FontSize="13" FontWeight="SemiBold"
+                                     Foreground="{DynamicResource CardTitleBrush}"
+                                     TextAlignment="Center" HorizontalAlignment="Center"
+                                     TextTrimming="CharacterEllipsis" MaxWidth="185" />
+
+                          <!-- Clean Title or Path -->
+                          <TextBlock Text="{Binding Converter={StaticResource LinkTitleOrPath}}"
+                                     FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                     FontSize="11"
+                                     Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
+                                     TextAlignment="Center" HorizontalAlignment="Center"
+                                     Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="185" />
+
+                          <!-- Clean Display URL -->
+                          <TextBlock Text="{Binding Converter={StaticResource LinkDisplayUrl}}"
+                                     FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                     FontSize="10"
+                                     Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
+                                     Opacity="0.8"
+                                     TextAlignment="Center" HorizontalAlignment="Center"
+                                     Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="185" />
+                        </StackPanel>
+                      </Grid>
+                    </Grid>
+                  </Border>
+
+                  <!-- Case 6: Text / Other Preview (Wrapped text with color emoji support) -->
+                  <Border Visibility="{Binding Converter={StaticResource TextPreviewVisibility}}"
+                          Background="{DynamicResource PreviewTextBackgroundBrush}"
+                          BorderBrush="{DynamicResource PreviewTextBorderBrush}" BorderThickness="1"
+                          CornerRadius="6" Padding="8,6" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                    <TextBlock Text="{Binding Converter={StaticResource PreviewText}}"
+                               FontFamily="Segoe UI Variable Text, Segoe UI Emoji, Segoe UI, sans-serif"
+                               FontSize="12" Foreground="{DynamicResource PreviewTextForegroundBrush}" TextWrapping="Wrap"
+                               LineHeight="17" LineStackingStrategy="BlockLineHeight"
+                               MaxHeight="145" TextTrimming="CharacterEllipsis" />
+                  </Border>
+
+                  <!-- Case 7: Dedicated Audio Preview (Album Cover or Fluent Music Art + Song Title + Artist • Album + Duration • Size) -->
+                  <Border Visibility="{Binding Converter={StaticResource AudioPreviewVisibility}}"
+                          Background="{DynamicResource PreviewFileBackgroundBrush}"
+                          BorderBrush="{DynamicResource PreviewFileBorderBrush}" BorderThickness="1"
+                          CornerRadius="6" Padding="8,7" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                      </Grid.RowDefinitions>
+
+                      <!-- Top: Album Cover (or Stylized Fluent Audio Art) -->
+                      <Grid Grid.Row="0" HorizontalAlignment="Center" Margin="0,2,0,5">
+                        <!-- 7A: Real Album Cover Thumbnail -->
+                        <Border Visibility="{Binding Converter={StaticResource AudioHasCoverVisibility}}"
+                                Width="72" Height="72" CornerRadius="6" ClipToBounds="True"
+                                Background="{DynamicResource PreviewImageBackgroundBrush}"
+                                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                          <Image Source="{Binding Converter={StaticResource AudioCoverImage}}"
+                                 Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 RenderOptions.BitmapScalingMode="HighQuality" />
+                        </Border>
+
+                        <!-- 7B: Stylized Fluent Music Artwork Fallback when no cover is embedded -->
+                        <Border Visibility="{Binding Converter={StaticResource AudioHasCoverVisibility}, ConverterParameter=Invert}"
+                                Width="56" Height="56" CornerRadius="28"
+                                Background="{Binding Converter={StaticResource KindBackgroundBrush}}"
+                                BorderBrush="{Binding Converter={StaticResource KindBrush}}" BorderThickness="1"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                          <TextBlock Text="&#xEC4F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                     FontSize="22" Foreground="{Binding Converter={StaticResource KindBrush}}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                      </Grid>
+
+                      <!-- Bottom: Track Title, Artist • Album, and Duration • Size Pill -->
+                      <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="210">
+                        <!-- Track / Song Title -->
+                        <TextBlock Text="{Binding Converter={StaticResource AudioTrackTitle}}"
+                                   FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                   FontSize="11.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource CardTitleBrush}"
+                                   TextAlignment="Center" HorizontalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="200" />
+
+                        <!-- Artist • Album (if metadata present) -->
+                        <TextBlock Text="{Binding Converter={StaticResource AudioArtistAlbum}}"
+                                   Visibility="{Binding Converter={StaticResource AudioHasArtistOrAlbumVisibility}}"
+                                   FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
+                                   TextAlignment="Center" HorizontalAlignment="Center"
+                                   Margin="0,1,0,0" TextTrimming="CharacterEllipsis" MaxWidth="200" />
+
+                        <!-- Duration • File Size Chip/Pill -->
+                        <Border HorizontalAlignment="Center" Margin="0,3,0,0"
+                                Background="{DynamicResource SearchBoxBackgroundBrush}"
+                                BorderBrush="{DynamicResource SearchBoxBorderBrush}" BorderThickness="1"
+                                CornerRadius="9" Padding="7,2">
+                          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xEC4F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       FontSize="9" Foreground="{Binding Converter={StaticResource KindBrush}}"
+                                       Margin="0,0,4,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Converter={StaticResource AudioDurationAndSize}}"
+                                       FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+                                       FontSize="10" FontWeight="Medium"
+                                       Foreground="{DynamicResource PreviewFileSecondaryTextBrush}"
+                                       VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Border>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </Grid>
+              </DockPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+          <!-- Incognito Empty State -->
+          <Border x:Name="IncognitoEmptyState" Visibility="Collapsed"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Padding="32,24" MaxWidth="520">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+              <TextBlock Text="🕶" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10" />
+              <TextBlock Text="{DynamicResource Loc_PopupIncognitoEmptyTitle}" FontSize="16" FontWeight="SemiBold"
+                         Foreground="{DynamicResource CardTitleBrush}" HorizontalAlignment="Center" />
+              <TextBlock Text="{DynamicResource Loc_PopupIncognitoEmptyDesc}"
+                         FontSize="12" Foreground="{DynamicResource PreviewLinkSecondaryTextBrush}"
+                         TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="18" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </DockPanel>
+    </Border>
+  </Grid>
 </Window>
