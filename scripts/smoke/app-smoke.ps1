@@ -292,6 +292,7 @@ $tempFiles = @()
 for ($f = 0; $f -lt 5; $f++) { $path = Join-Path $env:TEMP "wcm-smoke-$f.txt"; Set-Content $path "file $f"; $tempFiles += $path }
 $bigText = ('lorem ipsum dolor sit amet, consectetur adipiscing elit ' * 40000)   # ~2.2 MB
 $random = New-Object System.Random 7
+$clipboardFailures = New-Object System.Collections.Generic.List[string]
 $copyWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 for ($i = 1; $i -le $Copies; $i++) {
@@ -319,7 +320,9 @@ for ($i = 1; $i -le $Copies; $i++) {
         6 { $data.SetText([char]::ConvertFromUtf32(0x1F600 + ($i % 50))) }
         default { $data.SetText("multi`nline`ntext $i`n" + ('line ' * ($i % 40))) }
     }
-    Set-Clip $data
+    # Another app copying while WindowsCM reads the previous copy: it must
+    # never find the clipboard held for longer than its ~1 s of retries.
+    try { Set-Clip $data } catch { $clipboardFailures.Add("copy $i ($($data.GetFormats() -join ', '))") }
     # Bursts: every 20th copy is followed by a quick succession.
     if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds 40 }
 
@@ -339,6 +342,9 @@ $copyWatch.Stop()
 Start-Sleep -Seconds 2
 
 Check (Alive) "app still running after $Copies copies and $($openTimes.Count) popup cycles"
+foreach ($failure in $clipboardFailures) { Note "    clipboard busy at $failure" }
+Check ($clipboardFailures.Count -eq 0) "other apps can always copy: $($clipboardFailures.Count) of $Copies clipboard writes failed"
+$metrics.clipboardWriteFailures = $clipboardFailures.Count
 if (Alive) {
     $count = Item-Count
     Note "  items in history: $count"
