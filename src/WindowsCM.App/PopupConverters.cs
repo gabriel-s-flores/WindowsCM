@@ -555,6 +555,18 @@ internal sealed class FileListSummaryConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+// Syntax highlighting input: only Code cards show the code box. Bound to
+// every card's Content, the tokenizer built hundreds of Runs for each text
+// card that scrolled into view, all inside a collapsed TextBlock.
+internal sealed class CodeContentConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is ClipboardItem { Kind: ItemKind.Code } item ? item.Content : null;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 // Attached behavior to render highlighted code tokens in TextBlock Inlines.
 public static class SyntaxHighlightHelper
 {
