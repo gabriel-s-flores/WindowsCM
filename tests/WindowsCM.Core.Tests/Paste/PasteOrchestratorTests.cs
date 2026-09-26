@@ -440,4 +440,41 @@ public sealed class PasteOrchestratorTests : IDisposable
 
         Assert.Equal(PasteStatus.Pasted, outcome.Status);
     }
+
+    [Fact]
+    public async Task Paste_RestoresTheTargetBeforeHidingThePopup()
+    {
+        // Hiding first let Windows re-activate the window that was active
+        // before the popup (the taskbar after a tray click), beating the
+        // target: restore while the popup still owns the foreground.
+        var saved = SaveText();
+        var target = new IntPtr(123);
+        var log = new List<string>();
+        var foreground = new OrderedForeground(log) { Current = target };
+        var orchestrator = new PasteOrchestrator(_store, _capture, _images, _writer, foreground,
+            _elevation, _injector, _delay, _options, _clock);
+
+        await orchestrator.ExecuteAsync(saved.Id, target, shiftHeld: false, () =>
+        {
+            log.Add("hide");
+            return Task.CompletedTask;
+        });
+
+        Assert.True(log.IndexOf("restore") >= 0 && log.IndexOf("restore") < log.IndexOf("hide"),
+            string.Join(",", log));
+    }
+
+    private sealed class OrderedForeground(List<string> log) : IForegroundWindow
+    {
+        public IntPtr Current;
+
+        public IntPtr GetCurrent() => Current;
+
+        public bool RestoreForeground(IntPtr hwnd)
+        {
+            log.Add("restore");
+            Current = hwnd;
+            return true;
+        }
+    }
 }
