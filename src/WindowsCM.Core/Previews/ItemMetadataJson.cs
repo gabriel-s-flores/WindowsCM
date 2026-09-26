@@ -44,6 +44,21 @@ public static class ItemMetadataJson
         return JsonSerializer.Serialize(merged, StorageOptions);
     }
 
+    // A re-copy's metadata over the item's own: the new copy's keys win,
+    // enrichment it does not carry (link preview, code language) stays, and
+    // old CF_HTML goes when the new copy has none — pasting from history
+    // would otherwise put back formatting the latest copy did not have.
+    public static string? OnRecopy(string? existing, string? incoming)
+    {
+        var kept = ReadObject(existing);
+        kept.Remove("html");
+        foreach (var (key, value) in ReadObject(incoming))
+        {
+            kept[key] = value;
+        }
+        return kept.Count == 0 ? null : JsonSerializer.Serialize(kept, StorageOptions);
+    }
+
     public static string? GetString(string? json, string property)
     {
         if (string.IsNullOrEmpty(json))

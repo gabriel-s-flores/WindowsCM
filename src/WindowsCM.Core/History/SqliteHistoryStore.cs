@@ -43,17 +43,17 @@ public sealed class SqliteHistoryStore : IHistoryStore
         var existing = FindId(item.Kind, item.Content);
         if (existing is long id)
         {
+            var metadata = Previews.ItemMetadataJson.OnRecopy(ReadMetadata(id), item.MetadataJson);
             using var bump = _connection.CreateCommand();
-            // A re-copy carries no title and often no metadata: keep the
-            // item's own (a title the user set, a link preview) instead of
-            // wiping them.
+            // A re-copy carries no title: keep the item's own (set by the
+            // user or by a link preview) instead of wiping it, and merge the
+            // metadata (OnRecopy).
             bump.CommandText = """
-                UPDATE clipboard SET datetime = $datetime,
-                  metadata = COALESCE($metadata, metadata), title = COALESCE($title, title)
+                UPDATE clipboard SET datetime = $datetime, metadata = $metadata, title = COALESCE($title, title)
                 WHERE id = $id
                 """;
             bump.Parameters.AddWithValue("$datetime", Stamp(item.CapturedAt));
-            bump.Parameters.AddWithValue("$metadata", (object?)item.MetadataJson ?? DBNull.Value);
+            bump.Parameters.AddWithValue("$metadata", (object?)metadata ?? DBNull.Value);
             bump.Parameters.AddWithValue("$title", (object?)item.Title ?? DBNull.Value);
             bump.Parameters.AddWithValue("$id", id);
             bump.ExecuteNonQuery();
@@ -84,6 +84,20 @@ public sealed class SqliteHistoryStore : IHistoryStore
     }
 
     public ClipboardItem? GetById(long id) => ReadById(id);
+
+    public IReadOnlyList<string> ImageContents()
+    {
+        using var query = _connection.CreateCommand();
+        query.CommandText = "SELECT content FROM clipboard WHERE type = $type";
+        query.Parameters.AddWithValue("$type", nameof(ItemKind.Image));
+        using var reader = query.ExecuteReader();
+        var contents = new List<string>();
+        while (reader.Read())
+        {
+            contents.Add(reader.GetString(0));
+        }
+        return contents;
+    }
 
     // Streams the datetime index and stops at the first readable row, so it
     // skips unknown future types exactly like List() does.
@@ -173,8 +187,9 @@ public sealed class SqliteHistoryStore : IHistoryStore
             {
                 // SQLite refuses LIKE patterns over 50,000 bytes ("pattern
                 // too complex"), so a long pasted line threw on every
-                // refresh. Such a query is matched literally instead.
-                sql.Append(" AND (instr(content, $needle) > 0 OR instr(title, $needle) > 0)");
+                // refresh. Such a query is matched literally instead, with
+                // the same ASCII-only case folding as LIKE.
+                sql.Append(" AND (instr(lower(content), lower($needle)) > 0 OR instr(lower(title), lower($needle)) > 0)");
                 search.Parameters.AddWithValue("$needle", query);
             }
         }
@@ -290,6 +305,14 @@ public sealed class SqliteHistoryStore : IHistoryStore
         }
         return items;
     }
+    private string? ReadMetadata(long id)
+    {
+        using var read = _connection.CreateCommand();
+        read.CommandText = $"SELECT {MetadataColumn} FROM clipboard WHERE id = $id";
+        read.Parameters.AddWithValue("$id", id);
+        return read.ExecuteScalar() as string;
+    }
+
     private long? FindId(ItemKind kind, string content)
     {
         using var find = _connection.CreateCommand();
@@ -347,6 +370,7 @@ public sealed class SqliteHistoryStore : IHistoryStore
             """;
         ddl.ExecuteNonQuery();
         MigrateV1TitleIfNeeded();
+        NormalizeStoredDates();
     }
 
     // v0 databases lack the title column: add it and stamp version 2.
@@ -410,12 +434,12 @@ public sealed class SqliteHistoryStore : IHistoryStore
         {
             return null;
         }
-        if (reader.IsDBNull(5) || !DateTime.TryParseExact(
-            reader.GetString(5), StampFormats,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-                | System.Globalization.DateTimeStyles.AdjustToUniversal,
-            out var capturedAt))
+        if (reader.IsDBNull(5))
+        {
+            return null;
+        }
+        var stamp = reader.GetString(5);
+        if (!TryReadStamp(stamp, out var capturedAt) && !TryReadLegacyStamp(stamp, out capturedAt))
         {
             return null;
         }
@@ -449,6 +473,68 @@ public sealed class SqliteHistoryStore : IHistoryStore
         .Replace("%", "\\%")
         .Replace("_", "\\_");
 
+    // Invariant: with the current culture a '.' time separator (fi-FI,
+    // da-DK, a custom Windows setting) or another calendar (th-TH, fa-IR)
+    // went into the database, and the reader could not read it back.
     private static string Stamp(DateTime capturedAt) =>
-        capturedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fffffff");
+        capturedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture);
+
+    private const System.Globalization.DateTimeStyles StampStyles =
+        System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal;
+
+    private static bool TryReadStamp(string raw, out DateTime value) =>
+        DateTime.TryParseExact(raw, StampFormats, System.Globalization.CultureInfo.InvariantCulture, StampStyles, out value);
+
+    // A stamp an earlier version wrote under a culture with another time
+    // separator or calendar, read the way that culture meant it. Only rows
+    // the invariant reading rejects, or dates it puts centuries off.
+    private static bool TryReadLegacyStamp(string raw, out DateTime value) =>
+        DateTime.TryParseExact(raw, StampFormats, System.Globalization.CultureInfo.CurrentCulture, StampStyles, out value);
+
+    private static bool IsPlausible(DateTime value) => value.Year is >= 1970 and <= 2200;
+
+    // Rewrites legacy stamps once, so ordering, eviction and age limits
+    // (all string comparisons in SQL) see one format again.
+    private void NormalizeStoredDates()
+    {
+        var fixes = new List<(long Id, string Stamp)>();
+        using (var query = _connection.CreateCommand())
+        {
+            query.CommandText = "SELECT id, datetime FROM clipboard";
+            using var reader = query.ExecuteReader();
+            while (reader.Read())
+            {
+                if (reader.IsDBNull(1))
+                {
+                    continue;
+                }
+                var raw = reader.GetString(1);
+                if (TryReadStamp(raw, out var canonical) && IsPlausible(canonical))
+                {
+                    continue;
+                }
+                if (TryReadLegacyStamp(raw, out var legacy) && IsPlausible(legacy))
+                {
+                    fixes.Add((reader.GetInt64(0), Stamp(legacy)));
+                }
+            }
+        }
+        if (fixes.Count == 0)
+        {
+            return;
+        }
+        using var transaction = _connection.BeginTransaction();
+        using var update = _connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = "UPDATE clipboard SET datetime = $datetime WHERE id = $id";
+        var stamp = update.Parameters.Add("$datetime", SqliteType.Text);
+        var id = update.Parameters.Add("$id", SqliteType.Integer);
+        foreach (var fix in fixes)
+        {
+            stamp.Value = fix.Stamp;
+            id.Value = fix.Id;
+            update.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
 }

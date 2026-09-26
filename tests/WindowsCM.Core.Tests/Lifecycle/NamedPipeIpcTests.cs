@@ -133,8 +133,8 @@ public sealed class NamedPipeIpcTests
         var accepted = silent.WaitForConnectionAsync();
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var forward = Task.Run(() => new NamedPipeForwarder().TryForward(
-            pipe, "toggle", TimeSpan.FromMilliseconds(500), out _));
+        var forward = Task.Run(() => new NamedPipeForwarder(replyTimeout: TimeSpan.FromMilliseconds(500)).TryForward(
+            pipe, "toggle", TimeSpan.FromSeconds(2), out _));
         var finished = await Task.WhenAny(forward, Task.Delay(TimeSpan.FromSeconds(10)));
 
         Assert.Same(forward, finished);

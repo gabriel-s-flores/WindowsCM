@@ -944,7 +944,7 @@ internal sealed class LinkPreviewImageConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         value is ClipboardItem { Kind: ItemKind.Link } item && LinkPreviewImages.LocalPath(item) is { } path
-            ? ImageThumbnailCache.GetOrQueue(path)
+            ? ImageThumbnailCache.GetOrQueue(path, banner: true)
             : null;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>

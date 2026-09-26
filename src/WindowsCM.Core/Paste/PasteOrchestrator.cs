@@ -87,7 +87,7 @@ public sealed class PasteOrchestrator
             return new PasteOutcome(
                 PasteStatus.Failed, null, $"Copy-back failed: {ex.Message}");
         }
-        _capture.CopiedFromHistory(itemId, _clock.UtcNow);
+        _capture.CopiedFromHistory(item, _store, _clock.UtcNow);
         if (intent == ActivationIntent.CopyOnly)
         {
             return new PasteOutcome(PasteStatus.CopiedOnly, null, null);

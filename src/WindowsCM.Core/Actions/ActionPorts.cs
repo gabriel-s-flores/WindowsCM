@@ -56,13 +56,12 @@ public sealed class ProcessRunner : IProcessRunner
             },
             EnableRaisingEvents = true,
         };
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-        process.OutputDataReceived += (_, e) => AppendCapped(stdout, e.Data);
-        process.ErrorDataReceived += (_, e) => AppendCapped(stderr, e.Data);
         process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        // Drained from the start (a verbose child blocks on a full pipe),
+        // in raw chunks and capped: the line reader kept a whole
+        // newline-free output in memory, however large.
+        var stdout = DrainAsync(process.StandardOutput);
+        var stderr = DrainAsync(process.StandardError);
         // The item is fed alongside, not before, the timed wait: the timeout
         // used to start only once the whole item was written, so a command
         // that never reads stdin (a pipe holds a few KB) blocked the write
@@ -87,39 +86,32 @@ public sealed class ProcessRunner : IProcessRunner
             }
             process.WaitForExit();
             await feeding.ConfigureAwait(false);
-            return new ProcessResult(process.ExitCode, Snapshot(stdout), Snapshot(stderr), true);
+            return new ProcessResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false), true);
         }
-        // Post-true drain so the async handlers finish before we read.
         process.WaitForExit();
         await feeding.ConfigureAwait(false);
-        return new ProcessResult(process.ExitCode, Snapshot(stdout), Snapshot(stderr), false);
+        return new ProcessResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false), false);
     }
 
     // Output kept per stream: a command printing gigabytes used to grow the
-    // tray process without bound.
+    // tray process without bound. The rest is read and dropped, so the
+    // command never blocks on a full pipe.
     internal const int MaxOutputChars = 8 * 1024 * 1024;
 
-    private static void AppendCapped(StringBuilder target, string? line)
+    private static async Task<string> DrainAsync(StreamReader reader)
     {
-        if (line is null)
+        var kept = new StringBuilder();
+        var chunk = new char[16 * 1024];
+        int read;
+        while ((read = await reader.ReadAsync(chunk.AsMemory()).ConfigureAwait(false)) > 0)
         {
-            return;
-        }
-        lock (target)
-        {
-            if (target.Length + line.Length < MaxOutputChars)
+            var room = MaxOutputChars - kept.Length;
+            if (room > 0)
             {
-                target.AppendLine(line);
+                kept.Append(chunk, 0, Math.Min(read, room));
             }
         }
-    }
-
-    private static string Snapshot(StringBuilder source)
-    {
-        lock (source)
-        {
-            return source.ToString();
-        }
+        return kept.ToString();
     }
 
     // A command may exit (or close its input) without reading all of it:

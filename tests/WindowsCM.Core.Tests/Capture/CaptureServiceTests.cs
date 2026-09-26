@@ -485,4 +485,57 @@ public sealed class CaptureServiceTests : IDisposable
 
         Assert.True(File.Exists(ImageFile(7)));
     }
+
+    // A stand-in history (default location, memory-only, recreated file)
+    // shares the images folder with the real one: sweeping against it
+    // deleted the real history's images.
+    [Fact]
+    public void SweepDisabled_NeverDeletesImages()
+    {
+        var capture = new CaptureService(_store, _images,
+            new CaptureOptions { HistoryMaxItems = 1, OrphanImageSweepInterval = TimeSpan.Zero, SweepOrphanImages = false }, _clock);
+        var foreign = Path.Combine(_imagesDir, "belongs-to-the-real-history.png");
+        File.WriteAllBytes(foreign, [1]);
+
+        capture.Capture(ImagePayload(1), null, _clock.UtcNow);
+        capture.Capture(TextPayload("pushes the image out"), null, _clock.UtcNow.AddMinutes(1));
+        capture.SweepOrphanImages();
+
+        Assert.True(File.Exists(foreign));
+        Assert.True(File.Exists(ImageFile(1)));
+    }
+
+    // Pasting from the normal history while incognito: the ids of the two
+    // sessions overlap, and the item used to be looked up again in the
+    // incognito one.
+    [Fact]
+    public void CopiedFromHistory_FromTheNormalHistoryDuringIncognito_TouchesThatItemOnly()
+    {
+        using var coordinator = new IncognitoSessionCoordinator(_store, _images);
+        var capture = new CaptureService(coordinator, coordinator, _options, _clock);
+        var normal = _store.AddOrUpdate(new ClipboardItem(ItemKind.Text, "normal note", false, null, _clock.UtcNow, null, null));
+        coordinator.SetIncognito(true);
+        var secret = coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "secret note", false, null, _clock.UtcNow, null, null));
+        Assert.Equal(normal.Id, secret.Id);
+
+        var later = _clock.UtcNow.AddHours(1);
+        capture.CopiedFromHistory(normal, _store, later);
+
+        Assert.Equal(later, _store.GetById(normal.Id)!.CapturedAt);
+        Assert.Equal(_clock.UtcNow, coordinator.GetById(secret.Id)!.CapturedAt);
+        // The paste's own clipboard write is not captured.
+        Assert.Null(capture.Capture(TextPayload("normal note"), null, later));
+    }
+
+    // A row the item reader skips (an unreadable date) still owns its image.
+    [Fact]
+    public void Sweep_KeepsImagesOfRowsTheReaderSkips()
+    {
+        var saved = _capture.Capture(ImagePayload(3), null, _clock.UtcNow);
+        _store.ExecuteForTests($"UPDATE clipboard SET datetime = 'not a date' WHERE id = {saved!.Id}");
+
+        _capture.SweepOrphanImages();
+
+        Assert.True(File.Exists(ImageFile(3)));
+    }
 }

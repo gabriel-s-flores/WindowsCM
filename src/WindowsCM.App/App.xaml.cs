@@ -258,6 +258,9 @@ public partial class App : System.Windows.Application
         _disposables.Add(_coordinator);
 
         var captureOptions = _settings.ToCaptureOptions();
+        // The images folder is shared by every history: only the user's own,
+        // opened normally, may decide which images are orphans.
+        captureOptions.SweepOrphanImages = history.Outcome == HistoryOpenOutcome.Opened;
         _captureOptions = captureOptions;
         _capture = new CaptureService(
             _coordinator, _coordinator, captureOptions, clock);
@@ -310,8 +313,11 @@ public partial class App : System.Windows.Application
         try
         {
             // Nothing else removes preview images of links that left the
-            // history: the folder only grew.
-            linkImages.SweepOrphans(_store.Search("", kind: ItemKind.Link).Select(i => i.Content));
+            // history: the folder only grew. Only against the real history.
+            if (history.Outcome == HistoryOpenOutcome.Opened)
+            {
+                linkImages.SweepOrphans(_store.Search("", kind: ItemKind.Link).Select(i => i.Content));
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -656,6 +662,12 @@ public partial class App : System.Windows.Application
         {
             return;
         }
+        // A re-copied link that already has its preview is not fetched again.
+        var (knownTitle, _, knownImage) = ItemMetadataJson.GetLink(item.MetadataJson);
+        if (!string.IsNullOrWhiteSpace(knownTitle) || !string.IsNullOrWhiteSpace(knownImage))
+        {
+            return;
+        }
         if (!_inFlightLinkFetches.TryAdd(item.Id, 0))
         {
             return;
@@ -665,6 +677,7 @@ public partial class App : System.Windows.Application
             _linkPreviewAttempts.Clear();
         }
         _linkPreviewAttempts[item.Content] = DateTime.UtcNow;
+        var session = _coordinator.IsIncognito;
 
         _ = Task.Run(async () =>
         {
@@ -691,7 +704,15 @@ public partial class App : System.Windows.Application
                 var overlay = ItemMetadataJson.EncodeLink(title, description, image);
                 var merged = ItemMetadataJson.Merge(item.MetadataJson, overlay);
 
-                _coordinator.SetMetadataAndTitle(item.Id, merged, title);
+                // Ids are per session: after an incognito toggle during the
+                // fetch, the same id names an item of the other history.
+                if (_coordinator.IsIncognito != session)
+                {
+                    return;
+                }
+                // A title the user gave the card stays.
+                _coordinator.SetMetadataAndTitle(item.Id, merged,
+                    string.IsNullOrWhiteSpace(item.Title) ? title : item.Title);
 
                 RequestViewRefresh();
             }
