@@ -30,6 +30,14 @@ public sealed class NamedPipeForwarder : IIpcForwarder
         _replyTimeout = replyTimeout ?? DefaultReplyTimeout;
     }
 
+    private static async Task<string?> ExchangeAsync(Stream pipe, string line, CancellationToken ct)
+    {
+        await pipe.WriteAsync(Utf8NoBom.GetBytes(line + "\n"), ct).ConfigureAwait(false);
+        await pipe.FlushAsync(ct).ConfigureAwait(false);
+        using var reader = new StreamReader(pipe, Utf8NoBom, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        return await reader.ReadLineAsync(ct).ConfigureAwait(false);
+    }
+
     public bool TryForward(string pipeName, string line, TimeSpan timeout, out string? response)
     {
         response = null;
@@ -41,15 +49,25 @@ public sealed class NamedPipeForwarder : IIpcForwarder
                 ".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             client.Connect(timeout);
             client.ReadMode = PipeTransmissionMode.Byte;
-            using var writer = new StreamWriter(client, Utf8NoBom, leaveOpen: true)
-            {
-                AutoFlush = true,
-            };
-            using var reader = new StreamReader(client, Utf8NoBom, leaveOpen: true);
-            writer.WriteLine(line);
+            // The whole exchange runs within the reply budget: on Windows the
+            // write itself can block until the other end reads. The wait is
+            // bounded even if a pipe operation ignores cancellation; leaving
+            // closes the pipe, which ends the pending operation.
             using var replyBudget = new CancellationTokenSource(_replyTimeout);
-            response = reader.ReadLineAsync(replyBudget.Token).AsTask().GetAwaiter().GetResult();
+            var exchange = ExchangeAsync(client, line, replyBudget.Token);
+            if (!exchange.Wait(_replyTimeout + TimeSpan.FromSeconds(1)))
+            {
+                exchange.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                return false;
+            }
+            response = exchange.GetAwaiter().GetResult();
             return response is not null;
+        }
+        catch (AggregateException ex) when (ex.InnerException is TimeoutException or IOException
+            or UnauthorizedAccessException or ObjectDisposedException or OperationCanceledException)
+        {
+            response = null;
+            return false;
         }
         catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException
             or ObjectDisposedException or OperationCanceledException)

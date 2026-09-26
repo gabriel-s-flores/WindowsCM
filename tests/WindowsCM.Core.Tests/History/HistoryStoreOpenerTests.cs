@@ -24,6 +24,15 @@ public sealed class HistoryStoreOpenerTests : IDisposable
         }
     }
 
+    // The fresh database keeps its own sidecars open (on Windows a plain
+    // read is refused).
+    private static string ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     private static ClipboardItem Item(string content) =>
         new(ItemKind.Text, content, false, null, Now, null, null);
 
@@ -65,7 +74,7 @@ public sealed class HistoryStoreOpenerTests : IDisposable
         // into the fresh database.
         foreach (var sidecar in new[] { path + "-wal", path + "-shm" })
         {
-            Assert.False(File.Exists(sidecar) && File.ReadAllText(sidecar).StartsWith("stale"));
+            Assert.False(File.Exists(sidecar) && ReadShared(sidecar).StartsWith("stale"));
         }
         store.AddOrUpdate(Item("fresh"));
         Assert.Equal(["fresh"], store.List().Select(i => i.Content));
