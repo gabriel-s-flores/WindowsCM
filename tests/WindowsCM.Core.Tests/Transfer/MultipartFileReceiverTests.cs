@@ -135,7 +135,7 @@ public sealed class MultipartFileReceiverTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Reunião 10:30.pdf", "Reunião 10_30.pdf")]
+    [InlineData("Résumé 10:30.pdf", "Résumé 10_30.pdf")]
     [InlineData("a?b*c<d>e|f\"g.txt", "a_b_c_d_e_f_g.txt")]
     [InlineData("../../../etc/passwd.txt", "passwd.txt")]
     [InlineData(@"..\..\Windows\win.ini", "win.ini")]

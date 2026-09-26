@@ -203,7 +203,7 @@ public sealed class ItemDisplayFormatterTests
     }
 
     [Fact]
-    public void GetTypeLabel_StandardCharacter_ReturnsCaractereWithCodePoint()
+    public void GetTypeLabel_StandardCharacter_ReturnsCharacterLabelWithCodePoint()
     {
         var item = new ClipboardItem(ItemKind.Character, "A", false, null, DateTime.UtcNow, null, null);
         var label = ItemDisplayFormatter.GetTypeLabel(item);
@@ -211,9 +211,9 @@ public sealed class ItemDisplayFormatterTests
     }
 
     [Fact]
-    public void GetTypeLabel_Text_ReturnsCaracteresInPortuguese()
+    public void GetTypeLabel_Text_ReturnsCharacterCountInPortuguese()
     {
-        var item = new ClipboardItem(ItemKind.Text, "Olá mundo", false, null, DateTime.UtcNow, null, null);
+        var item = new ClipboardItem(ItemKind.Text, "Hi there!", false, null, DateTime.UtcNow, null, null);
         var label = ItemDisplayFormatter.GetTypeLabel(item);
         Assert.Equal("Texto • 9 caracteres", label);
     }

@@ -50,10 +50,10 @@ public sealed class ClipboardBlocksTests
     [Fact]
     public void DropFiles_Wide_ListsEveryPath()
     {
-        var block = DropFiles(wide: true, offset: null, @"C:\a.txt", @"D:\Fotos\ção 1.png", @"\\server\share\x.pdf");
+        var block = DropFiles(wide: true, offset: null, @"C:\a.txt", @"D:\Photos\façade 1.png", @"\\server\share\x.pdf");
 
         Assert.Equal(
-            [@"C:\a.txt", @"D:\Fotos\ção 1.png", @"\\server\share\x.pdf"],
+            [@"C:\a.txt", @"D:\Photos\façade 1.png", @"\\server\share\x.pdf"],
             ClipboardBlocks.ParseDropFiles(block));
     }
 
