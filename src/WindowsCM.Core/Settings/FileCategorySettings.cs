@@ -110,8 +110,18 @@ public sealed class FileCategorySettings
 
     public void Clamp()
     {
+        // Hand-edited JSON may null the list, an entry or an entry's fields
+        // (a NullReferenceException here kept the app from starting):
+        // restore the defaults for a missing list, drop null entries and
+        // coerce the rest before use.
+        Categories ??= CreateDefaultCategories();
+        Categories.RemoveAll(c => c is null);
         foreach (var cat in Categories)
         {
+            cat.Id ??= "";
+            cat.Name ??= "";
+            cat.ColorHex ??= "";
+            cat.Extensions ??= [];
             var normalized = ItemColorSettings.NormalizeHex(cat.ColorHex);
             if (cat.Id == "images" && (normalized == null || string.Equals(normalized, "#B146C2", StringComparison.OrdinalIgnoreCase) || string.Equals(normalized, "#107C41", StringComparison.OrdinalIgnoreCase)))
             {
@@ -144,6 +154,7 @@ public sealed class FileCategorySettings
 
             cat.ColorHex = normalized ?? "#16A34A";
             cat.Extensions = cat.Extensions
+                .OfType<string>()
                 .Select(FileCategory.NormalizeExtension)
                 .Where(e => !string.IsNullOrEmpty(e))
                 .Distinct(StringComparer.OrdinalIgnoreCase)

@@ -12,6 +12,11 @@ public sealed class MessageOnlyClipboardListener : IClipboardChangeSource, IDisp
     private IntPtr _hwnd;
     private NativeClipboard.WndProc? _wndProc;
     private readonly ManualResetEventSlim _ready = new(false);
+    // Reads wait for the source app to finish its copy (see
+    // ClipboardUpdateCoalescer). The timer is a window timer, so the
+    // delayed read still runs on this STA thread, as the reader requires.
+    private readonly ClipboardUpdateCoalescer _coalescer = new();
+    private static readonly UIntPtr ReadTimerId = new(1);
     private Exception? _startupError;
     private bool _disposed;
 
@@ -87,6 +92,16 @@ public sealed class MessageOnlyClipboardListener : IClipboardChangeSource, IDisp
     {
         if (msg == NativeClipboard.WM_CLIPBOARDUPDATE)
         {
+            var delay = _coalescer.OnUpdate(Environment.TickCount64);
+            // Re-arming the same timer id replaces the pending one: a burst
+            // ends in a single read of the final content.
+            NativeClipboard.SetTimer(hWnd, ReadTimerId, (uint)Math.Max(1, delay), IntPtr.Zero);
+            return IntPtr.Zero;
+        }
+        if (msg == NativeClipboard.WM_TIMER && wParam == (IntPtr)(long)ReadTimerId.ToUInt64())
+        {
+            NativeClipboard.KillTimer(hWnd, ReadTimerId);
+            _coalescer.OnRead();
             try
             {
                 ClipboardChanged?.Invoke(this, EventArgs.Empty);
