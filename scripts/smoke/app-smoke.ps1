@@ -312,7 +312,7 @@ function New-Payload([int]$i) {
     $data = New-Object System.Windows.Forms.DataObject
     switch ($i % 9) {
         0 { $data.SetText("public static int Compute$i(int x) { return x * $i; } // code") }
-        1 { $data.SetText("https://example.com/articles/$i?ref=smoke") }
+        1 { $data.SetText("https://example.com/articles/${i}?ref=smoke") }   # braces: "$i?" would read a variable named "i?"
         2 { $data.SetText("#{0:X6}" -f $random.Next(0x1000000)) }
         3 { if ($i % 27 -eq 3) { $data.SetText($bigText + $i) } else { $data.SetText("note $i " + ('x' * $random.Next(10, 4000))) } }
         4 {
@@ -426,7 +426,9 @@ if (Alive) {
     Check ($count -ge 50) "copies were captured (>= 50 items)"
     $byType = Item-Counts
     Note "  by type: $(($byType.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Value)" }) -join ', ')"
-    Check (($byType['Image'] -ge 1) -and (($byType['File'] + $byType['Files']) -ge 1) -and ($byType['Text'] -ge 1) -and ($byType['Link'] -ge 1)) "every kind was captured (image, files, text, link)"
+    # The last 100 copies hold ~11 of each generated kind (the five file
+    # lists repeat, so they dedupe to at most 5; images every 18th copy).
+    Check (($byType['Image'] -ge 2) -and (($byType['File'] + $byType['Files']) -ge 3) -and ($byType['Text'] -ge 20) -and ($byType['Link'] -ge 8) -and ($byType['Code'] -ge 8) -and ($byType['Color'] -ge 8) -and ($byType['Character'] -ge 8)) "every kind was captured in the expected proportion"
     $metrics.itemsByType = $byType
     $final = Sample-Process 'end'
     $samples.Add($final)
@@ -463,6 +465,7 @@ if (Alive) {
     }
     # The history itself, for diagnosis (type, time, title, content start).
     $dump = "import sqlite3,sys; c=sqlite3.connect(sys.argv[1])`nfor r in c.execute('select id, type, datetime, title, substr(replace(content, char(10), \' \'), 1, 70) from clipboard order by datetime desc'): print(*r, sep=' | ')"
+    $env:PYTHONIOENCODING = 'utf-8'
     & python -c $dump $dbPath | Set-Content (Join-Path $OutDir 'history.txt') -Encoding UTF8
     # The same popup, app idle: separates rendering cost from load.
     $idleTimes = New-Object System.Collections.Generic.List[double]
