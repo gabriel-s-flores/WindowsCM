@@ -253,6 +253,13 @@ function Set-Clip($data) {
     [System.Windows.Forms.Clipboard]::SetDataObject($data, $true, 20, 50)
 }
 
+function Item-Counts {
+    $py = "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); print(';'.join(t+'='+str(n) for t,n in c.execute('select type, count(*) from clipboard group by type')))"
+    $pairs = @{}
+    foreach ($pair in ((& python -c $py $dbPath) -split ';')) { if ($pair) { $kv = $pair -split '='; $pairs[$kv[0]] = [int]$kv[1] } }
+    return $pairs
+}
+
 function Item-Count {
     $py = "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); print(c.execute('select count(*) from clipboard').fetchone()[0])"
     return [int](& python -c $py $dbPath)
@@ -312,13 +319,15 @@ function Copy-Burst([int]$from, [int]$to, $failuresList) {
     for ($i = $from; $i -le $to; $i++) {
         $data = New-Payload $i
         try { Set-Clip $data } catch { $failuresList.Add("copy $i ($($data.GetFormats() -join ', ')) held by $([Smoke]::ClipboardHolder())") }
-        if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds 40 }
+        if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds $gapMs }
     }
 }
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw 'python is required to read the history database' }
 
 # ------------------------------------------------------------ fresh state
+
+try {
 
 Stop-App
 Remove-Item -Recurse -Force $dataDir, $configDir -ErrorAction SilentlyContinue
@@ -334,6 +343,7 @@ $tempFiles = @()
 for ($f = 0; $f -lt 5; $f++) { $path = Join-Path $env:TEMP "wcm-smoke-$f.txt"; Set-Content $path "file $f"; $tempFiles += $path }
 $bigText = ('lorem ipsum dolor sit amet, consectetur adipiscing elit ' * 40000)   # ~2.2 MB
 $random = New-Object System.Random 7
+$gapMs = 150
 $baselineFailures = New-Object System.Collections.Generic.List[string]
 Copy-Burst 1 60 $baselineFailures
 foreach ($failure in ($baselineFailures | Select-Object -First 10)) { Note "    clipboard busy at $failure" }
@@ -357,8 +367,9 @@ for ($i = 1; $i -le $Copies; $i++) {
     # Another app copying while WindowsCM reads the previous copy: it must
     # never find the clipboard held for longer than its ~1 s of retries.
     try { Set-Clip $data } catch { $clipboardFailures.Add("copy $i ($($data.GetFormats() -join ', ')) held by $([Smoke]::ClipboardHolder())") }
-    # Bursts: every 20th copy is followed by a quick succession.
-    if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds 40 }
+    # A fast human pace, plus bursts (every 20th copy starts three in a
+    # row, 5 ms apart) that WindowsCM coalesces into one read.
+    if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds $gapMs }
 
     if ($i % 50 -eq 0) {
         if (-not (Alive)) { break }
@@ -384,6 +395,10 @@ if (Alive) {
     Note "  items in history: $count"
     Check ($count -le 100) "history stays within the 100-item limit (Evict on every capture)"
     Check ($count -ge 50) "copies were captured (>= 50 items)"
+    $byType = Item-Counts
+    Note "  by type: $(($byType.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Value)" }) -join ', ')"
+    Check (($byType['Image'] -ge 1) -and (($byType['File'] + $byType['Files']) -ge 1) -and ($byType['Text'] -ge 1) -and ($byType['Link'] -ge 1)) "every kind was captured (image, files, text, link)"
+    $metrics.itemsByType = $byType
     $final = Sample-Process 'end'
     $samples.Add($final)
     $early = $samples | Where-Object { $_.at -eq 'copy 100' } | Select-Object -First 1
@@ -402,6 +417,22 @@ if (Alive) {
         $metrics.popupOpenMs = @{ p50 = [math]::Round($p50, 1); max = [math]::Round($max, 1); samples = $sorted.Count }
     }
     $metrics.copiesPerSecond = [math]::Round($Copies / $copyWatch.Elapsed.TotalSeconds, 1)
+    foreach ($sample in $samples) { Note ("  memory at {0}: private {1} MB, working set {2} MB, {3} handles, {4} threads" -f $sample.at, $sample.privateMB, $sample.workingSetMB, $sample.handles, $sample.threads) }
+    # The same popup, app idle: separates rendering cost from load.
+    $idleTimes = New-Object System.Collections.Generic.List[double]
+    for ($k = 0; $k -lt 6; $k++) {
+        $watch = [System.Diagnostics.Stopwatch]::StartNew()
+        Pipe 'show' | Out-Null
+        $watch.Stop()
+        $idleTimes.Add($watch.Elapsed.TotalMilliseconds)
+        Start-Sleep -Milliseconds 400
+        Pipe 'hide' | Out-Null
+        Start-Sleep -Milliseconds 300
+    }
+    $idleSorted = $idleTimes | Sort-Object
+    $idleP50 = $idleSorted[[int][math]::Floor(($idleSorted.Count - 1) * 0.5)]
+    Note ("  popup open, app idle: p50 {0:N0} ms, first {1:N0} ms, max {2:N0} ms" -f $idleP50, $idleTimes[0], $idleSorted[$idleSorted.Count - 1])
+    $metrics.popupOpenIdleMs = @{ p50 = [math]::Round($idleP50, 1); max = [math]::Round($idleSorted[$idleSorted.Count - 1], 1) }
     $metrics.itemsAfterStress = $count
 }
 $metrics.processSamples = $samples
@@ -437,23 +468,23 @@ Check ($rect -ne $null -and (Near $rect.Bottom ($work.Bottom - $margin)) -and $r
 Stop-App
 
 # Free, saved rectangle: reopens exactly there, edges resize, moves are saved.
-$saved = @{ left = 200; top = 150; width = 900; height = 400 }
+$saved = @{ left = 40; top = 60; width = 760; height = 300 }
 $rect = Show-And-Measure @{ largePlacement = 'Free'; largeFreeBoundsHorizontal = $saved }
 Check ($rect -ne $null) "free: popup visible"
 if ($rect) {
-    Check ((Near $rect.Left (200 * $scale)) -and (Near $rect.Top (150 * $scale)) -and (Near $rect.Width (900 * $scale)) -and (Near $rect.Height (400 * $scale))) "free: reopens at the saved rectangle ($($rect.Left),$($rect.Top) $($rect.Width)x$($rect.Height))"
+    Check ((Near $rect.Left (40 * $scale)) -and (Near $rect.Top (60 * $scale)) -and (Near $rect.Width (760 * $scale)) -and (Near $rect.Height (300 * $scale))) "free: reopens at the saved rectangle ($($rect.Left),$($rect.Top) $($rect.Width)x$($rect.Height))"
     $midY = $rect.Top + [int]($rect.Height / 2)
     $midX = $rect.Left + [int]($rect.Width / 2)
     Check ([Smoke]::HitTest($rect.Handle, $rect.Right - 2, $midY) -eq 11) "free: right edge resizes (HTRIGHT)"
     Check ([Smoke]::HitTest($rect.Handle, $rect.Left + 1, $rect.Top + 1) -eq 13) "free: top-left corner resizes (HTTOPLEFT)"
     Check ([Smoke]::HitTest($rect.Handle, $midX, $midY) -eq 1) "free: the content is not a resize handle (HTCLIENT)"
     # Simulate the end of a user move: Windows sends WM_EXITSIZEMOVE.
-    [Smoke]::SetWindowPos($rect.Handle, [IntPtr]::Zero, [int](320 * $scale), [int](260 * $scale), $rect.Width, $rect.Height, 0x0014) | Out-Null
+    [Smoke]::SetWindowPos($rect.Handle, [IntPtr]::Zero, [int](120 * $scale), [int](200 * $scale), $rect.Width, $rect.Height, 0x0014) | Out-Null
     Start-Sleep -Milliseconds 300
     [Smoke]::ExitSizeMove($rect.Handle)
     Start-Sleep -Milliseconds 500
     $persisted = (Get-Content $settingsPath -Raw | ConvertFrom-Json).dialog.largeFreeBoundsHorizontal
-    Check ($persisted -and (Near $persisted.left 320 1) -and (Near $persisted.top 260 1)) "free: new position saved to settings after the move ($($persisted.left),$($persisted.top))"
+    Check ($persisted -and (Near $persisted.left 120 1) -and (Near $persisted.top 200 1)) "free: new position saved to settings after the move ($($persisted.left),$($persisted.top))"
 }
 Stop-App
 
@@ -480,7 +511,7 @@ function Paste-Scenario([string]$name, [scriptblock]$focus, [bool]$expectPasted)
     [Smoke]::SetText($edit, '')
     [Smoke]::Focus($np) | Out-Null
     [Smoke]::Chord(0x1B)                 # Esc: Notepad never left in menu mode
-    Set-Clip $token
+    try { Set-Clip $token } catch { $failures.Add("${name}: clipboard write failed, held by $([Smoke]::ClipboardHolder())"); Note "  FAIL  ${name}: clipboard write failed"; return }
     Start-Sleep -Milliseconds 700        # captured as the newest item
     $focused = & $focus
     if (-not $focused) { $failures.Add("${name}: could not set up the foreground window"); Note "  FAIL  ${name}: foreground setup"; return }
@@ -538,6 +569,15 @@ if (Test-Path $logPath) {
     Check $false "no errors logged by the app"
 } else {
     Check $true "no errors logged by the app (log file never created)"
+}
+
+} catch {
+    Note ""
+    Note "ABORTED: $($_.Exception.Message)"
+    Note "$($_.ScriptStackTrace)"
+    $failures.Add("smoke aborted: $($_.Exception.Message)")
+} finally {
+    Stop-App
 }
 
 # ----------------------------------------------------------------- report

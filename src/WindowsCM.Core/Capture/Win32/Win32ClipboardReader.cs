@@ -37,19 +37,29 @@ public sealed class Win32ClipboardReader : IClipboardReader
         }
         List<string> formats;
         (byte[] Bytes, bool IsPng)? rawImage;
-        FileSnapshot? files;
-        string? text;
-        string? html;
+        FileSnapshot? files = null;
+        string? text = null;
+        string? html = null;
         try
         {
             // Only copy bytes out while the clipboard is open: until
             // CloseClipboard every other app's copy and paste fails, so the
             // PNG encoding of a screenshot happens after it (below).
+            // Formats are read in Classifier.Probe order and only as far as
+            // the winner: each GetClipboardData on a delayed-render format
+            // makes the source app render it (Excel renders the whole range
+            // as HTML), and an image or file list never uses the text/HTML.
             formats = GetFormatNames();
             rawImage = TryReadRawImage();
-            files = TryReadFiles();
-            text = TryReadText();
-            html = TryReadHtml();
+            if (rawImage is null)
+            {
+                files = TryReadFiles();
+                if (files is null)
+                {
+                    text = TryReadText();
+                    html = TryReadHtml();
+                }
+            }
         }
         finally
         {
