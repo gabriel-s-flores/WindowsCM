@@ -16,8 +16,62 @@ internal static class ImageThumbnailCache
 {
     private const int DecodePixelHeight = 180;
 
+    // Link preview banners are shown wide (UniformToFill): decoded by width
+    // so they stay sharp.
+    private const int BannerDecodePixelWidth = 320;
+
     // ~230 KB per 16:9 thumbnail at 180 px: ~30 MB worst case.
     private static readonly LruCache<string, ImageSource?> Cache = new(128, StringComparer.OrdinalIgnoreCase);
+
+    // Decodes queued by GetOrQueue, at most two at a time: scrolling past a
+    // hundred screenshots must not start a hundred full-size decodes.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> Queued = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly SemaphoreSlim DecodeSlots = new(2);
+
+    // Raised on a worker thread when a queued decode lands (or fails):
+    // marshal before touching the UI.
+    public static event Action? Updated;
+
+    // UI-thread lookup for card images (captured screenshots, link preview
+    // images): never decodes here. A miss — an older screenshot scrolling
+    // into view, one evicted from the cache, any image after a restart —
+    // used to decode the full file on the UI thread, 50–200 ms per 4K card.
+    // Null until the decode lands and Updated fires; a file that cannot be
+    // decoded is remembered as such.
+    public static ImageSource? GetOrQueue(string path, bool banner = false)
+    {
+        var key = KeyFor(path);
+        if (key is null)
+        {
+            return null;
+        }
+        if (banner)
+        {
+            key += "|banner";
+        }
+        if (Cache.TryGet(key, out var cached))
+        {
+            return cached;
+        }
+        if (Queued.TryAdd(key, 0))
+        {
+            _ = Task.Run(async () =>
+            {
+                await DecodeSlots.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    Cache.Set(key, TryDecode(path, banner));
+                }
+                finally
+                {
+                    DecodeSlots.Release();
+                    Queued.TryRemove(key, out _);
+                }
+                Updated?.Invoke();
+            });
+        }
+        return null;
+    }
 
     // UI-thread lookup: decode on a miss, falling back to the Shell
     // thumbnail (STA COM, so never from the prewarm worker).
@@ -89,7 +143,7 @@ internal static class ImageThumbnailCache
     // Frozen, so the worker-decoded bitmap can be used by the UI thread. The
     // bytes are read up front with FileShare.ReadWrite: the file is never
     // held open (or locked against the capture writer) while decoding.
-    private static BitmapSource? TryDecode(string path)
+    private static BitmapSource? TryDecode(string path, bool banner = false)
     {
         try
         {
@@ -104,7 +158,14 @@ internal static class ImageThumbnailCache
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.StreamSource = memory;
-            image.DecodePixelHeight = DecodePixelHeight;
+            if (banner)
+            {
+                image.DecodePixelWidth = BannerDecodePixelWidth;
+            }
+            else
+            {
+                image.DecodePixelHeight = DecodePixelHeight;
+            }
             image.EndInit();
             image.Freeze();
             return image;

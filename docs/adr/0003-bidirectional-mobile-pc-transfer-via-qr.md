@@ -45,3 +45,12 @@ No ecossistema Windows, a API nativa `System.Net.HttpListener` baseia-se no driv
   - Total integração com o histórico do WindowsCM e a área de transferência do Windows.
 - **Desafios / Limitações**:
   - Requer que o computador e o smartphone estejam conectados à mesma rede local (Wi-Fi ou LAN).
+
+## Revisão (2026-09-26): chave de envio, início sob demanda e limites
+
+A auditoria de estabilidade encontrou o servidor aberto a toda a rede local desde a inicialização, sem autenticação nos envios:
+
+- **Chave de envio**: `/api/upload` aceitava texto e arquivos de qualquer aparelho da mesma rede (um Wi-Fi público) e os colocava direto na área de transferência. Agora cada execução do app gera uma chave aleatória de 128 bits. Ela viaja só no QR Code de "Enviar do celular" (`/u/{chave}`), e o envio vai para `/api/upload/{chave}`. Sem a chave, a resposta é 403 e a página orienta a escanear o QR de novo.
+- **Início sob demanda**: o servidor sobe no primeiro uso (QR de arquivo/imagem/texto longo, "Enviar do celular"), não na inicialização. Quem nunca usa a função não vê o alerta do firewall nem fica com uma porta aberta. Se não houver porta disponível, um balão explica e o app segue sem a função.
+- **Compartilhamentos efêmeros de fato**: tokens de 128 bits, válidos por 24 horas (antes: 32 bits e para sempre, com o texto retido na memória).
+- **Limites**: arquivos recebidos vão direto para o disco (antes o corpo inteiro ficava na memória e era copiado de novo: um vídeo de 1,5 GB chegava a ~3,5 GB no processo). Textos acima de 16 MB são recusados, conexões ociosas caem após 30 s, há no máximo 16 conexões simultâneas e os nomes de arquivo são saneados para o Windows (`:` virava um fluxo NTFS oculto).

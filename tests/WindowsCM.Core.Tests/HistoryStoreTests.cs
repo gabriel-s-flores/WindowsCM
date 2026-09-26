@@ -208,6 +208,33 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.Equal(["Hello World"], found.Select(i => i.Content));
     }
 
+    // SQLite rejects LIKE patterns over 50,000 bytes ("LIKE or GLOB pattern
+    // too complex"): a long line pasted into the search box made every
+    // refresh throw, and the popup could no longer open.
+    [Fact]
+    public void Search_VeryLongQuery_DoesNotThrowAndStillMatches()
+    {
+        var needle = new string('x', 60_000);
+        _store.AddOrUpdate(Sample(content: "head " + needle + " tail"));
+        _store.AddOrUpdate(Sample(content: "other"));
+
+        var found = _store.Search(needle);
+        var foundOtherCase = _store.Search(needle.ToUpperInvariant());
+
+        Assert.Equal(["head " + needle + " tail"], found.Select(i => i.Content));
+        Assert.Equal(["head " + needle + " tail"], foundOtherCase.Select(i => i.Content));
+    }
+
+    [Fact]
+    public void Search_VeryLongMultibyteQuery_DoesNotThrow()
+    {
+        var needle = string.Concat(Enumerable.Repeat("ç😀", 10_000));
+        _store.AddOrUpdate(Sample(content: needle));
+
+        Assert.Single(_store.Search(needle));
+        Assert.Empty(_store.Search(needle + "z"));
+    }
+
     [Fact]
     public void Search_TreatsWildcardsLiterally()
     {
@@ -353,6 +380,79 @@ public sealed class HistoryStoreTests : IDisposable
 
         Assert.True(bumped.Pinned);
         Assert.Equal("blue", bumped.Tag);
+    }
+
+    // Re-copying an item used to wipe its title (set by the user, or by a
+    // link preview) and its metadata (the preview) with the new capture's
+    // nulls.
+    [Fact]
+    public void Recopy_KeepsTitleAndMetadataTheNewCopyDoesNotCarry()
+    {
+        var first = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com"));
+        _store.SetMetadataAndTitle(first.Id, """{"title":"Example","image":"x"}""", "Example");
+
+        var bumped = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("Example", bumped.Title);
+        Assert.Equal(("Example", (string?)null, "x"), WindowsCM.Core.Previews.ItemMetadataJson.GetLink(bumped.MetadataJson));
+    }
+
+    [Fact]
+    public void Recopy_WithNewMetadata_TakesIt()
+    {
+        _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"old"}"""));
+
+        var bumped = _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"new"}""",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("new", WindowsCM.Core.Previews.ItemMetadataJson.GetString(bumped.MetadataJson, "html"));
+    }
+
+    // Copied rich from a browser, later plain from Notepad: pasting from
+    // history must not bring back the old formatting.
+    [Fact]
+    public void Recopy_WithoutHtml_DropsTheOldHtml()
+    {
+        _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"<b>old</b>","language":{"id":"cs"}}"""));
+
+        var bumped = _store.AddOrUpdate(Sample(content: "same",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Null(WindowsCM.Core.Previews.ItemMetadataJson.GetString(bumped.MetadataJson, "html"));
+        Assert.Equal("cs", WindowsCM.Core.Previews.ItemMetadataJson.GetLanguage(bumped.MetadataJson).Id);
+    }
+
+    // A link re-copied from a page (with CF_HTML) keeps its preview.
+    [Fact]
+    public void Recopy_LinkWithHtml_KeepsThePreview()
+    {
+        var first = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com"));
+        _store.SetMetadataAndTitle(first.Id, """{"title":"Example","image":"x"}""", "Example");
+
+        var bumped = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com",
+            metadataJson: """{"html":"<a>link</a>"}""",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        var (title, _, image) = WindowsCM.Core.Previews.ItemMetadataJson.GetLink(bumped.MetadataJson);
+        Assert.Equal("Example", title);
+        Assert.Equal("x", image);
+        Assert.Equal("<a>link</a>", WindowsCM.Core.Previews.ItemMetadataJson.GetString(bumped.MetadataJson, "html"));
+    }
+
+    // One row with a date the reader cannot parse (a database edited by hand
+    // or migrated) made every read throw: the popup never opened again.
+    [Fact]
+    public void RowWithUnreadableDate_IsSkippedNotFatal()
+    {
+        var good = _store.AddOrUpdate(Sample(content: "good"));
+        var bad = _store.AddOrUpdate(Sample(content: "bad"));
+        _store.ExecuteForTests("UPDATE clipboard SET datetime = 'yesterday-ish' WHERE id = " + bad.Id);
+
+        Assert.Equal(["good"], _store.List().Select(i => i.Content));
+        Assert.Equal(["good"], _store.Search("").Select(i => i.Content));
+        Assert.Null(_store.GetById(bad.Id));
+        Assert.Equal(good.Id, _store.GetLatest()?.Id);
     }
 
     [Fact]

@@ -37,7 +37,8 @@ public static class DibToPng
         var height = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(8, 4));
         var bitCount = BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(14, 2));
         var compression = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(16, 4));
-        if (headerSize < 40 || width <= 0 || height == 0)
+        if (headerSize < 40 || width <= 0 || height == 0 || height == int.MinValue
+            || !ImageLimits.IsWithin(width, Math.Abs(height)))
         {
             return false;
         }
@@ -57,19 +58,30 @@ public static class DibToPng
         && BinaryPrimitives.ReadUInt32LittleEndian(dib.Slice(48, 4)) == 0x000000FF;
 
     // The deferred half of the clipboard read: PNG bytes pass through, a
-    // DIB is encoded; an unusable DIB yields no image instead of throwing
-    // (the text/file parts of the same copy are still captured).
+    // DIB is encoded; an unusable DIB yields no image instead of throwing.
     public static ImageSnapshot? ToSnapshot(byte[] bytes, bool isPng)
     {
         if (isPng)
         {
-            return bytes.Length > 0 ? new ImageSnapshot("image/png", bytes) : null;
+            if (bytes.Length == 0)
+            {
+                return null;
+            }
+            // Stored as is, but every thumbnail decodes it whole: a PNG over
+            // the cap is skipped like a bitmap over it.
+            if (ImageLimits.TryReadPngSize(bytes, out var pngWidth, out var pngHeight)
+                && !ImageLimits.IsWithin(pngWidth, pngHeight))
+            {
+                return null;
+            }
+            return new ImageSnapshot("image/png", bytes);
         }
         try
         {
             return new ImageSnapshot("image/png", FromDib(bytes));
         }
-        catch (Exception ex) when (ex is NotSupportedException or ArgumentException)
+        catch (Exception ex) when (ex is NotSupportedException or ArgumentException
+            or OverflowException or IndexOutOfRangeException or OutOfMemoryException)
         {
             return null;
         }
@@ -86,7 +98,7 @@ public static class DibToPng
         var height = BinaryPrimitives.ReadInt32LittleEndian(dib.AsSpan(8, 4));
         var bitCount = BinaryPrimitives.ReadUInt16LittleEndian(dib.AsSpan(14, 2));
         var compression = BinaryPrimitives.ReadInt32LittleEndian(dib.AsSpan(16, 4));
-        if (headerSize < 40 || width <= 0 || height == 0)
+        if (headerSize < 40 || width <= 0 || height == 0 || height == int.MinValue)
         {
             throw new ArgumentException("Invalid DIB header.", nameof(dib));
         }
@@ -99,69 +111,66 @@ public static class DibToPng
         {
             throw new NotSupportedException($"Compressed DIBs unsupported (compression {compression}).");
         }
-        // Pixels start after the header, the masks of a plain info header
-        // with BI_BITFIELDS, and any (optional) color table.
-        var colorsUsed = BinaryPrimitives.ReadInt32LittleEndian(dib.AsSpan(32, 4));
-        var pixelOffset = headerSize
-            + (bitfields && headerSize == 40 ? 12 : 0)
-            + (colorsUsed > 0 ? colorsUsed * 4 : 0);
+        if (bitCount is not (24 or 32))
+        {
+            throw new NotSupportedException($"DIB bit depth {bitCount}bpp unsupported in v1.");
+        }
         var topDown = height < 0;
         var absHeight = Math.Abs(height);
-        return bitCount switch
+        if (!ImageLimits.IsWithin(width, absHeight))
         {
-            32 => From32bpp(dib, pixelOffset, width, absHeight, topDown),
-            24 => From24bpp(dib, pixelOffset, width, absHeight, topDown),
-            _ => throw new NotSupportedException($"DIB bit depth {bitCount}bpp unsupported in v1."),
-        };
+            throw new NotSupportedException($"DIB of {width}x{absHeight} is over the {ImageLimits.MaxPixels} pixel cap.");
+        }
+        // Pixels start after the header, the masks of a plain info header
+        // with BI_BITFIELDS, and any (optional) color table. Checked in
+        // 64-bit before anything is allocated: the header is the source
+        // app's word, and a 52-byte block claiming 20000 x 20000 used to
+        // allocate 1.5 GB before failing.
+        var colorsUsed = BinaryPrimitives.ReadInt32LittleEndian(dib.AsSpan(32, 4));
+        var pixelOffset = (long)headerSize
+            + (bitfields && headerSize == 40 ? 12 : 0)
+            + (colorsUsed > 0 ? colorsUsed * 4L : 0);
+        var stride = bitCount == 32 ? width * 4L : (width * 3L + 3) / 4 * 4;
+        if (pixelOffset + stride * absHeight > dib.Length)
+        {
+            throw new ArgumentException("DIB pixel data truncated.", nameof(dib));
+        }
+        return bitCount == 32
+            ? From32bpp(dib, (int)pixelOffset, width, absHeight, topDown)
+            : From24bpp(dib, (int)pixelOffset, width, absHeight, topDown);
     }
 
+    // Rows go straight from the DIB into the compressor: no full-size RGBA
+    // copy and no second copy with the filter bytes.
     private static byte[] From32bpp(byte[] dib, int pixelOffset, int width, int height, bool topDown)
     {
         var stride = width * 4;
-        var rgba = new byte[width * height * 4];
-        for (var row = 0; row < height; row++)
+        return PngEncoder.Encode(width, height, bytesPerPixel: 4, colorType: 6, (row, dest) =>
         {
-            var srcRow = topDown ? row : height - 1 - row;
-            var srcOff = pixelOffset + srcRow * stride;
-            if (srcOff + stride > dib.Length)
+            var s = pixelOffset + (topDown ? row : height - 1 - row) * stride;
+            for (var d = 0; d < dest.Length; d += 4, s += 4)
             {
-                throw new ArgumentException("DIB pixel data truncated.", nameof(dib));
+                dest[d] = dib[s + 2]; // R
+                dest[d + 1] = dib[s + 1]; // G
+                dest[d + 2] = dib[s]; // B
+                dest[d + 3] = 255; // DIB has no alpha: opaque
             }
-            for (var col = 0; col < width; col++)
-            {
-                var s = srcOff + col * 4;
-                var d = (row * width + col) * 4;
-                rgba[d] = dib[s + 2]; // R
-                rgba[d + 1] = dib[s + 1]; // G
-                rgba[d + 2] = dib[s]; // B
-                rgba[d + 3] = 255; // DIB has no alpha: opaque
-            }
-        }
-        return PngEncoder.EncodeRgba(width, height, rgba);
+        });
     }
 
     private static byte[] From24bpp(byte[] dib, int pixelOffset, int width, int height, bool topDown)
     {
-        var stride = ((width * 3 + 3) / 4) * 4;
-        var rgb = new byte[width * height * 3];
-        for (var row = 0; row < height; row++)
+        var stride = (width * 3 + 3) / 4 * 4;
+        return PngEncoder.Encode(width, height, bytesPerPixel: 3, colorType: 2, (row, dest) =>
         {
-            var srcRow = topDown ? row : height - 1 - row;
-            var srcOff = pixelOffset + srcRow * stride;
-            if (srcOff + stride > dib.Length)
+            var s = pixelOffset + (topDown ? row : height - 1 - row) * stride;
+            for (var d = 0; d < dest.Length; d += 3, s += 3)
             {
-                throw new ArgumentException("DIB pixel data truncated.", nameof(dib));
+                dest[d] = dib[s + 2];
+                dest[d + 1] = dib[s + 1];
+                dest[d + 2] = dib[s];
             }
-            for (var col = 0; col < width; col++)
-            {
-                var s = srcOff + col * 3;
-                var d = (row * width + col) * 3;
-                rgb[d] = dib[s + 2];
-                rgb[d + 1] = dib[s + 1];
-                rgb[d + 2] = dib[s];
-            }
-        }
-        return PngEncoder.EncodeRgb(width, height, rgb);
+        });
     }
 }
 
@@ -171,13 +180,10 @@ internal static class PngEncoder
 {
     private static readonly byte[] Signature = [137, 80, 78, 71, 13, 10, 26, 10];
 
-    public static byte[] EncodeRgba(int width, int height, byte[] rgba) =>
-        Encode(width, height, rgba, bytesPerPixel: 4, colorType: 6);
+    // Fills one row (top to bottom) of unfiltered pixels.
+    public delegate void RowFiller(int row, Span<byte> destination);
 
-    public static byte[] EncodeRgb(int width, int height, byte[] rgb) =>
-        Encode(width, height, rgb, bytesPerPixel: 3, colorType: 2);
-
-    private static byte[] Encode(int width, int height, byte[] pixels, int bytesPerPixel, byte colorType)
+    public static byte[] Encode(int width, int height, int bytesPerPixel, byte colorType, RowFiller fillRow)
     {
         using var output = new MemoryStream();
         output.Write(Signature);
@@ -188,18 +194,15 @@ internal static class PngEncoder
         ihdr[9] = colorType;
         WriteChunk(output, "IHDR", ihdr);
 
-        using var raw = new MemoryStream();
-        var stride = width * bytesPerPixel;
-        for (var row = 0; row < height; row++)
-        {
-            raw.WriteByte(0); // filter: none
-            raw.Write(pixels, row * stride, stride);
-        }
+        var line = new byte[1 + width * bytesPerPixel]; // [0] = filter: none
         using var compressed = new MemoryStream();
         using (var zlib = new ZLibStream(compressed, CompressionLevel.Optimal, leaveOpen: true))
         {
-            raw.Position = 0;
-            raw.CopyTo(zlib);
+            for (var row = 0; row < height; row++)
+            {
+                fillRow(row, line.AsSpan(1));
+                zlib.Write(line);
+            }
         }
         WriteChunk(output, "IDAT", compressed.ToArray());
         WriteChunk(output, "IEND", []);

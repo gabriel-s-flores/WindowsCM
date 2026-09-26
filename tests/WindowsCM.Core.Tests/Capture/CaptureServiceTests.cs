@@ -262,6 +262,9 @@ public sealed class CaptureServiceTests : IDisposable
 
         Assert.NotNull(saved);
         Assert.Contains("StartFragment", saved.MetadataJson);
+        // Stored compactly (no \u003C escapes) and read back verbatim.
+        Assert.Contains("<!--StartFragment-->hi<!--EndFragment-->", saved.MetadataJson);
+        Assert.Equal(payload.Html, WindowsCM.Core.Previews.ItemMetadataJson.GetString(saved.MetadataJson, "html"));
         // The text itself still classifies normally.
         Assert.Equal("just a note to self", saved.Content);
     }
@@ -372,5 +375,167 @@ public sealed class CaptureServiceTests : IDisposable
         await Task.WhenAll(capturing, copying);
 
         Assert.Empty(errors);
+    }
+
+    // A store that fails the first write (disk full, busy database).
+    private sealed class FailOnceStore(IHistoryStore inner) : IHistoryStore
+    {
+        public int Failures = 1;
+        public ClipboardItem AddOrUpdate(ClipboardItem item)
+        {
+            if (Failures-- > 0)
+            {
+                throw new IOException("disk full");
+            }
+            return inner.AddOrUpdate(item);
+        }
+        public IReadOnlyList<ClipboardItem> List() => inner.List();
+        public ClipboardItem? GetById(long id) => inner.GetById(id);
+        public long TryUpdateContent(long id, ItemKind kind, string content) => inner.TryUpdateContent(id, kind, content);
+        public int Clear(bool keepProtected, bool protectPinned = true, bool protectTagged = true) =>
+            inner.Clear(keepProtected, protectPinned, protectTagged);
+        public int Evict(int maxCount, int maxAgeMinutes, DateTime utcNow, bool protectPinned = true, bool protectTagged = true) =>
+            inner.Evict(maxCount, maxAgeMinutes, utcNow, protectPinned, protectTagged);
+        public IReadOnlyList<ClipboardItem> Search(string query, bool? pinned = null, string? tag = null,
+            ItemKind? kind = null, bool excludePinned = false, bool excludeTagged = false) =>
+            inner.Search(query, pinned, tag, kind, excludePinned, excludeTagged);
+        public void RefreshDate(long id, DateTime utcNow) => inner.RefreshDate(id, utcNow);
+        public bool Delete(long id) => inner.Delete(id);
+        public void SetPinned(long id, bool pinned) => inner.SetPinned(id, pinned);
+        public void SetTag(long id, string? tag) => inner.SetTag(id, tag);
+        public void SetTitle(long id, string? title) => inner.SetTitle(id, title);
+        public void SetMetadata(long id, string? metadataJson) => inner.SetMetadata(id, metadataJson);
+        public void SetMetadataAndTitle(long id, string? metadataJson, string? title) =>
+            inner.SetMetadataAndTitle(id, metadataJson, title);
+        public void Dispose() => inner.Dispose();
+    }
+
+    // A failed write used to mark the copy as seen: the user's immediate
+    // re-copy was then dropped as a duplicate and never stored.
+    [Fact]
+    public void Capture_FailedWrite_DoesNotSwallowTheRetry()
+    {
+        var failing = new FailOnceStore(_store);
+        var capture = new CaptureService(failing, _images, _options, _clock);
+
+        Assert.Throws<IOException>(() => capture.Capture(TextPayload("important note"), null, _clock.UtcNow));
+        var retried = capture.Capture(TextPayload("important note"), null, _clock.UtcNow);
+
+        Assert.NotNull(retried);
+        Assert.Single(_store.List());
+    }
+
+    private ClipboardPayload ImagePayload(byte seed) =>
+        new(new ImageSnapshot("image/png", [seed, 1, 2, 3]), null, null, []);
+
+    private string ImageFile(byte seed) =>
+        Path.Combine(_imagesDir, ClipboardHash.Md5Hex(new byte[] { seed, 1, 2, 3 }) + ".png");
+
+    // Image files of evicted, deleted or cleared items stayed on disk until
+    // the next restart: hundreds of MB a day for a tray app that takes
+    // screenshots and runs for weeks.
+    [Fact]
+    public void Capture_SweepsImagesOfRemovedItemsWhileRunning()
+    {
+        var capture = new CaptureService(_store, _images,
+            new CaptureOptions { HistoryMaxItems = 1, OrphanImageSweepInterval = TimeSpan.FromMinutes(15) }, _clock);
+        capture.Capture(ImagePayload(1), null, _clock.UtcNow);
+        _clock.UtcNow = _clock.UtcNow.AddMinutes(1);
+        capture.Capture(ImagePayload(2), null, _clock.UtcNow); // evicts image 1
+        Assert.True(File.Exists(ImageFile(1)));
+
+        _clock.UtcNow = _clock.UtcNow.AddMinutes(20);
+        capture.Capture(TextPayload("later note"), null, _clock.UtcNow); // evicts image 2
+
+        Assert.False(File.Exists(ImageFile(1)));
+        Assert.False(File.Exists(ImageFile(2)));
+    }
+
+    [Fact]
+    public void Capture_OrphanSweepIsThrottled()
+    {
+        var capture = new CaptureService(_store, _images,
+            new CaptureOptions { HistoryMaxItems = 1, OrphanImageSweepInterval = TimeSpan.FromMinutes(15) }, _clock);
+        capture.Capture(ImagePayload(1), null, _clock.UtcNow);
+        _clock.UtcNow = _clock.UtcNow.AddMinutes(20);
+        capture.Capture(ImagePayload(2), null, _clock.UtcNow); // sweeps: image 1 gone
+        Assert.False(File.Exists(ImageFile(1)));
+
+        _clock.UtcNow = _clock.UtcNow.AddMinutes(1);
+        capture.Capture(TextPayload("soon after"), null, _clock.UtcNow);
+
+        Assert.True(File.Exists(ImageFile(2)));
+    }
+
+    // The sweep reads the persistent history and deletes in the persistent
+    // folder only: an incognito session never makes persistent images look
+    // unreferenced.
+    [Fact]
+    public void Capture_SweepDuringIncognito_KeepsPersistentImages()
+    {
+        using var coordinator = new IncognitoSessionCoordinator(_store, _images);
+        var capture = new CaptureService(coordinator, coordinator,
+            new CaptureOptions { OrphanImageSweepInterval = TimeSpan.Zero }, _clock);
+        capture.Capture(ImagePayload(7), null, _clock.UtcNow);
+        coordinator.SetIncognito(true);
+
+        _clock.UtcNow = _clock.UtcNow.AddHours(1);
+        capture.Capture(TextPayload("incognito note"), null, _clock.UtcNow);
+        capture.Capture(ImagePayload(8), null, _clock.UtcNow.AddSeconds(1));
+
+        Assert.True(File.Exists(ImageFile(7)));
+    }
+
+    // A stand-in history (default location, memory-only, recreated file)
+    // shares the images folder with the real one: sweeping against it
+    // deleted the real history's images.
+    [Fact]
+    public void SweepDisabled_NeverDeletesImages()
+    {
+        var capture = new CaptureService(_store, _images,
+            new CaptureOptions { HistoryMaxItems = 1, OrphanImageSweepInterval = TimeSpan.Zero, SweepOrphanImages = false }, _clock);
+        var foreign = Path.Combine(_imagesDir, "belongs-to-the-real-history.png");
+        File.WriteAllBytes(foreign, [1]);
+
+        capture.Capture(ImagePayload(1), null, _clock.UtcNow);
+        capture.Capture(TextPayload("pushes the image out"), null, _clock.UtcNow.AddMinutes(1));
+        capture.SweepOrphanImages();
+
+        Assert.True(File.Exists(foreign));
+        Assert.True(File.Exists(ImageFile(1)));
+    }
+
+    // Pasting from the normal history while incognito: the ids of the two
+    // sessions overlap, and the item used to be looked up again in the
+    // incognito one.
+    [Fact]
+    public void CopiedFromHistory_FromTheNormalHistoryDuringIncognito_TouchesThatItemOnly()
+    {
+        using var coordinator = new IncognitoSessionCoordinator(_store, _images);
+        var capture = new CaptureService(coordinator, coordinator, _options, _clock);
+        var normal = _store.AddOrUpdate(new ClipboardItem(ItemKind.Text, "normal note", false, null, _clock.UtcNow, null, null));
+        coordinator.SetIncognito(true);
+        var secret = coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "secret note", false, null, _clock.UtcNow, null, null));
+        Assert.Equal(normal.Id, secret.Id);
+
+        var later = _clock.UtcNow.AddHours(1);
+        capture.CopiedFromHistory(normal, _store, later);
+
+        Assert.Equal(later, _store.GetById(normal.Id)!.CapturedAt);
+        Assert.Equal(_clock.UtcNow, coordinator.GetById(secret.Id)!.CapturedAt);
+        // The paste's own clipboard write is not captured.
+        Assert.Null(capture.Capture(TextPayload("normal note"), null, later));
+    }
+
+    // A row the item reader skips (an unreadable date) still owns its image.
+    [Fact]
+    public void Sweep_KeepsImagesOfRowsTheReaderSkips()
+    {
+        var saved = _capture.Capture(ImagePayload(3), null, _clock.UtcNow);
+        _store.ExecuteForTests($"UPDATE clipboard SET datetime = 'not a date' WHERE id = {saved!.Id}");
+
+        _capture.SweepOrphanImages();
+
+        Assert.True(File.Exists(ImageFile(3)));
     }
 }

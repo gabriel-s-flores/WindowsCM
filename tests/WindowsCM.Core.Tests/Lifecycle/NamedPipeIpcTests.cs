@@ -121,6 +121,58 @@ public sealed class NamedPipeIpcTests
         Assert.Null(response);
     }
 
+    // A primary whose UI thread hangs accepts the connection but never
+    // answers: the launching process used to wait for the reply forever.
+    [Fact]
+    public async Task Forward_ServerNeverAnswers_GivesUpAfterTheTimeout()
+    {
+        var pipe = UniquePipe();
+        using var silent = new System.IO.Pipes.NamedPipeServerStream(
+            pipe, System.IO.Pipes.PipeDirection.InOut, 1,
+            System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+        var accepted = silent.WaitForConnectionAsync();
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var forward = Task.Run(() => new NamedPipeForwarder(replyTimeout: TimeSpan.FromMilliseconds(500)).TryForward(
+            pipe, "toggle", TimeSpan.FromSeconds(2), out _));
+        var finished = await Task.WhenAny(forward, Task.Delay(TimeSpan.FromSeconds(10)));
+
+        Assert.Same(forward, finished);
+        Assert.False(await forward);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5));
+        await accepted;
+    }
+
+    // A client that connects and never sends its line held the one-instance
+    // pipe for good: every later launch reported "not running".
+    [Fact]
+    public async Task SilentClient_IsDroppedAndTheServerKeepsServing()
+    {
+        // Off Windows, pipes are Unix sockets that do not serve again once
+        // an instance is disposed (StoreFailure_AnswersErrorAndKeepsServing
+        // fails there too); the Windows CI runs this.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        var pipe = UniquePipe();
+        var popup = new FakePopup();
+        using var store = new SqliteHistoryStore("Data Source=:memory:");
+        using var server = new NamedPipeServer(pipe, new IpcDispatcher(popup, store),
+            clientTimeout: TimeSpan.FromMilliseconds(300));
+        server.Start();
+        await Task.Delay(300);
+        using var mute = new System.IO.Pipes.NamedPipeClientStream(
+            ".", pipe, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous);
+        mute.Connect(2000);
+
+        var ok = new NamedPipeForwarder().TryForward(
+            pipe, "ping", TimeSpan.FromSeconds(5), out var response);
+
+        Assert.True(ok);
+        Assert.Equal("ok", response);
+    }
+
     [Fact]
     public void Start_AfterDispose_Throws()
     {

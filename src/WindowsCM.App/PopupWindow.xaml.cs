@@ -37,6 +37,7 @@ public partial class PopupWindow : Window
     private bool _isRenderingHooked;
     private long _lastRenderTicks;
     private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
+    private readonly System.Windows.Threading.DispatcherTimer _searchTimer;
     // Free placement (ADR 0006): drag by the top, resize from the edges.
     private bool _isFreePlacement;
 
@@ -72,16 +73,32 @@ public partial class PopupWindow : Window
                 ItemsList.Items.Refresh();
             }
         };
+        // Each keystroke reloaded the history and rebuilt every visible card:
+        // the search applies once typing pauses, and before any key that
+        // acts on the list (PendingSearchKeys), so Enter never picks from
+        // the list the user was still filtering.
+        _searchTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Input, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(120),
+        };
+        _searchTimer.Tick += (_, _) => ApplyPendingSearch();
         FaviconService.FaviconUpdated += _ => RequestCardRefresh();
         CardFileFacts.Updated += RequestCardRefresh;
+        ImageThumbnailCache.Updated += RequestCardRefresh;
     }
 
     // Thread-safe: file facts arrive on their probe thread.
     private void RequestCardRefresh() =>
         Dispatcher.BeginInvoke(() =>
         {
-            _cardRefreshTimer.Stop();
-            _cardRefreshTimer.Start();
+            // At most one refresh per interval: restarting the timer on every
+            // result kept pushing it back while decodes streamed in, and the
+            // cards stayed blank until the whole queue was done.
+            if (!_cardRefreshTimer.IsEnabled)
+            {
+                _cardRefreshTimer.Start();
+            }
         });
 
     public void ApplyTheme(ColorScheme scheme)
@@ -212,17 +229,64 @@ public partial class PopupWindow : Window
 
     public new void Hide()
     {
+        if (_searchTimer.IsEnabled)
+        {
+            _searchTimer.Stop();
+            // Kept for RememberSearch; otherwise forgotten just below, and
+            // applying it first would only reload the history twice.
+            if (_app.Settings.Behavior.RememberSearch)
+            {
+                ApplyPendingSearch();
+            }
+        }
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
         ResetScrollToInitial();
         base.Hide();
-        if (!_app.Settings.Behavior.RememberSearch)
+        // Only when there is a search to forget: SetSearch reloads the whole
+        // history, and a paste hides both popups on its way to the target.
+        if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
         {
             _model.SetSearch("");
+        }
+        if (!_app.Settings.Behavior.RememberSearch && SearchBox.Text.Length > 0)
+        {
             SearchBox.Text = "";
         }
 
         ApplyScrollbarPosition();
+    }
+
+    // Built once for the app's lifetime: Alt+F4 (or any WM_CLOSE) only hides
+    // it. A closed window can never be shown again, so every later hotkey
+    // threw ("Cannot ... after a Window has closed") until the burst limit
+    // ended the app.
+    private bool _closingForExit;
+
+    internal void CloseForExit()
+    {
+        _closingForExit = true;
+        Close();
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_closingForExit)
+        {
+            e.Cancel = true;
+            // Also reached while the app shuts down (WPF closes every window
+            // first, ignoring Cancel): nothing may throw here, or the exit
+            // cleanup (settings save, tray icon, database) is skipped.
+            try
+            {
+                Hide();
+            }
+            catch (Exception ex)
+            {
+                _app.LogError("popup-close", ex);
+            }
+        }
+        base.OnClosing(e);
     }
 
     public void ResetScrollToInitial()
@@ -555,9 +619,9 @@ public partial class PopupWindow : Window
             return;
         }
         var source = e.OriginalSource as DependencyObject;
-        if (VisualAncestor<System.Windows.Controls.ListBox>(source) is not null
-            || VisualAncestor<System.Windows.Controls.Primitives.ButtonBase>(source) is not null
-            || VisualAncestor<System.Windows.Controls.Primitives.TextBoxBase>(source) is not null)
+        if (VisualTreeWalk.FindAncestor<System.Windows.Controls.ListBox>(source) is not null
+            || VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(source) is not null
+            || VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.TextBoxBase>(source) is not null)
         {
             return;
         }
@@ -643,22 +707,6 @@ public partial class PopupWindow : Window
         });
     }
 
-    // VisualTreeHelper.GetParent throws for content elements (Run, ...):
-    // stop walking at the first non-visual node.
-    private static T? VisualAncestor<T>(DependencyObject? current)
-        where T : DependencyObject
-    {
-        while (current is Visual or System.Windows.Media.Media3D.Visual3D)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
-    }
-
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         UpdateSearchPlaceholder();
@@ -682,11 +730,29 @@ public partial class PopupWindow : Window
             return;
         }
         UpdateSearchPlaceholder();
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private void ApplyPendingSearch()
+    {
+        _searchTimer.Stop();
+        if (_model.SearchText == SearchBox.Text)
+        {
+            return;
+        }
         // By design this never repositions or resizes: SizeToContent is
         // Manual while open (ticket 21), so filtering only swaps rows.
         _model.SetSearch(SearchBox.Text);
         RefreshView();
     }
+
+    // Keys that act on the list rather than edit the search text.
+    internal static bool PendingSearchKeys(Key key) =>
+        key is Key.Enter or Key.Up or Key.Down or Key.Left or Key.Right or Key.Tab
+            or Key.PageUp or Key.PageDown or Key.Home or Key.End or Key.Delete
+        || Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+        || Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
 
     private void OnPinsClicked(object sender, RoutedEventArgs e)
     {
@@ -837,7 +903,7 @@ public partial class PopupWindow : Window
         {
             return;
         }
-        var isInteractive = FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
+        var isInteractive = VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
         var index = RowIndexAt(e.OriginalSource as DependencyObject);
         if (!PopupClickPolicy.ShouldActivate(IsVisible, index, isInteractive))
         {
@@ -847,13 +913,41 @@ public partial class PopupWindow : Window
         var request = _model.ActivateAt(index!.Value, runDefaultAction: false);
         if (request is not null)
         {
-            if (!shiftHeld)
-            {
-                _isActivating = true;
-            }
-            _ = _app.ActivateAsync(request, shiftHeld);
+            StartActivation(request, shiftHeld);
         }
     }
+
+    // A pick that fails before the popup hides (item gone, clipboard held
+    // by another app) left _isActivating set, and the popup ignored every
+    // later click until it was reopened.
+    private void StartActivation(ActivationRequest request, bool shiftHeld)
+    {
+        // Only a paste holds the popup (a copy-only or default-action pick
+        // does not), and only the latest one releases it.
+        var holds = !shiftHeld && !request.RunDefaultAction;
+        if (holds)
+        {
+            _isActivating = true;
+        }
+        _ = ActivateThenSettleAsync(request, shiftHeld, holds ? ++_activationToken : 0);
+    }
+
+    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld, int token)
+    {
+        try
+        {
+            await _app.ActivateAsync(request, shiftHeld);
+        }
+        finally
+        {
+            if (token != 0 && token == _activationToken)
+            {
+                _isActivating = false;
+            }
+        }
+    }
+
+    private int _activationToken;
 
     // Row under the mouse-up point, or null for empty area / scrollbar /
     // header (OriginalSource outside any ListBoxItem). IndexFromContainer
@@ -861,7 +955,7 @@ public partial class PopupWindow : Window
     // click policy sees a single "no row" shape.
     private int? RowIndexAt(DependencyObject? source)
     {
-        var item = FindAncestor<ListBoxItem>(source);
+        var item = VisualTreeWalk.FindAncestor<ListBoxItem>(source);
         if (item is null)
         {
             return null;
@@ -870,22 +964,12 @@ public partial class PopupWindow : Window
         return index >= 0 ? index : null;
     }
 
-    private static T? FindAncestor<T>(DependencyObject? current)
-        where T : DependencyObject
-    {
-        while (current is not null)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
-    }
-
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (_searchTimer.IsEnabled && PendingSearchKeys(e.Key == Key.System ? e.SystemKey : e.Key))
+        {
+            ApplyPendingSearch();
+        }
         // Ctrl+Q (QR) never reaches the keymap — PopupKey has no Q chord —
         // so the shell owns it directly (QrActions eligibility + dialog).
         if (e.Key == Key.Q
@@ -917,7 +1001,10 @@ public partial class PopupWindow : Window
         {
             return null;
         }
-        var key = e.Key switch
+        // With Alt held WPF reports Key.System and the real key in
+        // SystemKey: Alt+P never reached the keymap.
+        var pressed = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = pressed switch
         {
             Key.Enter => (PopupKey?)PopupKey.Enter,
             Key.Space => PopupKey.Space,
@@ -1016,7 +1103,7 @@ public partial class PopupWindow : Window
         var request = _model.ActivateSelected(runDefaultAction);
         if (request is not null)
         {
-            _ = _app.ActivateAsync(request, shiftHeld);
+            StartActivation(request, shiftHeld);
         }
     }
 
@@ -1180,24 +1267,22 @@ public partial class PopupWindow : Window
         var pasteItem = new MenuItem { Header = s.ContextMenuPaste, InputGestureText = "Enter" };
         pasteItem.Click += (_, _) =>
         {
-            var req = new ActivationRequest(item.Id, RunDefaultAction: false);
-            _isActivating = true;
-            _ = _app.ActivateAsync(req, shiftHeld: false);
+            StartActivation(new ActivationRequest(item.Id, RunDefaultAction: false), shiftHeld: false);
         };
         menu.Items.Add(pasteItem);
 
         var copyItem = new MenuItem { Header = s.ContextMenuCopy, InputGestureText = "Shift+Enter" };
         copyItem.Click += (_, _) =>
         {
-            var req = new ActivationRequest(item.Id, RunDefaultAction: false);
-            _ = _app.ActivateAsync(req, shiftHeld: true);
+            StartActivation(new ActivationRequest(item.Id, RunDefaultAction: false), shiftHeld: true);
         };
         menu.Items.Add(copyItem);
 
         var pinItem = new MenuItem
         {
             Header = item.Pinned ? s.ContextMenuUnpin : s.ContextMenuPin,
-            InputGestureText = "Alt+P"
+            // The keymap pins with Ctrl+S (Alt+P toggles the pins filter).
+            InputGestureText = "Ctrl+S"
         };
         pinItem.Click += (_, _) =>
         {

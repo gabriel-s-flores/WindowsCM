@@ -63,15 +63,24 @@ public partial class App : System.Windows.Application
     private readonly ErrorLog _errorLog = new(ErrorLog.DefaultPath());
     private readonly UnhandledErrorPolicy _errorPolicy = new();
     private System.Windows.Threading.DispatcherTimer? _viewRefreshTimer;
+    private System.Windows.Threading.DispatcherTimer? _liveSettingsTimer;
     private Win32ForegroundTracker? _foregroundTracker;
+    private ColorScheme _lastSystemScheme = ColorScheme.Dark;
     private bool _servicesReady;
 
     internal AppSettings Settings => _settings;
-    internal IHistoryStore Store => _coordinator ?? (IHistoryStore?)_store ?? throw new InvalidOperationException("Services not built.");
+    // What the popups act on (pin, edit, delete, paste): the history they
+    // show — the normal one when the user switched to it during incognito.
+    internal IHistoryStore Store => ViewedStore;
+
+    private IHistoryStore ViewedStore =>
+        _coordinator is { IsIncognito: true } coordinator && _popupModel is { IsViewingIncognito: false }
+            ? coordinator.PersistentStore
+            : _coordinator ?? (IHistoryStore?)_store ?? throw new InvalidOperationException("Services not built.");
     internal ActionExecutor Executor => _executor ?? throw new InvalidOperationException("Services not built.");
     internal ActionConfig Actions => _actions;
     internal bool IsIncognito => _coordinator?.IsIncognito ?? false;
-    internal MiniTransferHttpServer? TransferServer => _transferServer;
+    internal MiniTransferHttpServer? TransferServer => EnsureTransferServer();
 
     internal void SetIncognito(bool on)
     {
@@ -81,9 +90,32 @@ public partial class App : System.Windows.Application
         }
         _coordinator.SetIncognito(on);
         _popupModel.SetIncognito(on);
-        _popup.RefreshView();
-        _compactPopup?.RefreshView();
+        RefreshOpenPopups();
         _tray?.UpdateIncognitoState(on);
+    }
+
+    // The two popups share one PopupViewModel but may order it differently
+    // (recent first or last, per popup). Refreshing both re-queried the
+    // model in the compact popup's order while the large popup kept showing
+    // its own, so clicking card i there pasted a different item. Only an
+    // open popup is refreshed, in its own order; a hidden one reloads when
+    // it is shown.
+    internal void RefreshOpenPopups()
+    {
+        if (_popupModel is null)
+        {
+            return;
+        }
+        if (_popup?.IsVisible == true)
+        {
+            _popupModel.Refresh();
+            _popup.RefreshView();
+        }
+        else if (_compactPopup?.IsVisible == true)
+        {
+            _popupModel.Refresh();
+            _compactPopup.RefreshView();
+        }
     }
 
     private void OnStartup(object sender, StartupEventArgs e)
@@ -167,6 +199,28 @@ public partial class App : System.Windows.Application
             LogError("task", args.Exception);
             args.SetObserved();
         };
+        // The tray icon is WinForms: an exception in its click or menu
+        // handlers never reaches DispatcherUnhandledException. WinForms
+        // showed its own "unhandled exception" dialog instead, whose Quit
+        // ended the process without cleanup and without a log line.
+        try
+        {
+            System.Windows.Forms.Application.SetUnhandledExceptionMode(
+                System.Windows.Forms.UnhandledExceptionMode.CatchException);
+        }
+        catch (InvalidOperationException)
+        {
+            // A WinForms window already exists on this thread: the handler
+            // below still receives the exceptions.
+        }
+        System.Windows.Forms.Application.ThreadException += (_, args) =>
+        {
+            LogError("tray", args.Exception);
+            if (!_errorPolicy.ShouldContinue(DateTime.UtcNow))
+            {
+                Shutdown(1);
+            }
+        };
     }
 
     internal void LogError(string context, Exception exception) => _errorLog.Write(context, exception);
@@ -185,13 +239,18 @@ public partial class App : System.Windows.Application
         _viewRefreshTimer.Tick += (_, _) =>
         {
             _viewRefreshTimer.Stop();
-            _popupModel?.Refresh();
-            _popup?.RefreshView();
-            _compactPopup?.RefreshView();
+            RefreshOpenPopups();
         };
 
-        _store = new LockedHistoryStore(
-            new SqliteHistoryStore($"Data Source={_settings.History.ResolveDatabasePath()};Pooling=false"));
+        // Never throws: a damaged or unreachable database used to end every
+        // launch here, before the tray icon existed.
+        var history = HistoryStoreOpener.Open(
+            _settings.History.ResolveDatabasePath(), DatabasePaths.Default(), clock.UtcNow);
+        if (history.Error is not null)
+        {
+            LogError("history-open", history.Error);
+        }
+        _store = new LockedHistoryStore(history.Store);
         _disposables.Add(_store);
 
         var persistentImages = new FileImageAssetStore(AppFolders.ImagesDir());
@@ -199,17 +258,30 @@ public partial class App : System.Windows.Application
         _disposables.Add(_coordinator);
 
         var captureOptions = _settings.ToCaptureOptions();
+        // The images folder is shared by every history: only the user's own,
+        // opened normally, may decide which images are orphans.
+        captureOptions.SweepOrphanImages = history.Outcome == HistoryOpenOutcome.Opened;
         _captureOptions = captureOptions;
         _capture = new CaptureService(
             _coordinator, _coordinator, captureOptions, clock);
 
         // Startup rotation + orphan sweep (spec Janitor/history limits).
-        _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
-            clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-        _capture.SweepOrphanImages();
-        // Only the first screenful: a full prewarm would hold every
-        // thumbnail in memory even if the popup is never opened.
-        PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
+        // Housekeeping: a disk error here must not keep the app from
+        // starting.
+        try
+        {
+            _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
+                clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
+            _capture.SweepOrphanImages();
+            EphemeralImageAssetStore.SweepStaleSessions(TimeSpan.FromDays(1));
+            // Only the first screenful: a full prewarm would hold every
+            // thumbnail in memory even if the popup is never opened.
+            PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
+        }
+        catch (Exception ex)
+        {
+            LogError("startup-housekeeping", ex);
+        }
 
         var listener = new MessageOnlyClipboardListener();
         _disposables.Add(listener);
@@ -227,7 +299,7 @@ public partial class App : System.Windows.Application
         _disposables.Add(_foregroundTracker);
         var pasteOptions = _settings.ToPasteOptions();
         _pasteOptions = pasteOptions;
-        _orchestrator = new PasteOrchestrator(_coordinator, _capture,
+        _orchestrator = new PasteOrchestrator(new ViewedHistoryStore(() => ViewedStore), _capture,
             new FileImageReader(AppFolders.ImagesDir()), new Win32ClipboardWriter(),
             foreground, new Win32ElevationProbe(), new Win32PasteInjector(),
             new SystemPasteDelay(), pasteOptions, clock);
@@ -235,12 +307,28 @@ public partial class App : System.Windows.Application
 
         _executor = new ActionExecutor(new ProcessRunner(), new ShellLauncher());
 
+        var linkImages = new LinkImageCache(Path.Combine(AppFolders.CacheDir(), "link-images"));
         _linkPreviewService = new LinkPreviewService(new LinkPreviewHttpClient(),
-            new LinkImageCache(Path.Combine(AppFolders.CacheDir(), "link-images")), _settings.ToLinkPreviewOptions());
+            linkImages, _settings.ToLinkPreviewOptions());
+        try
+        {
+            // Nothing else removes preview images of links that left the
+            // history: the folder only grew. Only against the real history.
+            if (history.Outcome == HistoryOpenOutcome.Opened)
+            {
+                linkImages.SweepOrphans(_store.Search("", kind: ItemKind.Link).Select(i => i.Content));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogError("link-image-sweep", ex);
+        }
 
+        // Started on first use (EnsureTransferServer): listening on the
+        // network from every startup put a firewall prompt in front of every
+        // user and kept a port open for a feature most never touch.
         _transferServer = new MiniTransferHttpServer();
         _transferServer.PayloadReceived += OnTransferPayloadReceived;
-        _transferServer.Start();
         _disposables.Add(_transferServer);
 
         _popupModel = new PopupViewModel(_coordinator);
@@ -266,10 +354,10 @@ public partial class App : System.Windows.Application
             shell,
             captureTarget: CapturePasteTarget,
             onCaptured: hw => _pasteTarget = hw);
-        var history = new ShellHistory(_coordinator, _popupModel, _popup);
+        var clearHistory = new ShellHistory(_coordinator, RefreshOpenPopups);
         var settings = new ShellSettingsOpener(dispatcher, () => OpenSettings());
         var exiter = new ShellExiter(() => Shutdown(0));
-        var controller = new TrayController(popup, incognito, history, settings, exiter);
+        var controller = new TrayController(popup, incognito, clearHistory, settings, exiter);
 
         _tray = new TrayManager(controller, incognito, dispatcher, () => ShowCompactPopup(),
             isAutoPaste: () => _settings.Behavior.AutoPaste,
@@ -277,7 +365,20 @@ public partial class App : System.Windows.Application
         _disposables.Add(_tray);
         if (!string.IsNullOrWhiteSpace(conflictGuidance))
         {
-            _tray.ShowBalloon("Conflito de atalhos", conflictGuidance);
+            _tray.ShowBalloon(LocalizationManager.Strings.TrayShortcutConflictTitle, conflictGuidance);
+        }
+        var historyNotice = history.Outcome switch
+        {
+            HistoryOpenOutcome.RecoveredDamaged =>
+                LocalizationManager.Strings.HistoryDatabaseRecoveredBalloon(history.Detail ?? ""),
+            HistoryOpenOutcome.FellBackToDefault =>
+                LocalizationManager.Strings.HistoryDatabaseFallbackBalloon(history.Detail ?? ""),
+            HistoryOpenOutcome.MemoryOnly => LocalizationManager.Strings.HistoryDatabaseMemoryOnlyBalloon,
+            _ => null,
+        };
+        if (historyNotice is not null)
+        {
+            _tray.ShowBalloon("WindowsCM", historyNotice);
         }
 
         var dispatcherFacade = new IpcDispatcher(popup, _coordinator);
@@ -291,18 +392,30 @@ public partial class App : System.Windows.Application
 
         _themeDetector = new Win32WindowsThemeDetector();
         _disposables.Add(_themeDetector);
+        _lastSystemScheme = _themeDetector.DetectSystemScheme();
         _themeDetector.ThemeChanged += (_, scheme) =>
         {
             try
             {
-                dispatcher.Invoke(() => UpdateTheme(scheme));
+                dispatcher.Invoke(() =>
+                {
+                    // Windows raises this for many unrelated preference
+                    // changes; each rebuilt every window's theme, hidden
+                    // popups full of cards included.
+                    if (scheme == _lastSystemScheme)
+                    {
+                        return;
+                    }
+                    _lastSystemScheme = scheme;
+                    UpdateTheme(scheme);
+                });
             }
             catch (Exception ex)
             {
                 LogError("theme", ex);
             }
         };
-        UpdateTheme(_themeDetector.DetectSystemScheme());
+        UpdateTheme(_lastSystemScheme);
 
         WatchActionsFile();
 
@@ -517,19 +630,27 @@ public partial class App : System.Windows.Application
             _viewRefreshTimer.Start();
         });
 
+    // Runs on every popup open. A link whose fetch failed or found nothing
+    // (offline, a 404, a PDF, a page with only a description) was fetched
+    // again on every open; each is now retried after a while.
     internal void EnsureLinkPreviewsForRecentItems()
     {
         if (_coordinator is null || _linkPreviewService is null) return;
+        var now = DateTime.UtcNow;
         var links = _coordinator.Search("", kind: ItemKind.Link).Take(15);
         foreach (var link in links)
         {
             var (title, _, img) = ItemMetadataJson.GetLink(link.MetadataJson);
-            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(img))
+            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(img)
+                && !(_linkPreviewAttempts.TryGetValue(link.Content, out var at) && now - at < LinkPreviewRetryAfter))
             {
                 FetchPreviewInBackground(link);
             }
         }
     }
+
+    private static readonly TimeSpan LinkPreviewRetryAfter = TimeSpan.FromMinutes(30);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _linkPreviewAttempts = new();
 
     private void FetchPreviewInBackground(ClipboardItem item)
     {
@@ -541,10 +662,22 @@ public partial class App : System.Windows.Application
         {
             return;
         }
+        // A re-copied link that already has its preview is not fetched again.
+        var (knownTitle, _, knownImage) = ItemMetadataJson.GetLink(item.MetadataJson);
+        if (!string.IsNullOrWhiteSpace(knownTitle) || !string.IsNullOrWhiteSpace(knownImage))
+        {
+            return;
+        }
         if (!_inFlightLinkFetches.TryAdd(item.Id, 0))
         {
             return;
         }
+        if (_linkPreviewAttempts.Count > 500)
+        {
+            _linkPreviewAttempts.Clear();
+        }
+        _linkPreviewAttempts[item.Content] = DateTime.UtcNow;
+        var session = _coordinator.IsIncognito;
 
         _ = Task.Run(async () =>
         {
@@ -558,7 +691,10 @@ public partial class App : System.Windows.Application
 
                 var title = result.Metadata.Title;
                 var description = result.Metadata.Description;
-                var image = result.CachedImagePath ?? result.Metadata.ImageUrl;
+                // Only the cached copy: a remote URL (download failed, or
+                // preview images turned off) was never displayed and made
+                // each card realization start a throwaway download.
+                var image = result.CachedImagePath;
 
                 if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description) && string.IsNullOrWhiteSpace(image))
                 {
@@ -568,7 +704,15 @@ public partial class App : System.Windows.Application
                 var overlay = ItemMetadataJson.EncodeLink(title, description, image);
                 var merged = ItemMetadataJson.Merge(item.MetadataJson, overlay);
 
-                _coordinator.SetMetadataAndTitle(item.Id, merged, title);
+                // Ids are per session: after an incognito toggle during the
+                // fetch, the same id names an item of the other history.
+                if (_coordinator.IsIncognito != session)
+                {
+                    return;
+                }
+                // A title the user gave the card stays.
+                _coordinator.SetMetadataAndTitle(item.Id, merged,
+                    string.IsNullOrWhiteSpace(item.Title) ? title : item.Title);
 
                 RequestViewRefresh();
             }
@@ -584,22 +728,36 @@ public partial class App : System.Windows.Application
         });
     }
 
+    // Popups fire and forget these (a click, Enter): nothing may escape, or
+    // the failure only surfaced when the GC finalized the task and the user
+    // saw nothing happen.
     internal async Task ActivateAsync(ActivationRequest request, bool shiftHeld)
+    {
+        try
+        {
+            await ActivateCoreAsync(request, shiftHeld).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LogError("activate", ex);
+            _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TrayActivationFailedBalloon(ex.Message));
+        }
+    }
+
+    private async Task ActivateCoreAsync(ActivationRequest request, bool shiftHeld)
     {
         if (_coordinator is null || _orchestrator is null || _executor is null || _popup is null)
         {
             return;
         }
-        var item = _coordinator.GetById(request.ItemId);
+        var item = ViewedStore.GetById(request.ItemId);
         if (item is null)
         {
             var missing = ActivationFeedbackPolicy.ForMissingItem(request.ItemId);
             // Never silent: the list went stale (e.g. cleared via tray/pipe
             // between show and Enter), so refresh and explain instead of
             // vanishing.
-            _popupModel?.Refresh();
-            _popup.RefreshView();
-            _compactPopup?.RefreshView();
+            RefreshOpenPopups();
             if (!string.IsNullOrWhiteSpace(missing.BalloonText))
             {
                 _tray?.ShowBalloon("WindowsCM", missing.BalloonText);
@@ -645,8 +803,16 @@ public partial class App : System.Windows.Application
         {
             return;
         }
-        var result = await _executor.ExecuteAsync(action, item).ConfigureAwait(true);
-        await HandleActionResultAsync(result, item).ConfigureAwait(true);
+        try
+        {
+            var result = await _executor.ExecuteAsync(action, item).ConfigureAwait(true);
+            await HandleActionResultAsync(result, item).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LogError("action", ex);
+            _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TrayActionFailedBalloon(ex.Message));
+        }
     }
 
     internal void ShowQr(string payload)
@@ -654,9 +820,32 @@ public partial class App : System.Windows.Application
         ShowInFront(new QrWindow(payload));
     }
 
+    // The transfer server, started on first use; null (and explained)
+    // when no port can be opened.
+    private MiniTransferHttpServer? EnsureTransferServer()
+    {
+        if (_transferServer is null || _transferServer.IsRunning)
+        {
+            return _transferServer;
+        }
+        try
+        {
+            _transferServer.Start();
+            return _transferServer;
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException
+            or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LogError("transfer-start", ex);
+            _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TransferServerUnavailableBalloon);
+            return null;
+        }
+    }
+
     internal void ShowQr(ClipboardItem item)
     {
-        if (_transferServer != null && (item.Kind == ItemKind.File || item.Kind == ItemKind.Files || item.Kind == ItemKind.Image || item.Content.Length > 250))
+        var needsServer = item.Kind == ItemKind.File || item.Kind == ItemKind.Files || item.Kind == ItemKind.Image || item.Content.Length > 250;
+        if (needsServer && EnsureTransferServer() is { } transferServer)
         {
             string? filePath = null;
             List<string>? filePaths = null;
@@ -675,7 +864,7 @@ public partial class App : System.Windows.Application
                 filePath = ItemDisplayFormatter.TryGetLocalImagePath(item);
             }
 
-            var session = _transferServer.RegisterShare(
+            var session = transferServer.RegisterShare(
                 title: ItemDisplayFormatter.GetTitle(item),
                 kindLabel: ItemDisplayFormatter.GetTypeLabel(item, _settings.FileCategories),
                 filePath: filePath,
@@ -684,7 +873,7 @@ public partial class App : System.Windows.Application
                 itemId: item.Id);
 
             var ip = LocalNetworkResolver.GetPreferredLocalIp();
-            var url = _transferServer.BuildUrl(ip, $"/d/{session.Token}");
+            var url = transferServer.BuildUrl(ip, $"/d/{session.Token}");
             ShowInFront(new QrWindow(session, url, this));
             return;
         }
@@ -692,15 +881,24 @@ public partial class App : System.Windows.Application
         var textPayload = WindowsCM.Core.Actions.QrActions.Payload(item.Kind, item.Content);
         if (textPayload != null)
         {
-            ShowInFront(new QrWindow(textPayload));
+            try
+            {
+                ShowInFront(new QrWindow(textPayload));
+            }
+            catch (QRCoder.Exceptions.DataTooLongException ex)
+            {
+                // Only when the transfer server could not start (long text
+                // normally goes through it): already explained by a balloon.
+                LogError("qr", ex);
+            }
         }
     }
 
     internal void ShowMobileTransfer()
     {
-        if (_transferServer == null) return;
+        if (EnsureTransferServer() is not { } transferServer) return;
         var ip = LocalNetworkResolver.GetPreferredLocalIp();
-        ShowInFront(new MobileTransferWindow(_transferServer, ip));
+        ShowInFront(new MobileTransferWindow(transferServer, ip));
     }
 
     // The large popup stays up behind a QR opened from it and is Topmost, so
@@ -712,9 +910,12 @@ public partial class App : System.Windows.Application
         window.Activate();
     }
 
+    // Raised on the server's connection thread: queued, not waited for (a
+    // busy UI thread held the phone's request open, and at exit the
+    // server's disposal could wait on a handler blocked here).
     private void OnTransferPayloadReceived(IncomingTransferPayload payload)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.BeginInvoke(() =>
         {
             if (!string.IsNullOrWhiteSpace(payload.Text))
             {
@@ -730,9 +931,7 @@ public partial class App : System.Windows.Application
                     new ClipboardPayload(Image: null, Files: null, Text: payload.Text, Formats: ["CF_UNICODETEXT"], Html: null),
                     "Mobile Transfer");
 
-                _popupModel?.Refresh();
-                _popup?.RefreshView();
-                _compactPopup?.RefreshView();
+                RefreshOpenPopups();
 
                 SubtleToastWindow.ShowToast(LocalizationManager.Strings.MobileTextCopiedSuccess);
             }
@@ -756,9 +955,7 @@ public partial class App : System.Windows.Application
                         new ClipboardPayload(Image: null, Files: new FileSnapshot(paths, FileOperation.Copy), Text: null, Formats: ["CF_HDROP"], Html: null),
                         "Mobile Transfer");
 
-                    _popupModel?.Refresh();
-                    _popup?.RefreshView();
-                    _compactPopup?.RefreshView();
+                    RefreshOpenPopups();
 
                     var first = payload.Files[0].FileName;
                     var count = payload.Files.Count;
@@ -854,10 +1051,8 @@ public partial class App : System.Windows.Application
             return;
         }
         // Slots 1..9 address the nine tag colors; slot 0 clears the tag.
-        _store.SetTag(item.Id, slot == 0 ? null : ItemTags.All[(slot - 1) % ItemTags.All.Count]);
-        _popupModel.Refresh();
-        _popup.RefreshView();
-        _compactPopup?.RefreshView();
+        ViewedStore.SetTag(item.Id, slot == 0 ? null : ItemTags.All[(slot - 1) % ItemTags.All.Count]);
+        RefreshOpenPopups();
     }
 
     private void ShowWelcomeOnFirstRun()
@@ -868,7 +1063,7 @@ public partial class App : System.Windows.Application
         }
         // Persist before showing so a crash or kill never re-greets.
         _settings.Onboarding.WelcomeShown = true;
-        SettingsStore.Save(_settingsPath, _settings);
+        SaveSettingsQuietly();
         ShowWelcome();
     }
 
@@ -917,23 +1112,46 @@ public partial class App : System.Windows.Application
             _hotkeys,
             _hotkeyWindow?.Handle ?? IntPtr.Zero,
             effectiveScheme,
-            onSettingsLiveUpdated: () =>
-            {
-                UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
-                ApplyHistoryLimitsToCapture();
-                ApplyAutoPaste();
-                _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
-                    DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-                _popupModel?.Refresh();
-                _popup?.RefreshView();
-                _compactPopup?.RefreshView();
-            },
+            onSettingsLiveUpdated: RequestLiveSettingsApply,
             onClosed: () => _settingsWindow = null,
             onShowWelcome: ShowWelcome);
 
         _settingsWindow.Closed += (_, _) => OnSettingsClosed();
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    // Settings apply while the window is open, but a slider drag or typing
+    // raises this per tick or keystroke. Each call used to re-theme every
+    // window, reload the history — and evict it: dragging the history limit
+    // down and back up deleted everything past the lowest value for good.
+    // One apply once the input settles; eviction waits for the window to
+    // close (and captures meanwhile honor the settled limit).
+    private void RequestLiveSettingsApply()
+    {
+        if (_liveSettingsTimer is null)
+        {
+            _liveSettingsTimer = new System.Windows.Threading.DispatcherTimer(
+                System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(200),
+            };
+            _liveSettingsTimer.Tick += (_, _) =>
+            {
+                _liveSettingsTimer.Stop();
+                ApplyLiveSettings();
+            };
+        }
+        _liveSettingsTimer.Stop();
+        _liveSettingsTimer.Start();
+    }
+
+    private void ApplyLiveSettings()
+    {
+        UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
+        ApplyHistoryLimitsToCapture();
+        ApplyAutoPaste();
+        RefreshOpenPopups();
     }
 
     // History limits are enforced on every capture, so slider changes must
@@ -953,7 +1171,24 @@ public partial class App : System.Windows.Application
 
     private void OnSettingsClosed()
     {
-        SettingsStore.Save(_settingsPath, _settings);
+        // First: when anything below threw (a locked settings file, a busy
+        // database), the field kept the closed window and every later
+        // OpenSettings threw on Show() until restart.
+        _settingsWindow = null;
+        _liveSettingsTimer?.Stop();
+        SaveSettingsQuietly();
+        try
+        {
+            ApplyClosedSettings();
+        }
+        catch (Exception ex)
+        {
+            LogError("settings-apply", ex);
+        }
+    }
+
+    private void ApplyClosedSettings()
+    {
         // Reapply live:Ctor-held option shapes are mutated in place because
         // the services keep the same references (no restart needed).
         if (_captureOptions is not null)
@@ -974,11 +1209,8 @@ public partial class App : System.Windows.Application
         }
         _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
             DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-        _popupModel?.Refresh();
-        _popup?.RefreshView();
-        _compactPopup?.RefreshView();
+        RefreshOpenPopups();
         UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
-        _settingsWindow = null;
     }
 
     private void WatchActionsFile()
@@ -1040,7 +1272,8 @@ public partial class App : System.Windows.Application
             }
         }
         _hotkeyWindow?.Close();
-        _compactPopup?.Close();
+        _compactPopup?.CloseForExit();
+        _popup?.CloseForExit();
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]

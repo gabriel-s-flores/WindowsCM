@@ -31,6 +31,8 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
 
     public IHistoryStore PersistentStore => _persistentStore;
 
+    public IImageAssetStore PersistentImages => _persistentImages;
+
     public IHistoryStore? EphemeralStore
     {
         get
@@ -133,6 +135,8 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
     public ClipboardItem? GetById(long id) => Locked(s => s.GetById(id));
 
     public ClipboardItem? GetLatest() => Locked(s => s.GetLatest());
+
+    public IReadOnlyList<string> ImageContents() => Locked(s => s.ImageContents());
 
     public long TryUpdateContent(long id, ItemKind kind, string content) =>
         Locked(s => s.TryUpdateContent(id, kind, content));

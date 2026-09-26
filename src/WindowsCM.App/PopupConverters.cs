@@ -164,9 +164,9 @@ internal sealed class ImageThumbConverter : IValueConverter
             return null;
         }
 
-        // Decoded once per file (bounded cache, prewarmed off the UI thread),
-        // not on every card realization.
-        return ImageThumbnailCache.Get(localPath);
+        // Decoded once per file, off the UI thread (bounded cache, prewarmed
+        // for new captures); the card refreshes when a queued decode lands.
+        return ImageThumbnailCache.GetOrQueue(localPath);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
@@ -310,7 +310,8 @@ internal sealed class CharacterCodeConverter : IValueConverter
         string? content = null;
         if (value is ClipboardItem item)
         {
-            content = item.Content;
+            // Bound on every card: only character cards show it.
+            content = item.Kind == ItemKind.Character ? item.Content : null;
         }
         else if (value is string text)
         {
@@ -540,9 +541,9 @@ internal sealed class FileListSummaryConverter : IValueConverter
             if (details is { IsMultiple: true })
             {
                 var take = details.Items.Take(3).Select(f => $"• {f.FileName}").ToList();
-                if (details.Items.Count > 3)
+                if (details.FileCount > 3)
                 {
-                    var rem = details.Items.Count - 3;
+                    var rem = details.FileCount - 3;
                     take.Add(LocalizationManager.Strings.LabelMoreFilesRemaining(rem));
                 }
                 return string.Join("\n", take);
@@ -861,11 +862,14 @@ internal sealed class LinkFaviconConverter : IValueConverter
 // Clean website domain converter (e.g. "github.com").
 internal sealed class LinkDomainConverter : IValueConverter
 {
+    // Link bindings are evaluated for every card (the link branch is only
+    // collapsed): other kinds answer at once instead of copying and parsing
+    // their whole content.
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is ClipboardItem item)
         {
-            return LinkDisplayHelper.GetDomain(item.Content);
+            return item.Kind == ItemKind.Link ? LinkDisplayHelper.GetDomain(item.Content) : "";
         }
         if (value is string url)
         {
@@ -883,7 +887,7 @@ internal sealed class LinkTitleOrPathConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is ClipboardItem item)
+        if (value is ClipboardItem { Kind: ItemKind.Link } item)
         {
             return LinkDisplayHelper.GetPathOrTitle(item);
         }
@@ -901,7 +905,7 @@ internal sealed class LinkDisplayUrlConverter : IValueConverter
     {
         if (value is ClipboardItem item)
         {
-            return LinkDisplayHelper.GetDisplayUrl(item.Content);
+            return item.Kind == ItemKind.Link ? LinkDisplayHelper.GetDisplayUrl(item.Content) : "";
         }
         if (value is string url)
         {
@@ -931,64 +935,34 @@ internal sealed class QrButtonVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-// Rich website preview thumbnail image converter (local cached thumbnail or remote image).
+// Link preview thumbnail: the image the preview service cached on disk,
+// decoded off the UI thread like screenshots. It used to be decoded on the
+// UI thread on every card realization, and a remote URL (stored when the
+// download failed, or with preview images turned off) started a throwaway
+// download each time and never showed.
 internal sealed class LinkPreviewImageConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        string? imageRef = null;
-        if (value is ClipboardItem item)
-        {
-            var (_, _, img) = ItemMetadataJson.GetLink(item.MetadataJson);
-            imageRef = img;
-        }
-        else if (value is string str)
-        {
-            var (_, _, img) = ItemMetadataJson.GetLink(str);
-            imageRef = img ?? str;
-        }
-
-        if (string.IsNullOrWhiteSpace(imageRef))
-        {
-            return null;
-        }
-
-        try
-        {
-            if (File.Exists(imageRef))
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.UriSource = new Uri(imageRef);
-                bmp.DecodePixelWidth = 320;
-                bmp.EndInit();
-                bmp.Freeze();
-                return bmp;
-            }
-
-            if (Uri.TryCreate(imageRef, UriKind.Absolute, out var uri)
-                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.UriSource = uri;
-                bmp.DecodePixelWidth = 320;
-                bmp.EndInit();
-                bmp.Freeze();
-                return bmp;
-            }
-        }
-        catch
-        {
-        }
-
-        return null;
-    }
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is ClipboardItem { Kind: ItemKind.Link } item && LinkPreviewImages.LocalPath(item) is { } path
+            ? ImageThumbnailCache.GetOrQueue(path, banner: true)
+            : null;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
+}
+
+internal static class LinkPreviewImages
+{
+    // The cached preview image of a link card, when it is a local file.
+    public static string? LocalPath(ClipboardItem item)
+    {
+        var (_, _, image) = ItemMetadataJson.GetLink(item.MetadataJson);
+        if (string.IsNullOrWhiteSpace(image) || !Path.IsPathFullyQualified(image))
+        {
+            return null;
+        }
+        return File.Exists(image) ? image : null;
+    }
 }
 
 // Website description converter from metadata.
@@ -996,7 +970,7 @@ internal sealed class LinkDescriptionConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is ClipboardItem item)
+        if (value is ClipboardItem { Kind: ItemKind.Link } item)
         {
             return LinkDisplayHelper.GetDescription(item);
         }
@@ -1012,11 +986,9 @@ internal sealed class LinkHasPreviewImageVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        bool hasImage = false;
-        if (value is ClipboardItem item)
-        {
-            hasImage = LinkDisplayHelper.HasPreviewImage(item);
-        }
+        // Only a local cached image is shown (see LinkPreviewImageConverter).
+        var hasImage = value is ClipboardItem { Kind: ItemKind.Link } item
+            && LinkPreviewImages.LocalPath(item) is not null;
 
         bool invert = parameter is string p && (p.Equals("Invert", StringComparison.OrdinalIgnoreCase) || p.Equals("Inverse", StringComparison.OrdinalIgnoreCase));
         if (invert)
@@ -1035,7 +1007,7 @@ internal sealed class LinkHasDescriptionVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is ClipboardItem item)
+        if (value is ClipboardItem { Kind: ItemKind.Link } item)
         {
             var desc = LinkDisplayHelper.GetDescription(item);
             return !string.IsNullOrWhiteSpace(desc) ? Visibility.Visible : Visibility.Collapsed;

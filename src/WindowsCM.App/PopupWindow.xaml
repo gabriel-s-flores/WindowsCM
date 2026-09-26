@@ -544,6 +544,7 @@
                          BorderThickness="0" Foreground="{DynamicResource SearchForegroundBrush}" FontSize="13"
                          VerticalAlignment="Center" CaretBrush="{DynamicResource SearchCaretBrush}"
                          ToolTip="{DynamicResource Loc_PopupSearchTooltip}"
+                         MaxLength="1000"
                          TextChanged="OnSearchChanged" />
               </Grid>
 

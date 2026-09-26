@@ -32,7 +32,7 @@ public static class SettingsStore
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(
-                File.ReadAllText(path), JsonOptions);
+                ReadWithRetry(path), JsonOptions);
             if (settings is null)
             {
                 return AppSettings.Default();
@@ -54,6 +54,33 @@ public static class SettingsStore
             // every preference without a trace.
             PreserveCorrupt(path);
             return AppSettings.Default();
+        }
+    }
+
+    // A lock held for a moment at logon (antivirus, a sync client) used to
+    // load defaults, and the next save wrote them over every preference.
+    // Brief waits are fine here: settings load once, at startup.
+    private static readonly TimeSpan[] ReadRetryDelays =
+    [
+        TimeSpan.FromMilliseconds(50),
+        TimeSpan.FromMilliseconds(100),
+        TimeSpan.FromMilliseconds(200),
+        TimeSpan.FromMilliseconds(400),
+        TimeSpan.FromMilliseconds(800),
+    ];
+
+    private static string ReadWithRetry(string path)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return File.ReadAllText(path);
+            }
+            catch (IOException) when (attempt < ReadRetryDelays.Length && File.Exists(path))
+            {
+                Thread.Sleep(ReadRetryDelays[attempt]);
+            }
         }
     }
 

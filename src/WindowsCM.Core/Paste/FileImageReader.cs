@@ -21,7 +21,7 @@ public sealed class FileImageReader : IImageFileReader
         {
             return null;
         }
-        var path = Path.Combine(_directory, name);
+        var path = IncognitoPath(content) ?? Path.Combine(_directory, name);
         try
         {
             return File.Exists(path) ? File.ReadAllBytes(path) : null;
@@ -31,6 +31,25 @@ public sealed class FileImageReader : IImageFileReader
             return null;
         }
         catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // An image captured in incognito lives in its session's temp folder
+    // (EphemeralImageAssetStore), not in the persistent one: pasting it
+    // back used to report it missing. Only such a folder is honored.
+    private static string? IncognitoPath(string content)
+    {
+        try
+        {
+            var path = new Uri(content).LocalPath;
+            var folder = Path.GetFileName(Path.GetDirectoryName(path));
+            return folder is not null && folder.StartsWith(EphemeralImageAssetStore.DirectoryPrefix, StringComparison.Ordinal)
+                ? path
+                : null;
+        }
+        catch (Exception ex) when (ex is UriFormatException or InvalidOperationException or ArgumentException)
         {
             return null;
         }

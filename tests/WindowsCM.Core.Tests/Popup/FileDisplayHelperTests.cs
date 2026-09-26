@@ -165,4 +165,38 @@ public sealed class FileDisplayHelperTests
         Assert.Equal(1, probes);
         Assert.False(string.IsNullOrEmpty(details?.FormattedSize));
     }
+
+    // A 50,000-file Explorer copy built one record per path (URI parse,
+    // type label, size format) in four converters per card realization;
+    // only the first few names are ever shown.
+    [Fact]
+    public void GetFileDetails_HugeFileList_CountsAllListsFew()
+    {
+        var content = string.Join("\n", Enumerable.Range(0, 50_000).Select(i => $"/home/me/Pictures/IMG_{i:D5}.jpg"));
+        var item = new ClipboardItem(ItemKind.Files, content, false, null, T0, null, null);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var details = FileDisplayHelper.GetFileDetails(item, _ => null, isPortuguese: false)!;
+        var title = ItemDisplayFormatter.GetTitle(item, isPortuguese: false);
+        var label = ItemDisplayFormatter.GetTypeLabel(item, null, isPortuguese: false);
+
+        Assert.Equal(50_000, details.FileCount);
+        Assert.True(details.IsMultiple);
+        Assert.Equal("IMG_00000.jpg", details.Items[0].FileName);
+        Assert.True(details.Items.Count <= FileDisplayHelper.MaxListedFiles);
+        Assert.Equal("50000 files (IMG_00000.jpg)", title);
+        Assert.Equal("50000 files", label);
+        Assert.True(watch.ElapsedMilliseconds < 500, $"{watch.ElapsedMilliseconds} ms");
+    }
+
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData("", 0)]
+    [InlineData("/a", 1)]
+    [InlineData("/a\n/b\n", 2)]
+    [InlineData("\n  \n/a\n   \n/b", 2)]
+    public void CountPaths_CountsNonBlankLines(string? content, int expected)
+    {
+        Assert.Equal(expected, FileDisplayHelper.CountPaths(content));
+    }
 }

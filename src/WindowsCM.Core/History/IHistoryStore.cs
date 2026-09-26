@@ -20,6 +20,12 @@ public interface IHistoryStore : IDisposable
     // The newest item (List() head), or null when history is empty.
     ClipboardItem? GetLatest() => List().FirstOrDefault();
 
+    // Content of every Image row, including rows the item reader skips (an
+    // unreadable date): the orphan-image sweep must never take a file a
+    // stored row still points to for an orphan.
+    IReadOnlyList<string> ImageContents() =>
+        Search("", kind: ItemKind.Image).Select(i => i.Content).ToList();
+
     // Edit identity. Returns -1 when applied, or the conflicting item id
     // (Gda parity) leaving the edited item untouched.
     long TryUpdateContent(long id, ItemKind kind, string content);

@@ -65,7 +65,13 @@ public sealed class PasteOrchestrator
                 PasteStatus.Failed, null,
                 $"Item {itemId} is no longer in history; nothing was copied.");
         }
-        var contents = CopyBackPlanner.Plan(item, _images.LoadPng);
+        // An image is read from disk and converted to a bitmap first (a 4K
+        // screenshot: ~130 ms): off the UI thread, which used to freeze on
+        // every image pick. The await returns to the caller's context, so
+        // the clipboard write below stays on the UI (STA) thread.
+        var contents = item.Kind == ItemKind.Image
+            ? await Task.Run(() => CopyBackPlanner.Plan(item, _images.LoadPng), ct)
+            : CopyBackPlanner.Plan(item, _images.LoadPng);
         if (contents is null)
         {
             return new PasteOutcome(
@@ -81,7 +87,7 @@ public sealed class PasteOrchestrator
             return new PasteOutcome(
                 PasteStatus.Failed, null, $"Copy-back failed: {ex.Message}");
         }
-        _capture.CopiedFromHistory(itemId, _clock.UtcNow);
+        _capture.CopiedFromHistory(item, _store, _clock.UtcNow);
         if (intent == ActivationIntent.CopyOnly)
         {
             return new PasteOutcome(PasteStatus.CopiedOnly, null, null);

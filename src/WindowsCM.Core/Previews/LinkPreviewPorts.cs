@@ -36,6 +36,12 @@ public sealed record LinkHttpResponse(string? ContentType, byte[] Body, bool IsS
         && (ContentType.Equals("text/html", StringComparison.OrdinalIgnoreCase)
             || ContentType.StartsWith("text/html;", StringComparison.OrdinalIgnoreCase));
 
+    // oEmbed answers (YouTube titles).
+    public bool IsJson =>
+        ContentType is not null
+        && (ContentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase)
+            || ContentType.StartsWith("text/json", StringComparison.OrdinalIgnoreCase));
+
     public bool IsImage =>
         ContentType is not null
         && ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
@@ -53,13 +59,41 @@ public interface ILinkPreviewHttp
 // (Copyous Soup idle_timeout:5 parity; .NET default 100s is too long for
 // hover/cards), Accept: text/html, ResponseHeadersRead so cancellation
 // stops a slow body, transport failures wrapped as unavailable.
+//
+// Every copied link is fetched in the background, so a link to a large file
+// or a stream must cost next to nothing: only what a preview can use is read
+// (a page, an image, oEmbed JSON), only so much of it, and within a body
+// budget — HttpClient.Timeout stops at the headers here, and a link to an
+// ISO, a zip or a live stream used to be downloaded whole into memory.
 public sealed class LinkPreviewHttpClient : ILinkPreviewHttp
 {
     public const int TimeoutSeconds = 5;
     public const string UserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
+    // The tags a preview needs are in the <head>: a longer page is cut.
+    public const int MaxHtmlBytes = 1024 * 1024;
+
+    // An image or oEmbed answer over this is not used at all.
+    public const int MaxBodyBytes = 5 * 1024 * 1024;
+
+    public static readonly TimeSpan DefaultBodyTimeout = TimeSpan.FromSeconds(10);
+
     private static readonly HttpClient Shared = CreateShared();
+
+    private readonly HttpClient _client;
+    private readonly TimeSpan _bodyTimeout;
+
+    public LinkPreviewHttpClient()
+        : this(Shared, null)
+    {
+    }
+
+    internal LinkPreviewHttpClient(HttpClient client, TimeSpan? bodyTimeout)
+    {
+        _client = client;
+        _bodyTimeout = bodyTimeout ?? DefaultBodyTimeout;
+    }
 
     private static HttpClient CreateShared()
     {
@@ -82,26 +116,60 @@ public sealed class LinkPreviewHttpClient : ILinkPreviewHttp
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            response = await Shared.SendAsync(
+            response = await _client.SendAsync(
                 request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException
+            or InvalidOperationException or NotSupportedException or ArgumentException or UriFormatException)
         {
+            // Also an og:image that is not http(s) (data:, relative, ftp:).
             throw new LinkPreviewUnavailableException($"Preview fetch failed for {url}.", ex);
         }
         using (response)
         {
-            byte[] body;
+            var head = new LinkHttpResponse(
+                response.Content.Headers.ContentType?.ToString(), [], response.IsSuccessStatusCode);
+            if (!head.IsSuccess || !(head.IsHtml || head.IsImage || head.IsJson))
+            {
+                return head;
+            }
+            var limit = head.IsHtml ? MaxHtmlBytes : MaxBodyBytes;
             try
             {
-                body = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+                using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                budget.CancelAfter(_bodyTimeout);
+                var (body, truncated) = await ReadBoundedAsync(response.Content, limit, budget.Token).ConfigureAwait(false);
+                if (truncated && !head.IsHtml)
+                {
+                    // Part of an image or of JSON is useless.
+                    throw new LinkPreviewUnavailableException($"Preview body over {limit} bytes for {url}.");
+                }
+                return head with { Body = body };
             }
-            catch (OperationCanceledException ex)
+            catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or IOException)
             {
-                throw new LinkPreviewUnavailableException($"Preview read cancelled for {url}.", ex);
+                throw new LinkPreviewUnavailableException($"Preview read failed for {url}.", ex);
             }
-            var contentType = response.Content.Headers.ContentType?.ToString();
-            return new LinkHttpResponse(contentType, body, response.IsSuccessStatusCode);
         }
+    }
+
+    private static async Task<(byte[] Body, bool Truncated)> ReadBoundedAsync(
+        HttpContent content, int limit, CancellationToken ct)
+    {
+        using var stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var body = new MemoryStream();
+        var chunk = new byte[64 * 1024];
+        while (body.Length < limit)
+        {
+            var read = await stream.ReadAsync(
+                chunk.AsMemory(0, (int)Math.Min(chunk.Length, limit - body.Length)), ct).ConfigureAwait(false);
+            if (read == 0)
+            {
+                return (body.ToArray(), false);
+            }
+            body.Write(chunk, 0, read);
+        }
+        var more = await stream.ReadAsync(chunk.AsMemory(0, 1), ct).ConfigureAwait(false);
+        return (body.ToArray(), more > 0);
     }
 }

@@ -33,6 +33,33 @@ public static class FileUris
     }
 }
 
+public static class ImageFiles
+{
+    // Temp file, then rename: a write cut short (disk full, crash) used to
+    // leave a truncated <md5>.png that every later capture of the same
+    // image reused because the name already existed.
+    public static void WriteAtomically(string path, byte[] bytes)
+    {
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllBytes(temp, bytes);
+            File.Move(temp, path, overwrite: false);
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            // Another writer stored the same image first: same bytes.
+        }
+        finally
+        {
+            if (File.Exists(temp))
+            {
+                File.Delete(temp);
+            }
+        }
+    }
+}
+
 public sealed class FileImageAssetStore : IImageAssetStore
 {
     public string Directory { get; }
@@ -49,7 +76,7 @@ public sealed class FileImageAssetStore : IImageAssetStore
         var path = Path.Combine(Directory, safe);
         if (!File.Exists(path))
         {
-            File.WriteAllBytes(path, bytes);
+            ImageFiles.WriteAtomically(path, bytes);
         }
         return FileUris.FromPath(path);
     }
