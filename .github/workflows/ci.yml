@@ -74,6 +74,31 @@ jobs:
           path: smoke-results
           if-no-files-found: ignore
 
+      # Scrolling the popup across a full history on a full-HD desktop,
+      # with a file on a share that does not answer deep in the list (a
+      # card that probed it on the UI thread froze the popup). On a hang it
+      # saves the managed stacks (dotnet-stack); on a crash, a summarised
+      # dump (dotnet-dump).
+      - name: Install dotnet-stack and dotnet-dump (scroll smoke diagnostics)
+        run: |
+          dotnet tool install --global dotnet-stack
+          dotnet tool install --global dotnet-dump
+
+      - name: Scroll smoke (real app)
+        shell: powershell
+        run: >
+          ./scripts/smoke/scroll-smoke.ps1
+          -Exe src/WindowsCM.App/bin/Release/net8.0-windows/WindowsCM.exe
+          -OutDir scroll-results -ResetUserData -Resolution 1920x1080
+
+      - name: Upload scroll smoke results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scroll-results
+          path: scroll-results
+          if-no-files-found: ignore
+
   release:
     name: Release
     needs: test
