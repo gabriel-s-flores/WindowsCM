@@ -158,6 +158,10 @@ public sealed class CaptureService
     // lists the history's images and the images folder.
     private void SweepOrphanImagesIfDue(DateTime utcNow)
     {
+        if (!_options.SweepOrphanImages)
+        {
+            return;
+        }
         if (_lastOrphanSweep is { } last && utcNow - last < _options.OrphanImageSweepInterval)
         {
             return;
@@ -203,11 +207,28 @@ public sealed class CaptureService
             {
                 return;
             }
-            _lastSeen = (item.Kind, SuppressionHash(item));
-            if (_options.UpdateDateOnCopy)
-            {
-                _store.RefreshDate(id, utcNow);
-            }
+            CopiedFromHistoryLocked(item, _store, utcNow);
+        }
+    }
+
+    // The item as the paste read it, and the history it came from. With
+    // incognito on, a pick from the normal history was looked up again by
+    // id in the incognito session (the ids overlap): another item's date
+    // was bumped and the paste's own clipboard write was captured.
+    public void CopiedFromHistory(ClipboardItem item, IHistoryStore source, DateTime utcNow)
+    {
+        lock (_gate)
+        {
+            CopiedFromHistoryLocked(item, source, utcNow);
+        }
+    }
+
+    private void CopiedFromHistoryLocked(ClipboardItem item, IHistoryStore source, DateTime utcNow)
+    {
+        _lastSeen = (item.Kind, SuppressionHash(item));
+        if (_options.UpdateDateOnCopy)
+        {
+            source.RefreshDate(item.Id, utcNow);
         }
     }
 
@@ -216,6 +237,10 @@ public sealed class CaptureService
     // are shown with a fallback, never deleted here.
     public void SweepOrphanImages()
     {
+        if (!_options.SweepOrphanImages)
+        {
+            return;
+        }
         lock (_gate)
         {
             SweepOrphanImagesLocked(_clock.UtcNow);
@@ -231,8 +256,8 @@ public sealed class CaptureService
         var (store, images) = _store is IncognitoSessionCoordinator coordinator
             ? (coordinator.PersistentStore, coordinator.PersistentImages)
             : (_store, _images);
-        var referenced = store.Search("", kind: ItemKind.Image)
-            .Select(i => FileUris.TryGetFileName(i.Content))
+        var referenced = store.ImageContents()
+            .Select(FileUris.TryGetFileName)
             .OfType<string>()
             .ToList();
         images.SweepOrphans(referenced);

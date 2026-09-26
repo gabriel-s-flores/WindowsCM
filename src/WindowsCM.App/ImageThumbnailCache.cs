@@ -16,6 +16,10 @@ internal static class ImageThumbnailCache
 {
     private const int DecodePixelHeight = 180;
 
+    // Link preview banners are shown wide (UniformToFill): decoded by width
+    // so they stay sharp.
+    private const int BannerDecodePixelWidth = 320;
+
     // ~230 KB per 16:9 thumbnail at 180 px: ~30 MB worst case.
     private static readonly LruCache<string, ImageSource?> Cache = new(128, StringComparer.OrdinalIgnoreCase);
 
@@ -34,12 +38,16 @@ internal static class ImageThumbnailCache
     // used to decode the full file on the UI thread, 50–200 ms per 4K card.
     // Null until the decode lands and Updated fires; a file that cannot be
     // decoded is remembered as such.
-    public static ImageSource? GetOrQueue(string path)
+    public static ImageSource? GetOrQueue(string path, bool banner = false)
     {
         var key = KeyFor(path);
         if (key is null)
         {
             return null;
+        }
+        if (banner)
+        {
+            key += "|banner";
         }
         if (Cache.TryGet(key, out var cached))
         {
@@ -52,7 +60,7 @@ internal static class ImageThumbnailCache
                 await DecodeSlots.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    Cache.Set(key, TryDecode(path));
+                    Cache.Set(key, TryDecode(path, banner));
                 }
                 finally
                 {
@@ -135,7 +143,7 @@ internal static class ImageThumbnailCache
     // Frozen, so the worker-decoded bitmap can be used by the UI thread. The
     // bytes are read up front with FileShare.ReadWrite: the file is never
     // held open (or locked against the capture writer) while decoding.
-    private static BitmapSource? TryDecode(string path)
+    private static BitmapSource? TryDecode(string path, bool banner = false)
     {
         try
         {
@@ -150,7 +158,14 @@ internal static class ImageThumbnailCache
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.StreamSource = memory;
-            image.DecodePixelHeight = DecodePixelHeight;
+            if (banner)
+            {
+                image.DecodePixelWidth = BannerDecodePixelWidth;
+            }
+            else
+            {
+                image.DecodePixelHeight = DecodePixelHeight;
+            }
             image.EndInit();
             image.Freeze();
             return image;

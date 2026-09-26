@@ -17,6 +17,19 @@ public sealed class NamedPipeForwarder : IIpcForwarder
     // preamble stalls line framing over pipes — always suppress it.
     internal static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
+    // The primary answers once the command ran (a cold first popup can take
+    // over a second): longer than the connect budget, but bounded — a
+    // primary whose UI thread hangs never answers, and the launching
+    // process used to wait for it forever.
+    public static TimeSpan DefaultReplyTimeout { get; } = TimeSpan.FromSeconds(10);
+
+    private readonly TimeSpan _replyTimeout;
+
+    public NamedPipeForwarder(TimeSpan? replyTimeout = null)
+    {
+        _replyTimeout = replyTimeout ?? DefaultReplyTimeout;
+    }
+
     public bool TryForward(string pipeName, string line, TimeSpan timeout, out string? response)
     {
         response = null;
@@ -34,10 +47,7 @@ public sealed class NamedPipeForwarder : IIpcForwarder
             };
             using var reader = new StreamReader(client, Utf8NoBom, leaveOpen: true);
             writer.WriteLine(line);
-            // The reply has the same budget as the connect: a primary whose
-            // UI thread hangs accepts the connection but never answers, and
-            // the launching process used to wait for it forever.
-            using var replyBudget = new CancellationTokenSource(timeout);
+            using var replyBudget = new CancellationTokenSource(_replyTimeout);
             response = reader.ReadLineAsync(replyBudget.Token).AsTask().GetAwaiter().GetResult();
             return response is not null;
         }

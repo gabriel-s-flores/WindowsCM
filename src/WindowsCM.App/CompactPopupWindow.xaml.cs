@@ -83,8 +83,13 @@ public partial class CompactPopupWindow : Window
     private void RequestCardRefresh() =>
         Dispatcher.BeginInvoke(() =>
         {
-            _cardRefreshTimer.Stop();
-            _cardRefreshTimer.Start();
+            // At most one refresh per interval: restarting the timer on every
+            // result kept pushing it back while decodes streamed in, and the
+            // cards stayed blank until the whole queue was done.
+            if (!_cardRefreshTimer.IsEnabled)
+            {
+                _cardRefreshTimer.Start();
+            }
         });
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
@@ -172,8 +177,13 @@ public partial class CompactPopupWindow : Window
     {
         if (_searchTimer.IsEnabled)
         {
-            // Kept for RememberSearch; forgotten just below otherwise.
-            ApplyPendingSearch();
+            _searchTimer.Stop();
+            // Kept for RememberSearch; otherwise forgotten just below, and
+            // applying it first would only reload the history twice.
+            if (_app.Settings.Behavior.RememberSearch)
+            {
+                ApplyPendingSearch();
+            }
         }
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
@@ -208,7 +218,17 @@ public partial class CompactPopupWindow : Window
         if (!_closingForExit)
         {
             e.Cancel = true;
-            Hide();
+            // Also reached while the app shuts down (WPF closes every window
+            // first, ignoring Cancel): nothing may throw here, or the exit
+            // cleanup (settings save, tray icon, database) is skipped.
+            try
+            {
+                Hide();
+            }
+            catch (Exception ex)
+            {
+                _app.LogError("popup-close", ex);
+            }
         }
         base.OnClosing(e);
     }
@@ -502,27 +522,33 @@ public partial class CompactPopupWindow : Window
             }
         }
 
-        if (key == Key.P && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+        if (key == Key.P && IsPlainAlt())
         {
             e.Handled = true;
             TogglePinSelected();
             return;
         }
 
-        if (key == Key.S && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+        if (key == Key.S && IsPlainAlt())
         {
             e.Handled = true;
             OnSettingsClicked(this, new RoutedEventArgs());
             return;
         }
 
-        if (key == Key.C && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+        if (key == Key.C && IsPlainAlt())
         {
             e.Handled = true;
             OnClearClicked(this, new RoutedEventArgs());
             return;
         }
     }
+
+    // Alt alone: AltGr arrives as Ctrl+Alt, and typing ś or ć (AltGr+S/C on
+    // a Polish layout) in the search box opened Settings or asked to clear
+    // the history.
+    private static bool IsPlainAlt() =>
+        (Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Control)) == ModifierKeys.Alt;
 
     private void MoveSelection(int delta)
     {
@@ -562,14 +588,17 @@ public partial class CompactPopupWindow : Window
     // ignored clicks and never hid on focus loss.
     private void StartActivation(ActivationRequest request, bool shiftHeld)
     {
-        if (!shiftHeld)
+        // Only a paste holds the popup (a copy-only or default-action pick
+        // does not), and only the latest one releases it.
+        var holds = !shiftHeld && !request.RunDefaultAction;
+        if (holds)
         {
             _isActivating = true;
         }
-        _ = ActivateThenSettleAsync(request, shiftHeld);
+        _ = ActivateThenSettleAsync(request, shiftHeld, holds ? ++_activationToken : 0);
     }
 
-    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld)
+    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld, int token)
     {
         try
         {
@@ -577,9 +606,14 @@ public partial class CompactPopupWindow : Window
         }
         finally
         {
-            _isActivating = false;
+            if (token != 0 && token == _activationToken)
+            {
+                _isActivating = false;
+            }
         }
     }
+
+    private int _activationToken;
 
     private void OnItemDoubleClicked(object sender, MouseButtonEventArgs e)
     {

@@ -92,8 +92,13 @@ public partial class PopupWindow : Window
     private void RequestCardRefresh() =>
         Dispatcher.BeginInvoke(() =>
         {
-            _cardRefreshTimer.Stop();
-            _cardRefreshTimer.Start();
+            // At most one refresh per interval: restarting the timer on every
+            // result kept pushing it back while decodes streamed in, and the
+            // cards stayed blank until the whole queue was done.
+            if (!_cardRefreshTimer.IsEnabled)
+            {
+                _cardRefreshTimer.Start();
+            }
         });
 
     public void ApplyTheme(ColorScheme scheme)
@@ -226,8 +231,13 @@ public partial class PopupWindow : Window
     {
         if (_searchTimer.IsEnabled)
         {
-            // Kept for RememberSearch; forgotten just below otherwise.
-            ApplyPendingSearch();
+            _searchTimer.Stop();
+            // Kept for RememberSearch; otherwise forgotten just below, and
+            // applying it first would only reload the history twice.
+            if (_app.Settings.Behavior.RememberSearch)
+            {
+                ApplyPendingSearch();
+            }
         }
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
@@ -264,7 +274,17 @@ public partial class PopupWindow : Window
         if (!_closingForExit)
         {
             e.Cancel = true;
-            Hide();
+            // Also reached while the app shuts down (WPF closes every window
+            // first, ignoring Cancel): nothing may throw here, or the exit
+            // cleanup (settings save, tray icon, database) is skipped.
+            try
+            {
+                Hide();
+            }
+            catch (Exception ex)
+            {
+                _app.LogError("popup-close", ex);
+            }
         }
         base.OnClosing(e);
     }
@@ -902,14 +922,17 @@ public partial class PopupWindow : Window
     // later click until it was reopened.
     private void StartActivation(ActivationRequest request, bool shiftHeld)
     {
-        if (!shiftHeld)
+        // Only a paste holds the popup (a copy-only or default-action pick
+        // does not), and only the latest one releases it.
+        var holds = !shiftHeld && !request.RunDefaultAction;
+        if (holds)
         {
             _isActivating = true;
         }
-        _ = ActivateThenSettleAsync(request, shiftHeld);
+        _ = ActivateThenSettleAsync(request, shiftHeld, holds ? ++_activationToken : 0);
     }
 
-    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld)
+    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld, int token)
     {
         try
         {
@@ -917,9 +940,14 @@ public partial class PopupWindow : Window
         }
         finally
         {
-            _isActivating = false;
+            if (token != 0 && token == _activationToken)
+            {
+                _isActivating = false;
+            }
         }
     }
+
+    private int _activationToken;
 
     // Row under the mouse-up point, or null for empty area / scrollbar /
     // header (OriginalSource outside any ListBoxItem). IndexFromContainer
@@ -1253,7 +1281,8 @@ public partial class PopupWindow : Window
         var pinItem = new MenuItem
         {
             Header = item.Pinned ? s.ContextMenuUnpin : s.ContextMenuPin,
-            InputGestureText = "Alt+P"
+            // The keymap pins with Ctrl+S (Alt+P toggles the pins filter).
+            InputGestureText = "Ctrl+S"
         };
         pinItem.Click += (_, _) =>
         {

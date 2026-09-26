@@ -45,6 +45,14 @@ public sealed class LockedHistoryStore : IHistoryStore
         }
     }
 
+    public IReadOnlyList<string> ImageContents()
+    {
+        lock (_gate)
+        {
+            return _inner.ImageContents();
+        }
+    }
+
     public long TryUpdateContent(long id, ItemKind kind, string content)
     {
         lock (_gate)

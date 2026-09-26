@@ -379,6 +379,14 @@ public sealed class MiniTransferHttpServer : IDisposable
             return;
         }
 
+        // Lets a page left open from an earlier run find out its key is gone.
+        if (path.StartsWith("/api/key/", StringComparison.OrdinalIgnoreCase))
+        {
+            var valid = IsUploadKey(path["/api/key/".Length..].Trim('/'));
+            await SendTextAsync(stream, valid ? 200 : 403, valid ? "OK" : "Forbidden", valid ? "ok" : "stale", ct).ConfigureAwait(false);
+            return;
+        }
+
         if (path.Equals("/api/ping", StringComparison.OrdinalIgnoreCase))
         {
             var json = "{\"status\":\"online\"}";

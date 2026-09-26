@@ -219,8 +219,10 @@ public sealed class HistoryStoreTests : IDisposable
         _store.AddOrUpdate(Sample(content: "other"));
 
         var found = _store.Search(needle);
+        var foundOtherCase = _store.Search(needle.ToUpperInvariant());
 
         Assert.Equal(["head " + needle + " tail"], found.Select(i => i.Content));
+        Assert.Equal(["head " + needle + " tail"], foundOtherCase.Select(i => i.Content));
     }
 
     [Fact]
@@ -393,7 +395,7 @@ public sealed class HistoryStoreTests : IDisposable
             capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
 
         Assert.Equal("Example", bumped.Title);
-        Assert.Equal("""{"title":"Example","image":"x"}""", bumped.MetadataJson);
+        Assert.Equal(("Example", (string?)null, "x"), WindowsCM.Core.Previews.ItemMetadataJson.GetLink(bumped.MetadataJson));
     }
 
     [Fact]
@@ -404,7 +406,38 @@ public sealed class HistoryStoreTests : IDisposable
         var bumped = _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"new"}""",
             capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
 
-        Assert.Equal("""{"html":"new"}""", bumped.MetadataJson);
+        Assert.Equal("new", WindowsCM.Core.Previews.ItemMetadataJson.GetString(bumped.MetadataJson, "html"));
+    }
+
+    // Copied rich from a browser, later plain from Notepad: pasting from
+    // history must not bring back the old formatting.
+    [Fact]
+    public void Recopy_WithoutHtml_DropsTheOldHtml()
+    {
+        _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"<b>old</b>","language":{"id":"cs"}}"""));
+
+        var bumped = _store.AddOrUpdate(Sample(content: "same",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Null(WindowsCM.Core.Previews.ItemMetadataJson.GetString(bumped.MetadataJson, "html"));
+        Assert.Equal("cs", WindowsCM.Core.Previews.ItemMetadataJson.GetLanguage(bumped.MetadataJson).Id);
+    }
+
+    // A link re-copied from a page (with CF_HTML) keeps its preview.
+    [Fact]
+    public void Recopy_LinkWithHtml_KeepsThePreview()
+    {
+        var first = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com"));
+        _store.SetMetadataAndTitle(first.Id, """{"title":"Example","image":"x"}""", "Example");
+
+        var bumped = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com",
+            metadataJson: """{"html":"<a>link</a>"}""",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        var (title, _, image) = WindowsCM.Core.Previews.ItemMetadataJson.GetLink(bumped.MetadataJson);
+        Assert.Equal("Example", title);
+        Assert.Equal("x", image);
+        Assert.Equal("<a>link</a>", WindowsCM.Core.Previews.ItemMetadataJson.GetString(bumped.MetadataJson, "html"));
     }
 
     // One row with a date the reader cannot parse (a database edited by hand

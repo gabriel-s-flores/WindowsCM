@@ -165,6 +165,16 @@ public sealed class TransferServerTests : IDisposable
     }
 
     [Fact]
+    public async Task Server_KeyCheck_TellsAStalePageToRescan()
+    {
+        Assert.Equal(HttpStatusCode.OK, (await _http.GetAsync("/api/key/" + _server.UploadKey)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await _http.GetAsync("/api/key/0123456789abcdef0123456789abcdef")).StatusCode);
+
+        var page = await (await _http.GetAsync(_server.UploadPagePath)).Content.ReadAsStringAsync();
+        Assert.Contains("'/api/key/" + _server.UploadKey + "'", page);
+    }
+
+    [Fact]
     public void Tokens_Are128Bit()
     {
         var session = _server.RegisterShare("t", "k", textContent: "x");

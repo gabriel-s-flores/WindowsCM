@@ -136,6 +136,8 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
 
     public ClipboardItem? GetLatest() => Locked(s => s.GetLatest());
 
+    public IReadOnlyList<string> ImageContents() => Locked(s => s.ImageContents());
+
     public long TryUpdateContent(long id, ItemKind kind, string content) =>
         Locked(s => s.TryUpdateContent(id, kind, content));
 

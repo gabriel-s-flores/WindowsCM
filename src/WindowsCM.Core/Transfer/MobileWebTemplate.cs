@@ -25,7 +25,6 @@ public static class MobileWebTemplate
 
         var copyBtnText = pt ? "📋 Copiar Texto no Celular" : "📋 Copy Text on Mobile";
         var downloadBtnText = pt ? $"📥 Baixar Arquivo ({sizeFormatted})" : $"📥 Download File ({sizeFormatted})";
-        var footerLinkText = pt ? "📤 Quer enviar algo do celular para o PC? Toque aqui" : "📤 Want to send something from mobile to PC? Tap here";
         var toastCopied = pt ? "Texto copiado!" : "Text copied!";
 
         var previewHtml = new StringBuilder();
@@ -100,11 +99,6 @@ public static class MobileWebTemplate
               </div>
             </div>
 
-            <hr class="divider" />
-
-            <div class="footer-action">
-              <a href="/" class="btn-link">{{footerLinkText}}</a>
-            </div>
           </div>
 
           <div id="toast" class="toast">{{toastCopied}}</div>
@@ -167,6 +161,11 @@ public static class MobileWebTemplate
 
     public static string RenderUploadPage(string host, bool? isPortuguese = null, string uploadEndpoint = "/api/upload")
     {
+        // The key changes with every run of the app: a page left open on the
+        // phone checks it first, so a stale one says to scan again instead
+        // of failing the upload with a bare connection error.
+        var keyCheckEndpoint = uploadEndpoint.Replace("/api/upload", "/api/key", StringComparison.Ordinal);
+        var rescanMessage = System.Text.Json.JsonSerializer.Serialize(LocalizationManager.Strings.MobileUploadLinkInvalidBody);
         var pt = isPortuguese ?? LocalizationManager.IsPortuguese;
         var langAttr = pt ? "pt-BR" : "en";
         var pageTitle = pt ? "Enviar para o Computador - WindowsCM" : "Send to PC - WindowsCM";
@@ -309,8 +308,18 @@ public static class MobileWebTemplate
               return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
             }
 
+            function withValidKey(send) {
+              fetch('{{keyCheckEndpoint}}', { cache: 'no-store' })
+                .then(res => { if (res.status === 403) { alert({{rescanMessage}}); } else { send(); } })
+                .catch(() => send());
+            }
+
             function uploadFiles() {
               if (selectedFiles.length === 0) return;
+              withValidKey(uploadFilesNow);
+            }
+
+            function uploadFilesNow() {
               const formData = new FormData();
               for (let i = 0; i < selectedFiles.length; i++) {
                 formData.append('files', selectedFiles[i]);
@@ -373,6 +382,10 @@ public static class MobileWebTemplate
                 alert('{{enterSomething}}');
                 return;
               }
+              withValidKey(() => sendTextNow(text));
+            }
+
+            function sendTextNow(text) {
               fetch('{{uploadEndpoint}}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

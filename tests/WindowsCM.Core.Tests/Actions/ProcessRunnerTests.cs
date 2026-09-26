@@ -56,4 +56,18 @@ public sealed class ProcessRunnerTests
 
         Assert.Contains("hello from the clipboard", result.Stdout);
     }
+
+    // Output without a newline used to be held whole by the line reader.
+    [Fact]
+    public async Task HugeOutput_IsCappedAndTheCommandStillFinishes()
+    {
+        var request = OperatingSystem.IsWindows()
+            ? new ProcessRequest("powershell.exe", "-NoProfile -Command \"[Console]::Out.Write('x' * 12000000)\"", "", 60_000)
+            : new ProcessRequest("/bin/sh", "-c \"head -c 12000000 /dev/zero | tr '\\\\0' x\"", "", 60_000);
+
+        var result = await new ProcessRunner().RunAsync(request);
+
+        Assert.False(result.TimedOut);
+        Assert.Equal(ProcessRunner.MaxOutputChars, result.Stdout.Length);
+    }
 }
