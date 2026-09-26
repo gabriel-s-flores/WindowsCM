@@ -141,7 +141,7 @@ public sealed class AppSettingsTests
     // A lock held for a moment at logon (antivirus, a sync client) made Load
     // return defaults, and the next save wrote them over every preference.
     [Fact]
-    public async Task SettingsStore_BrieflyLockedFile_IsReadOnceTheLockGoes()
+    public void SettingsStore_BrieflyLockedFile_IsReadOnceTheLockGoes()
     {
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         var path = Path.Combine(dir, "settings.json");
@@ -150,14 +150,17 @@ public sealed class AppSettingsTests
         SettingsStore.Save(path, saved);
 
         var holder = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        var release = Task.Run(async () =>
+        // A dedicated thread: on a busy two-core runner a pool task released
+        // the lock only after the retries were over.
+        var release = new Thread(() =>
         {
-            await Task.Delay(250);
+            Thread.Sleep(250);
             holder.Dispose();
         });
+        release.Start();
 
         var loaded = SettingsStore.Load(path);
-        await release;
+        release.Join();
 
         Assert.Equal(42, loaded.History.MaxItems);
     }
