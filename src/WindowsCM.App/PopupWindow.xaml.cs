@@ -36,7 +36,7 @@ public partial class PopupWindow : Window
     private readonly SmoothScrollController _scrollController = new();
     private bool _isRenderingHooked;
     private long _lastRenderTicks;
-    private readonly System.Windows.Threading.DispatcherTimer _faviconRefreshTimer;
+    private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
     // Free placement (ADR 0006): drag by the top, resize from the edges.
     private bool _isFreePlacement;
 
@@ -55,31 +55,34 @@ public partial class PopupWindow : Window
         SourceInitialized += (_, _) =>
             HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
         ItemsList.SelectionChanged += OnListSelectionChanged;
-        // Favicons land one domain at a time; refreshing the whole list per
-        // download regenerated every card N times on open. One refresh per
-        // burst is enough.
-        _faviconRefreshTimer = new System.Windows.Threading.DispatcherTimer(
+        // Favicons and file facts (thumbnails, sizes, tags) land one at a
+        // time from background probes; refreshing the whole list per result
+        // regenerated every card N times on open. One refresh per burst is
+        // enough.
+        _cardRefreshTimer = new System.Windows.Threading.DispatcherTimer(
             System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
         {
             Interval = TimeSpan.FromMilliseconds(250),
         };
-        _faviconRefreshTimer.Tick += (_, _) =>
+        _cardRefreshTimer.Tick += (_, _) =>
         {
-            _faviconRefreshTimer.Stop();
+            _cardRefreshTimer.Stop();
             if (IsVisible)
             {
                 ItemsList.Items.Refresh();
             }
         };
-        FaviconService.FaviconUpdated += _ =>
-        {
-            Dispatcher.BeginInvoke(() =>
-            {
-                _faviconRefreshTimer.Stop();
-                _faviconRefreshTimer.Start();
-            });
-        };
+        FaviconService.FaviconUpdated += _ => RequestCardRefresh();
+        CardFileFacts.Updated += RequestCardRefresh;
     }
+
+    // Thread-safe: file facts arrive on their probe thread.
+    private void RequestCardRefresh() =>
+        Dispatcher.BeginInvoke(() =>
+        {
+            _cardRefreshTimer.Stop();
+            _cardRefreshTimer.Start();
+        });
 
     public void ApplyTheme(ColorScheme scheme)
     {

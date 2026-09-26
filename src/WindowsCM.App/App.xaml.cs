@@ -335,6 +335,7 @@ public partial class App : System.Windows.Application
         _localizationDict = AppLocalizationResources.BuildResourceDictionary(strings);
         Resources.MergedDictionaries.Add(_localizationDict);
         MediaMetadataService.ClearCache();
+        CardFileFacts.Clear();
 
         _tray?.UpdateLanguage();
         _popup?.UpdateLanguage();

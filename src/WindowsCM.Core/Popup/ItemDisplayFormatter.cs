@@ -243,7 +243,7 @@ public static class ItemDisplayFormatter
         {
             var firstLine = TextPreview.FirstNonEmptySegment(item.Content);
             var path = NormalizePath(firstLine);
-            if (!string.IsNullOrWhiteSpace(path) && ImageExtensions.Contains(Path.GetExtension(path)))
+            if (!string.IsNullOrWhiteSpace(path) && IsImageFilePath(path))
             {
                 return File.Exists(path) ? path : null;
             }
@@ -251,6 +251,9 @@ public static class ItemDisplayFormatter
 
         return null;
     }
+
+    public static bool IsImageFilePath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && ImageExtensions.Contains(Path.GetExtension(path));
 
     public static bool IsEmoji(string? text) => EmojiDetector.IsAllEmojis(text);
 
