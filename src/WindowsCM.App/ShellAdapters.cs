@@ -46,6 +46,37 @@ public sealed class ShellIncognito(App app) : IIncognitoToggle
     public void SetIncognito(bool on) => app.SetIncognito(on);
 }
 
+// The history the open popup shows, resolved per call. With incognito on,
+// the popup can switch to the normal history; picks, pins, edits and
+// deletes made there used to resolve their ids in the incognito session —
+// another item, or none. Not owned: disposing it disposes nothing.
+public sealed class ViewedHistoryStore(Func<IHistoryStore> current) : IHistoryStore
+{
+    public ClipboardItem AddOrUpdate(ClipboardItem item) => current().AddOrUpdate(item);
+    public IReadOnlyList<ClipboardItem> List() => current().List();
+    public ClipboardItem? GetById(long id) => current().GetById(id);
+    public ClipboardItem? GetLatest() => current().GetLatest();
+    public long TryUpdateContent(long id, ItemKind kind, string content) => current().TryUpdateContent(id, kind, content);
+    public int Clear(bool keepProtected, bool protectPinned = true, bool protectTagged = true) =>
+        current().Clear(keepProtected, protectPinned, protectTagged);
+    public int Evict(int maxCount, int maxAgeMinutes, DateTime utcNow, bool protectPinned = true, bool protectTagged = true) =>
+        current().Evict(maxCount, maxAgeMinutes, utcNow, protectPinned, protectTagged);
+    public IReadOnlyList<ClipboardItem> Search(string query, bool? pinned = null, string? tag = null,
+        ItemKind? kind = null, bool excludePinned = false, bool excludeTagged = false) =>
+        current().Search(query, pinned, tag, kind, excludePinned, excludeTagged);
+    public void RefreshDate(long id, DateTime utcNow) => current().RefreshDate(id, utcNow);
+    public bool Delete(long id) => current().Delete(id);
+    public void SetPinned(long id, bool pinned) => current().SetPinned(id, pinned);
+    public void SetTag(long id, string? tag) => current().SetTag(id, tag);
+    public void SetTitle(long id, string? title) => current().SetTitle(id, title);
+    public void SetMetadata(long id, string? metadataJson) => current().SetMetadata(id, metadataJson);
+    public void SetMetadataAndTitle(long id, string? metadataJson, string? title) =>
+        current().SetMetadataAndTitle(id, metadataJson, title);
+    public void Dispose()
+    {
+    }
+}
+
 public sealed class ShellHistory(IHistoryStore store, Action refreshOpenPopups) : IClearHistory
 {
     public int ClearKeepProtected()

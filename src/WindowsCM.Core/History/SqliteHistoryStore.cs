@@ -44,8 +44,12 @@ public sealed class SqliteHistoryStore : IHistoryStore
         if (existing is long id)
         {
             using var bump = _connection.CreateCommand();
+            // A re-copy carries no title and often no metadata: keep the
+            // item's own (a title the user set, a link preview) instead of
+            // wiping them.
             bump.CommandText = """
-                UPDATE clipboard SET datetime = $datetime, metadata = $metadata, title = $title
+                UPDATE clipboard SET datetime = $datetime,
+                  metadata = COALESCE($metadata, metadata), title = COALESCE($title, title)
                 WHERE id = $id
                 """;
             bump.Parameters.AddWithValue("$datetime", Stamp(item.CapturedAt));
@@ -397,9 +401,21 @@ public sealed class SqliteHistoryStore : IHistoryStore
 
     private static readonly string[] StampFormats = ["yyyy-MM-dd HH:mm:ss.fffffff", "yyyy-MM-dd HH:mm:ss"];
 
+    // Unreadable rows (an unknown future type, a date the reader cannot
+    // parse after a hand edit or a migration) are skipped: one used to make
+    // every read throw, and the popup never opened again.
     private static ClipboardItem? ReadItem(SqliteDataReader reader)
     {
         if (!Enum.TryParse<ItemKind>(reader.GetString(1), out var kind))
+        {
+            return null;
+        }
+        if (reader.IsDBNull(5) || !DateTime.TryParseExact(
+            reader.GetString(5), StampFormats,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal
+                | System.Globalization.DateTimeStyles.AdjustToUniversal,
+            out var capturedAt))
         {
             return null;
         }
@@ -408,11 +424,7 @@ public sealed class SqliteHistoryStore : IHistoryStore
         Content: reader.GetString(2),
         Pinned: reader.GetInt64(3) == 1,
         Tag: reader.IsDBNull(4) ? null : reader.GetString(4),
-        CapturedAt: DateTime.ParseExact(
-            reader.GetString(5), StampFormats,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-                | System.Globalization.DateTimeStyles.AdjustToUniversal),
+        CapturedAt: capturedAt,
         MetadataJson: CoerceMetadata(reader.IsDBNull(6) ? null : reader.GetString(6)),
         Title: reader.IsDBNull(7) ? null : reader.GetString(7),
         Id: reader.GetInt64(0));
@@ -423,6 +435,14 @@ public sealed class SqliteHistoryStore : IHistoryStore
     // broken enrichment payload.
     private static string? CoerceMetadata(string? raw) =>
         string.IsNullOrWhiteSpace(raw) || raw.AsSpan().Trim().SequenceEqual("null") ? null : raw;
+
+    // Test seam: raw SQL against this store (corrupt-row scenarios).
+    internal void ExecuteForTests(string sql)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
 
     private static string EscapeLike(string query) => query
         .Replace("\\", "\\\\")

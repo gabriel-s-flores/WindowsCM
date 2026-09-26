@@ -272,7 +272,7 @@ public sealed class PopupViewModel : ITrayPopup
         {
             return false;
         }
-        _store.SetPinned(selected.Id, !selected.Pinned);
+        ViewedStore.SetPinned(selected.Id, !selected.Pinned);
         Refresh();
         return true;
     }
@@ -290,14 +290,14 @@ public sealed class PopupViewModel : ITrayPopup
         {
             return false;
         }
-        var removed = _store.Delete(selected.Id);
+        var removed = ViewedStore.Delete(selected.Id);
         Refresh();
         return removed;
     }
 
     public int ClearKeepProtected()
     {
-        var removed = _store.Clear(keepProtected: true);
+        var removed = ViewedStore.Clear(keepProtected: true);
         SelectedIndex = -1;
         Refresh();
         return removed;
@@ -305,7 +305,7 @@ public sealed class PopupViewModel : ITrayPopup
 
     public int ClearAll()
     {
-        var removed = _store.Clear(keepProtected: false);
+        var removed = ViewedStore.Clear(keepProtected: false);
         SelectedIndex = -1;
         Refresh();
         return removed;
@@ -331,13 +331,17 @@ public sealed class PopupViewModel : ITrayPopup
 
     public void SetProfile(PopupProfile profile) => Profile = profile;
 
-    public void Refresh()
-    {
-        var targetStore = (!IsViewingIncognito && _store is IncognitoSessionCoordinator isc)
+    // The history on screen: with incognito on, the user can switch to the
+    // normal one, and every mutation from that view must act there (ids of
+    // the two sessions overlap).
+    private IHistoryStore ViewedStore =>
+        (!IsViewingIncognito && _store is IncognitoSessionCoordinator isc)
             ? isc.PersistentStore
             : _store;
 
-        var rawItems = targetStore.Search(
+    public void Refresh()
+    {
+        var rawItems = ViewedStore.Search(
             SearchText,
             pinned: PinsOnly ? true : null,
             tag: TagFilter,
