@@ -119,4 +119,52 @@ public sealed class ClipboardMonitorTests : IDisposable
 
         Assert.Empty(_store.List());
     }
+
+    [Fact]
+    public void ReaderFailure_IsReportedNotThrown_AndNextCopyStillCaptures()
+    {
+        var reader = new FlakyReader { Failure = new InvalidOperationException("clipboard busy") };
+        var capture = new CaptureService(
+            _store, new FileImageAssetStore(_imagesDir), new CaptureOptions(), _clock);
+        using var monitor = new ClipboardMonitor(_source, reader, capture, _sequences, _processes, _clock);
+        var failures = new List<Exception>();
+        monitor.CaptureFailed += (_, ex) => failures.Add(ex);
+
+        _source.Raise();
+
+        Assert.Equal(["clipboard busy"], failures.Select(f => f.Message));
+        Assert.Empty(_store.List());
+
+        reader.Failure = null;
+        reader.Next = new ClipboardPayload(null, null, "just a note to self", []);
+        _source.Raise();
+
+        Assert.Single(_store.List());
+    }
+
+    [Fact]
+    public void StoreFailure_IsReportedNotThrown()
+    {
+        var broken = new SqliteHistoryStore("Data Source=:memory:");
+        broken.Dispose();
+        var capture = new CaptureService(
+            broken, new FileImageAssetStore(_imagesDir), new CaptureOptions(), _clock);
+        using var monitor = Build(capture);
+        var failures = new List<Exception>();
+        monitor.CaptureFailed += (_, ex) => failures.Add(ex);
+        _reader.Next = new ClipboardPayload(null, null, "just a note to self", []);
+
+        var raised = Record.Exception(() => _source.Raise());
+
+        Assert.Null(raised);
+        Assert.Single(failures);
+    }
+
+    private sealed class FlakyReader : IClipboardReader
+    {
+        public Exception? Failure;
+        public ClipboardPayload? Next;
+
+        public ClipboardPayload? Read() => Failure is null ? Next : throw Failure;
+    }
 }

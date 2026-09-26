@@ -19,6 +19,7 @@ public sealed class EnglishAppStrings : IAppStrings
     public string TrayShortcutConflictTitle => "Shortcut conflict";
     public string TrayMissingItemBalloon(long id) => $"Item {id} is no longer in history, so nothing was copied.";
     public string TrayPasteFailedBalloon(string message) => $"Failed to paste after copying: {message}";
+    public string TrayCopyFailedBalloon(string message) => $"Could not copy to the clipboard (another app may be using it): {message}";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Incognito mode";
 

@@ -23,6 +23,10 @@ public static class AppFolders
 
     public static string ImagesDir() => Path.Combine(DataDir(), "images");
 
+    // Error log for crash diagnosis (ErrorLog). Under Data so the
+    // uninstaller's "remove my data" takes it too.
+    public static string LogsDir() => Path.Combine(DataDir(), "logs");
+
     public static string LinkImagesDir() => LinkImageCache.DefaultDirectory();
 
     public static string SettingsPath() => Path.Combine(ConfigDir(), "settings.json");

@@ -193,5 +193,61 @@ public sealed class IncognitoSessionCoordinatorTests : IDisposable
         Assert.Single(_coordinator.PersistentStore.List());
         Assert.Equal("persistent alpha", _coordinator.PersistentStore.List()[0].Content);
     }
-}
 
+    [Fact]
+    public async Task ConcurrentUseWhileToggling_NeverThrows()
+    {
+        // The capture thread, the popup and link previews reach the
+        // coordinator at once while the user toggles incognito: every call
+        // must stay serialized with the swap/dispose of the in-memory session.
+        var errors = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+        void Hammer(Action<int> work)
+        {
+            var i = 0;
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    work(i++);
+                }
+                catch (Exception ex)
+                {
+                    errors.Enqueue(ex);
+                    return;
+                }
+            }
+        }
+
+        var workers = new[]
+        {
+            Task.Run(() => Hammer(i => _coordinator.AddOrUpdate(
+                new ClipboardItem(ItemKind.Text, $"item {i % 50}", false, null, DateTime.UtcNow, null, null)))),
+            Task.Run(() => Hammer(_ => _coordinator.Search(""))),
+            Task.Run(() => Hammer(_ => _coordinator.GetLatest())),
+            Task.Run(() => Hammer(i => _coordinator.SetIncognito(i % 2 == 0))),
+        };
+        await Task.WhenAll(workers);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void GetByIdAndLatest_FollowTheActiveSession()
+    {
+        var persistent = _coordinator.AddOrUpdate(
+            new ClipboardItem(ItemKind.Text, "persistent", false, null, DateTime.UtcNow, null, null));
+        _coordinator.SetIncognito(true);
+        var secret = _coordinator.AddOrUpdate(
+            new ClipboardItem(ItemKind.Text, "secret", false, null, DateTime.UtcNow, null, null));
+
+        Assert.Equal("secret", _coordinator.GetLatest()?.Content);
+        Assert.Equal("secret", _coordinator.GetById(secret.Id)?.Content);
+
+        _coordinator.SetIncognito(false);
+
+        Assert.Equal("persistent", _coordinator.GetLatest()?.Content);
+        Assert.Equal("persistent", _coordinator.GetById(persistent.Id)?.Content);
+    }
+}

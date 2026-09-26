@@ -99,49 +99,86 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
 
     #region IHistoryStore Forwarding
 
-    public ClipboardItem AddOrUpdate(ClipboardItem item) => ActiveStore.AddOrUpdate(item);
+    // Every forwarded call runs under the lock that swaps and disposes the
+    // ephemeral session: its in-memory SqliteConnection is not thread-safe
+    // (capture thread, UI, link previews and the pipe all reach it), and
+    // SetIncognito(false) must never dispose it under an in-flight query.
+    private T Locked<T>(Func<IHistoryStore, T> call)
+    {
+        lock (_lock)
+        {
+            return call((IsIncognito && _incognitoStore is not null) ? _incognitoStore : _persistentStore);
+        }
+    }
 
-    public IReadOnlyList<ClipboardItem> List() => ActiveStore.List();
+    private void Locked(Action<IHistoryStore> call) =>
+        Locked<bool>(store =>
+        {
+            call(store);
+            return true;
+        });
+
+    private T LockedImages<T>(Func<IImageAssetStore, T> call)
+    {
+        lock (_lock)
+        {
+            return call((IsIncognito && _incognitoImages is not null) ? _incognitoImages : _persistentImages);
+        }
+    }
+
+    public ClipboardItem AddOrUpdate(ClipboardItem item) => Locked(s => s.AddOrUpdate(item));
+
+    public IReadOnlyList<ClipboardItem> List() => Locked(s => s.List());
+
+    public ClipboardItem? GetById(long id) => Locked(s => s.GetById(id));
+
+    public ClipboardItem? GetLatest() => Locked(s => s.GetLatest());
 
     public long TryUpdateContent(long id, ItemKind kind, string content) =>
-        ActiveStore.TryUpdateContent(id, kind, content);
+        Locked(s => s.TryUpdateContent(id, kind, content));
 
     public int Clear(bool keepProtected, bool protectPinned = true, bool protectTagged = true) =>
-        ActiveStore.Clear(keepProtected, protectPinned, protectTagged);
+        Locked(s => s.Clear(keepProtected, protectPinned, protectTagged));
 
     public int Evict(int maxCount, int maxAgeMinutes, DateTime utcNow,
         bool protectPinned = true, bool protectTagged = true) =>
-        ActiveStore.Evict(maxCount, maxAgeMinutes, utcNow, protectPinned, protectTagged);
+        Locked(s => s.Evict(maxCount, maxAgeMinutes, utcNow, protectPinned, protectTagged));
 
     public IReadOnlyList<ClipboardItem> Search(string query, bool? pinned = null, string? tag = null,
         ItemKind? kind = null, bool excludePinned = false, bool excludeTagged = false) =>
-        ActiveStore.Search(query, pinned, tag, kind, excludePinned, excludeTagged);
+        Locked(s => s.Search(query, pinned, tag, kind, excludePinned, excludeTagged));
 
-    public void RefreshDate(long id, DateTime utcNow) => ActiveStore.RefreshDate(id, utcNow);
+    public void RefreshDate(long id, DateTime utcNow) => Locked(s => s.RefreshDate(id, utcNow));
 
-    public bool Delete(long id) => ActiveStore.Delete(id);
+    public bool Delete(long id) => Locked(s => s.Delete(id));
 
-    public void SetPinned(long id, bool pinned) => ActiveStore.SetPinned(id, pinned);
+    public void SetPinned(long id, bool pinned) => Locked(s => s.SetPinned(id, pinned));
 
-    public void SetTag(long id, string? tag) => ActiveStore.SetTag(id, tag);
+    public void SetTag(long id, string? tag) => Locked(s => s.SetTag(id, tag));
 
-    public void SetTitle(long id, string? title) => ActiveStore.SetTitle(id, title);
+    public void SetTitle(long id, string? title) => Locked(s => s.SetTitle(id, title));
 
-    public void SetMetadata(long id, string? metadataJson) => ActiveStore.SetMetadata(id, metadataJson);
+    public void SetMetadata(long id, string? metadataJson) => Locked(s => s.SetMetadata(id, metadataJson));
 
     public void SetMetadataAndTitle(long id, string? metadataJson, string? title) =>
-        ActiveStore.SetMetadataAndTitle(id, metadataJson, title);
+        Locked(s => s.SetMetadataAndTitle(id, metadataJson, title));
 
     #endregion
 
 
     #region IImageAssetStore Forwarding
 
-    public string Directory => ActiveImages.Directory;
+    public string Directory => LockedImages(i => i.Directory);
 
-    public string SaveIfAbsent(string fileName, byte[] bytes) => ActiveImages.SaveIfAbsent(fileName, bytes);
+    public string SaveIfAbsent(string fileName, byte[] bytes) =>
+        LockedImages(i => i.SaveIfAbsent(fileName, bytes));
 
-    public void SweepOrphans(IEnumerable<string> referencedFileNames) => ActiveImages.SweepOrphans(referencedFileNames);
+    public void SweepOrphans(IEnumerable<string> referencedFileNames) =>
+        LockedImages(i =>
+        {
+            i.SweepOrphans(referencedFileNames);
+            return true;
+        });
 
     #endregion
 

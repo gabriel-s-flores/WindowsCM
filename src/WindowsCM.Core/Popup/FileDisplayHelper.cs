@@ -219,11 +219,16 @@ public static class FileDisplayHelper
                 Items: Array.Empty<FileItemDetail>());
         }
 
+        // Only a single file shows its size. Probing every entry of a
+        // multi-thousand-file copy (two syscalls per path, from several
+        // converters per card, on the UI thread) froze the popup — worst on
+        // network paths.
+        var probeSizes = lines.Count == 1;
         var detailsList = lines.Select(path =>
         {
             var name = Path.GetFileName(path);
             var ext = Path.GetExtension(path);
-            var size = probeFileSize(path);
+            var size = probeSizes ? probeFileSize(path) : null;
             return new FileItemDetail(
                 FullPath: path,
                 FileName: string.IsNullOrWhiteSpace(name) ? path : name,

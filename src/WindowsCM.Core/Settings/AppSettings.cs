@@ -82,6 +82,10 @@ public sealed class AppSettings
         ExcludedProcesses = new HashSet<string>(Exclusions.Processes, StringComparer.OrdinalIgnoreCase),
         MaxCharacters = PerType.Character.MaxCharacters,
         UpdateDateOnCopy = Behavior.UpdateDateOnCopy,
+        HistoryMaxItems = History.MaxItems,
+        HistoryMaxAgeMinutes = History.MaxAgeMinutes,
+        ProtectPinned = Behavior.ProtectPinned,
+        ProtectTagged = Behavior.ProtectTagged,
     };
 
     public PasteOptions ToPasteOptions() => new()

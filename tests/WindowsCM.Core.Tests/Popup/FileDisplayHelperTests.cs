@@ -131,4 +131,38 @@ public sealed class FileDisplayHelperTests
         Assert.Equal("Texto.txt", details.Items[1].FileName);
         Assert.Equal("Foto.png", details.Items[2].FileName);
     }
+
+    [Fact]
+    public void GetFileDetails_MultipleFiles_NeverProbesTheDisk()
+    {
+        var content = string.Join("\n", Enumerable.Range(0, 2000).Select(i => $@"\\server\share\file{i}.txt"));
+        var item = new ClipboardItem(ItemKind.Files, content, false, null, T0, null, null);
+        var probes = 0;
+
+        var details = FileDisplayHelper.GetFileDetails(item, _ =>
+        {
+            probes++;
+            return 1024L;
+        });
+
+        Assert.NotNull(details);
+        Assert.Equal(2000, details.FileCount);
+        Assert.Equal(0, probes);
+    }
+
+    [Fact]
+    public void GetFileDetails_SingleFile_StillProbesItsSize()
+    {
+        var item = new ClipboardItem(ItemKind.File, @"C:\Docs\report.pdf", false, null, T0, null, null);
+        var probes = 0;
+
+        var details = FileDisplayHelper.GetFileDetails(item, _ =>
+        {
+            probes++;
+            return 2048L;
+        });
+
+        Assert.Equal(1, probes);
+        Assert.False(string.IsNullOrEmpty(details?.FormattedSize));
+    }
 }

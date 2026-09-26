@@ -283,4 +283,94 @@ public sealed class CaptureServiceTests : IDisposable
             ClipboardHash.Md5Hex(bytes) + ".png")));
         Assert.False(File.Exists(orphan));
     }
+
+    [Fact]
+    public void Capture_EnforcesHistoryLengthOnEveryStoredItem()
+    {
+        // Limits used to apply only at startup: a long session kept growing.
+        var capture = new CaptureService(_store, _images,
+            new CaptureOptions { HistoryMaxItems = 3 }, _clock);
+        var pinned = capture.Capture(TextPayload("keep me pinned"), null, _clock.UtcNow);
+        Assert.NotNull(pinned);
+        _store.SetPinned(pinned.Id, true);
+
+        for (var i = 0; i < 6; i++)
+        {
+            _clock.UtcNow = _clock.UtcNow.AddMinutes(1);
+            capture.Capture(TextPayload($"note number {i}"), null, _clock.UtcNow);
+        }
+
+        var contents = _store.List().Select(i => i.Content).ToList();
+        Assert.Equal(4, contents.Count);
+        Assert.Contains("keep me pinned", contents);
+        Assert.Equal(["note number 5", "note number 4", "note number 3"],
+            contents.Where(c => c != "keep me pinned"));
+    }
+
+    [Fact]
+    public void Capture_EnforcesHistoryAge()
+    {
+        var capture = new CaptureService(_store, _images,
+            new CaptureOptions { HistoryMaxAgeMinutes = 30 }, _clock);
+        capture.Capture(TextPayload("stale note"), null, _clock.UtcNow);
+
+        _clock.UtcNow = _clock.UtcNow.AddHours(2);
+        capture.Capture(TextPayload("fresh note"), null, _clock.UtcNow);
+
+        Assert.Equal(["fresh note"], _store.List().Select(i => i.Content));
+    }
+
+    [Fact]
+    public void Capture_NoLimitsConfigured_KeepsEverything()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            _clock.UtcNow = _clock.UtcNow.AddMinutes(1);
+            _capture.Capture(TextPayload($"note number {i}"), null, _clock.UtcNow);
+        }
+
+        Assert.Equal(5, _store.List().Count);
+    }
+
+    [Fact]
+    public async Task Capture_AndCopyBack_FromManyThreads_StayConsistent()
+    {
+        // The listener thread captures while the UI thread copies back from
+        // history: both touch the suppression state and the store.
+        var saved = _capture.Capture(TextPayload("shared"), null, _clock.UtcNow);
+        Assert.NotNull(saved);
+        var errors = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+
+        var capturing = Task.Run(() =>
+        {
+            for (var i = 0; i < 300; i++)
+            {
+                try
+                {
+                    _capture.Capture(TextPayload($"parallel note {i % 20}"), null, DateTime.UtcNow);
+                }
+                catch (Exception ex)
+                {
+                    errors.Enqueue(ex);
+                }
+            }
+        });
+        var copying = Task.Run(() =>
+        {
+            for (var i = 0; i < 300; i++)
+            {
+                try
+                {
+                    _capture.CopiedFromHistory(saved.Id, DateTime.UtcNow);
+                }
+                catch (Exception ex)
+                {
+                    errors.Enqueue(ex);
+                }
+            }
+        });
+        await Task.WhenAll(capturing, copying);
+
+        Assert.Empty(errors);
+    }
 }

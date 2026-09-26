@@ -440,5 +440,19 @@ public class LocalizationTests
         Assert.False(string.IsNullOrWhiteSpace(en.SettingsLayoutScrollbarPosTop));
         Assert.False(string.IsNullOrWhiteSpace(pt.SettingsLayoutScrollbarPosTop));
     }
-}
 
+    [Fact]
+    public void TrayCopyFailedBalloon_HasParityAndCarriesTheReason()
+    {
+        IAppStrings pt = new PortugueseAppStrings();
+        IAppStrings en = new EnglishAppStrings();
+
+        var ptText = pt.TrayCopyFailedBalloon("OpenClipboard failed");
+        var enText = en.TrayCopyFailedBalloon("OpenClipboard failed");
+
+        Assert.Contains("OpenClipboard failed", ptText);
+        Assert.Contains("OpenClipboard failed", enText);
+        Assert.NotEqual(ptText, enText);
+        Assert.NotEqual(en.TrayPasteFailedBalloon("x"), en.TrayCopyFailedBalloon("x"));
+    }
+}

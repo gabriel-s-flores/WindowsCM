@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.Popup;
 
 namespace WindowsCM.App;
@@ -65,7 +65,9 @@ public static class ThumbnailService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteObject(IntPtr hObject);
 
-    private static readonly ConcurrentDictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
+    // Bounded LRU (~160 KB per 250x160 thumbnail): keys carry the write
+    // time, so an unbounded map kept every stale thumbnail for the session.
+    private static readonly LruCache<string, ImageSource?> Cache = new(128, StringComparer.OrdinalIgnoreCase);
 
     public static ImageSource? GetThumbnail(string? rawPath, int width = 250, int height = 160)
     {
@@ -83,13 +85,13 @@ public static class ThumbnailService
         var writeTime = File.GetLastWriteTimeUtc(path).Ticks;
         var cacheKey = $"{path}_{width}x{height}_{writeTime}";
 
-        if (Cache.TryGetValue(cacheKey, out var cached))
+        if (Cache.TryGet(cacheKey, out var cached))
         {
             return cached;
         }
 
         var thumb = ExtractThumbnail(path, width, height);
-        Cache[cacheKey] = thumb;
+        Cache.Set(cacheKey, thumb);
         return thumb;
     }
 

@@ -56,7 +56,7 @@ public sealed class PasteOrchestrator
         CancellationToken ct = default)
     {
         var intent = CopyPasteChords.Resolve(shiftHeld, _options.SwapCopyPaste);
-        var item = _store.List().FirstOrDefault(i => i.Id == itemId);
+        var item = _store.GetById(itemId);
         if (item is null)
         {
             return new PasteOutcome(

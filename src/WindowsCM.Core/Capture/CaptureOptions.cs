@@ -17,4 +17,16 @@ public sealed class CaptureOptions
 
     // Copyous `update-date-on-copy`: copying from history refreshes datetime.
     public bool UpdateDateOnCopy { get; set; } = true;
+
+    // History limits (Copyous `history-length` / `history-time`), enforced
+    // after every stored capture so a long session never outgrows them.
+    // 0 disables a rule; production copies HistorySettings here.
+    public int HistoryMaxItems { get; set; }
+
+    public int HistoryMaxAgeMinutes { get; set; }
+
+    // Protection flags for the limits (Behavior settings parity).
+    public bool ProtectPinned { get; set; } = true;
+
+    public bool ProtectTagged { get; set; } = true;
 }

@@ -17,6 +17,11 @@ public sealed class MessageOnlyClipboardListener : IClipboardChangeSource, IDisp
 
     public event EventHandler? ClipboardChanged;
 
+    // Handlers run inside this window procedure, called from native code:
+    // an exception escaping it terminates the process, so every failure is
+    // caught and reported here instead (the app logs it).
+    public event EventHandler<Exception>? HandlerFailed;
+
     public MessageOnlyClipboardListener()
     {
         if (!OperatingSystem.IsWindows())
@@ -82,10 +87,38 @@ public sealed class MessageOnlyClipboardListener : IClipboardChangeSource, IDisp
     {
         if (msg == NativeClipboard.WM_CLIPBOARDUPDATE)
         {
-            ClipboardChanged?.Invoke(this, EventArgs.Empty);
+            try
+            {
+                ClipboardChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                ReportFailure(ex);
+            }
+            return IntPtr.Zero;
+        }
+        if (msg == NativeClipboard.WM_CLOSE)
+        {
+            // Posted by Dispose: the window must be torn down (and the loop
+            // quit) on the thread that owns it.
+            NativeClipboard.RemoveClipboardFormatListener(hWnd);
+            NativeClipboard.DestroyWindow(hWnd);
+            NativeClipboard.PostQuitMessage(0);
             return IntPtr.Zero;
         }
         return NativeClipboard.DefWindowProcW(hWnd, msg, wParam, lParam);
+    }
+
+    private void ReportFailure(Exception ex)
+    {
+        try
+        {
+            HandlerFailed?.Invoke(this, ex);
+        }
+        catch
+        {
+            // Reporting is best effort; nothing may escape to native code.
+        }
     }
 
     public void Dispose()
@@ -95,13 +128,15 @@ public sealed class MessageOnlyClipboardListener : IClipboardChangeSource, IDisp
             return;
         }
         _disposed = true;
+        // DestroyWindow and PostQuitMessage only act on the calling thread's
+        // own windows/queue, so calling them here (the UI thread) left the
+        // listener pumping and made every exit wait out the Join timeout.
+        // Ask the listener thread to shut itself down instead.
         if (_hwnd != IntPtr.Zero)
         {
-            NativeClipboard.RemoveClipboardFormatListener(_hwnd);
-            NativeClipboard.DestroyWindow(_hwnd);
+            NativeClipboard.PostMessageW(_hwnd, NativeClipboard.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
             _hwnd = IntPtr.Zero;
         }
-        NativeClipboard.PostQuitMessage(0);
         // Let the STA pump drain; never block the caller forever.
         _thread.Join(TimeSpan.FromSeconds(2));
         _ready.Dispose();

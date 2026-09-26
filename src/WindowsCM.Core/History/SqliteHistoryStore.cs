@@ -60,6 +60,29 @@ public sealed class SqliteHistoryStore : IHistoryStore
         return ReadAll(reader);
     }
 
+    public ClipboardItem? GetById(long id) => ReadById(id);
+
+    // Streams the datetime index and stops at the first readable row, so it
+    // skips unknown future types exactly like List() does.
+    public ClipboardItem? GetLatest()
+    {
+        using var query = _connection.CreateCommand();
+        query.CommandText = """
+            SELECT id, type, content, pinned, tag, datetime, metadata, title
+            FROM clipboard
+            ORDER BY datetime DESC
+            """;
+        using var reader = query.ExecuteReader();
+        while (reader.Read())
+        {
+            if (ReadItem(reader) is { } item)
+            {
+                return item;
+            }
+        }
+        return null;
+    }
+
     public long TryUpdateContent(long id, ItemKind kind, string content)
     {
         using var update = _connection.CreateCommand();

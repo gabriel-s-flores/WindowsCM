@@ -135,7 +135,7 @@ internal sealed class ImageThumbConverter : IValueConverter
             localPath = ItemDisplayFormatter.TryGetLocalImagePath(item);
             if (string.IsNullOrEmpty(localPath) && (item.Kind == ItemKind.File || item.Kind == ItemKind.Files))
             {
-                var first = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                var first = TextPreview.FirstNonEmptySegment(item.Content);
                 first = FileDisplayHelper.NormalizePath(first);
                 if (!string.IsNullOrEmpty(first) && File.Exists(first))
                 {
@@ -171,21 +171,9 @@ internal sealed class ImageThumbConverter : IValueConverter
             return null;
         }
 
-        try
-        {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.UriSource = new Uri(localPath);
-            image.DecodePixelHeight = 180;
-            image.EndInit();
-            image.Freeze();
-            return image;
-        }
-        catch
-        {
-            return ThumbnailService.GetThumbnail(localPath);
-        }
+        // Decoded once per file (bounded cache, prewarmed off the UI thread),
+        // not on every card realization.
+        return ImageThumbnailCache.Get(localPath);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
@@ -217,7 +205,7 @@ internal sealed class ImagePreviewVisibilityConverter : IValueConverter
                     return Visibility.Collapsed;
                 }
 
-                var first = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                var first = TextPreview.FirstNonEmptySegment(item.Content);
                 first = FileDisplayHelper.NormalizePath(first);
                 if (!string.IsNullOrEmpty(first) && File.Exists(first))
                 {
@@ -473,7 +461,7 @@ internal sealed class FilePreviewVisibilityConverter : IValueConverter
                     return Visibility.Collapsed;
                 }
 
-                var first = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                var first = TextPreview.FirstNonEmptySegment(item.Content);
                 first = FileDisplayHelper.NormalizePath(first);
                 if (!string.IsNullOrEmpty(first) && File.Exists(first))
                 {
@@ -502,7 +490,7 @@ internal sealed class FileIconConverter : IValueConverter
         var isLarge = parameter is not "small";
         if (value is ClipboardItem item)
         {
-            var firstPath = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var firstPath = TextPreview.FirstNonEmptySegment(item.Content);
             return FileIconService.GetFileIcon(firstPath, isLarge);
         }
         if (value is string path)
@@ -651,7 +639,8 @@ public static class SyntaxHighlightHelper
         var showNumbers = GetShowLineNumbers(tb);
         if (showNumbers)
         {
-            var lines = rawCode.Replace("\r\n", "\n").Split('\n').Take(6).ToList();
+            // Bounded: only the six shown lines are read from the content.
+            var lines = TextPreview.FirstLines(rawCode, 6).Lines;
             for (var i = 0; i < lines.Count; i++)
             {
                 var numRun = new Run($"{i}  ");
@@ -765,7 +754,7 @@ internal sealed class KindBrushConverter : IValueConverter
 
         if ((kind == ItemKind.File || kind == ItemKind.Files) && categories != null && !string.IsNullOrWhiteSpace(content))
         {
-            var first = content.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var first = TextPreview.FirstNonEmptySegment(content);
             var cat = categories.ResolveCategory(first);
             if (cat != null && !string.IsNullOrWhiteSpace(cat.ColorHex))
             {
@@ -1105,7 +1094,7 @@ internal static class MediaItemClassifier
             return false;
         }
 
-        var first = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        var first = TextPreview.FirstNonEmptySegment(item.Content);
         var path = FileDisplayHelper.NormalizePath(first);
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -1138,7 +1127,7 @@ internal static class MediaItemClassifier
             return false;
         }
 
-        var first = item.Content?.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        var first = TextPreview.FirstNonEmptySegment(item.Content);
         var path = FileDisplayHelper.NormalizePath(first);
         if (string.IsNullOrWhiteSpace(path))
         {

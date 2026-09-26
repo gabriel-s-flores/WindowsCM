@@ -36,6 +36,7 @@ public partial class PopupWindow : Window
     private readonly SmoothScrollController _scrollController = new();
     private bool _isRenderingHooked;
     private long _lastRenderTicks;
+    private readonly System.Windows.Threading.DispatcherTimer _faviconRefreshTimer;
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
     private ColorScheme _currentScheme = ColorScheme.Dark;
@@ -50,14 +51,28 @@ public partial class PopupWindow : Window
         InitializeComponent();
         ApplyTheme(ColorScheme.Dark);
         ItemsList.SelectionChanged += OnListSelectionChanged;
+        // Favicons land one domain at a time; refreshing the whole list per
+        // download regenerated every card N times on open. One refresh per
+        // burst is enough.
+        _faviconRefreshTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(250),
+        };
+        _faviconRefreshTimer.Tick += (_, _) =>
+        {
+            _faviconRefreshTimer.Stop();
+            if (IsVisible)
+            {
+                ItemsList.Items.Refresh();
+            }
+        };
         FaviconService.FaviconUpdated += _ =>
         {
             Dispatcher.BeginInvoke(() =>
             {
-                if (IsVisible)
-                {
-                    ItemsList.Items.Refresh();
-                }
+                _faviconRefreshTimer.Stop();
+                _faviconRefreshTimer.Start();
             });
         };
     }
