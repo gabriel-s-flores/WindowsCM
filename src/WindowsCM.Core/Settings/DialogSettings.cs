@@ -35,6 +35,33 @@ public enum LargeVerticalPosition
     Right = 1,
 }
 
+// How the large window is placed (ADR 0006). The two docked modes keep
+// the edge anchoring (LargeHorizontalPosition / LargeVerticalPosition).
+public enum LargePlacementMode
+{
+    // Docked to an edge of the monitor under the mouse (original behavior).
+    FollowMouse = 0,
+    // Docked to an edge of the monitor the user picked (LargeMonitor).
+    FixedMonitor = 1,
+    // Wherever the user dragged it, at the size they left it.
+    Free = 2,
+}
+
+// A window rectangle in WPF device-independent units (virtual-screen
+// coordinates, the same space Window.Left/Top use).
+public sealed class WindowBounds
+{
+    public double Left { get; set; }
+    public double Top { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+
+    public bool IsUsable =>
+        double.IsFinite(Left) && double.IsFinite(Top)
+        && double.IsFinite(Width) && double.IsFinite(Height)
+        && Width > 0 && Height > 0;
+}
+
 public enum HorizontalItemOrder
 {
     RecentOnLeft = 0,
@@ -86,6 +113,33 @@ public sealed class DialogSettings
     public LargeVerticalPosition LargeVerticalPosition { get; set; } = LargeVerticalPosition.Left;
     public HorizontalItemOrder LargeHorizontalOrder { get; set; } = HorizontalItemOrder.RecentOnLeft;
     public VerticalItemOrder LargeVerticalOrder { get; set; } = VerticalItemOrder.RecentOnTop;
+    public LargePlacementMode LargePlacement { get; set; } = LargePlacementMode.FollowMouse;
+
+    // Screen.DeviceName of the monitor picked for FixedMonitor (e.g.
+    // \\.\DISPLAY2); empty means the primary monitor. Kept even while that
+    // monitor is disconnected, so it is used again once it comes back.
+    public string LargeMonitor { get; set; } = "";
+
+    // Free-mode rectangles, one per orientation: a wide strip and a tall
+    // column are different shapes, so switching orientation never squeezes
+    // one into the other. Null until the user first places the window.
+    public WindowBounds? LargeFreeBoundsHorizontal { get; set; }
+    public WindowBounds? LargeFreeBoundsVertical { get; set; }
+
+    public WindowBounds? FreeBoundsFor(DialogOrientation orientation) =>
+        orientation == DialogOrientation.Vertical ? LargeFreeBoundsVertical : LargeFreeBoundsHorizontal;
+
+    public void SetFreeBounds(DialogOrientation orientation, WindowBounds? bounds)
+    {
+        if (orientation == DialogOrientation.Vertical)
+        {
+            LargeFreeBoundsVertical = bounds;
+        }
+        else
+        {
+            LargeFreeBoundsHorizontal = bounds;
+        }
+    }
 
     // Posicionamento da barra de scroll (customizável por orientação)
     public VerticalScrollbarPosition VerticalScrollbarPosition { get; set; } = VerticalScrollbarPosition.Right;
@@ -112,6 +166,13 @@ public sealed class DialogSettings
             LargeHorizontalOrder = HorizontalItemOrder.RecentOnLeft;
         if (!Enum.IsDefined(typeof(VerticalItemOrder), LargeVerticalOrder))
             LargeVerticalOrder = VerticalItemOrder.RecentOnTop;
+        if (!Enum.IsDefined(typeof(LargePlacementMode), LargePlacement))
+            LargePlacement = LargePlacementMode.FollowMouse;
+        LargeMonitor ??= "";
+        if (LargeFreeBoundsHorizontal is { IsUsable: false })
+            LargeFreeBoundsHorizontal = null;
+        if (LargeFreeBoundsVertical is { IsUsable: false })
+            LargeFreeBoundsVertical = null;
 
         if (!Enum.IsDefined(typeof(VerticalScrollbarPosition), VerticalScrollbarPosition))
             VerticalScrollbarPosition = VerticalScrollbarPosition.Right;
