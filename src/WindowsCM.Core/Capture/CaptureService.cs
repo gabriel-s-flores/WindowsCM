@@ -35,6 +35,9 @@ public sealed class CaptureService
     // one gate keeps _lastSeen and the standalone session consistent.
     private readonly object _gate = new();
 
+    // Last orphan-image sweep (startup or runtime), capture clock time.
+    private DateTime? _lastOrphanSweep;
+
     public CaptureService(
         IHistoryStore store,
         IImageAssetStore images,
@@ -119,8 +122,6 @@ public sealed class CaptureService
         {
             return null;
         }
-        // Recorded only for copies that will be stored.
-        _lastSeen = identity;
 
         var item = classified switch
         {
@@ -141,8 +142,34 @@ public sealed class CaptureService
         }
         var store = EffectiveStore;
         var stored = store.AddOrUpdate(item);
+        // Recorded once stored: a failed write (disk full, busy database)
+        // used to mark the copy as seen, and the user's immediate re-copy
+        // was dropped as a duplicate.
+        _lastSeen = identity;
         EnforceHistoryLimits(store, utcNow);
+        SweepOrphanImagesIfDue(utcNow);
         return stored;
+    }
+
+    // Image files of evicted, deleted and cleared items used to stay on disk
+    // until the next restart (hundreds of MB a day of screenshots for a tray
+    // app that runs for weeks). Runs under the gate, so no capture is ever
+    // between writing its file and storing its row; throttled because it
+    // lists the history's images and the images folder.
+    private void SweepOrphanImagesIfDue(DateTime utcNow)
+    {
+        if (_lastOrphanSweep is { } last && utcNow - last < _options.OrphanImageSweepInterval)
+        {
+            return;
+        }
+        try
+        {
+            SweepOrphanImagesLocked(utcNow);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Housekeeping only; the next due sweep retries.
+        }
     }
 
     // Copyous evicts on insert: without this the history-length and
@@ -191,13 +218,25 @@ public sealed class CaptureService
     {
         lock (_gate)
         {
-            var referenced = _store.List()
-                .Where(i => i.Kind == ItemKind.Image)
-                .Select(i => FileUris.TryGetFileName(i.Content))
-                .OfType<string>()
-                .ToList();
-            _images.SweepOrphans(referenced);
+            SweepOrphanImagesLocked(_clock.UtcNow);
         }
+    }
+
+    // The persistent pair only, whatever the session: an incognito toggle
+    // between listing one store and sweeping another folder would delete
+    // images the other still references. Incognito images live in their
+    // own folder, deleted with the session.
+    private void SweepOrphanImagesLocked(DateTime utcNow)
+    {
+        var (store, images) = _store is IncognitoSessionCoordinator coordinator
+            ? (coordinator.PersistentStore, coordinator.PersistentImages)
+            : (_store, _images);
+        var referenced = store.Search("", kind: ItemKind.Image)
+            .Select(i => FileUris.TryGetFileName(i.Content))
+            .OfType<string>()
+            .ToList();
+        images.SweepOrphans(referenced);
+        _lastOrphanSweep = utcNow;
     }
 
     // CF_HTML stored opaque in v1 (rewritten verbatim by copy-back, issue 12).

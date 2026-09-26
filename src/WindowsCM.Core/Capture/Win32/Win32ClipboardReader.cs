@@ -142,22 +142,39 @@ public sealed class Win32ClipboardReader : IClipboardReader
         {
             return null;
         }
-        // The HDROP handle belongs to the clipboard: DragQueryFile copies the
-        // paths out; the handle is never freed here.
-        var count = NativeClipboard.DragQueryFileW(hDrop, 0xFFFFFFFF, null, 0);
-        if (count == 0)
+        // The HDROP handle belongs to the clipboard and is never freed here.
+        // The block is copied out (GlobalSize-bounded) and parsed in one
+        // pass; only an ANSI list goes through DragQueryFile.
+        var block = ReadBytes(NativeClipboard.CF_HDROP);
+        var raw = (block is null ? null : ClipboardBlocks.ParseDropFiles(block)) ?? QueryDropFiles(hDrop);
+        var paths = new List<string>(raw.Count);
+        foreach (var path in raw)
         {
-            return null;
+            try
+            {
+                paths.Add(new Uri(path).AbsoluteUri);
+            }
+            catch (UriFormatException)
+            {
+                // One odd entry (relative, \\?\ prefixed) used to throw
+                // away the whole copy; it is the only one skipped now.
+            }
         }
-        var paths = new List<string>((int)count);
+        return paths.Count == 0 ? null : new FileSnapshot(paths, ReadDropEffect());
+    }
+
+    private static List<string> QueryDropFiles(IntPtr hDrop)
+    {
+        var count = NativeClipboard.DragQueryFileW(hDrop, 0xFFFFFFFF, null, 0);
+        var paths = new List<string>((int)Math.Min(count, 100_000));
         for (uint i = 0; i < count; i++)
         {
             var len = NativeClipboard.DragQueryFileW(hDrop, i, null, 0);
             var sb = new StringBuilder((int)len + 1);
             NativeClipboard.DragQueryFileW(hDrop, i, sb, (uint)sb.Capacity);
-            paths.Add(new Uri(sb.ToString()).AbsoluteUri);
+            paths.Add(sb.ToString());
         }
-        return new FileSnapshot(paths, ReadDropEffect());
+        return paths;
     }
 
     private FileOperation ReadDropEffect()
@@ -166,24 +183,10 @@ public sealed class Win32ClipboardReader : IClipboardReader
         {
             return FileOperation.Copy;
         }
-        var handle = NativeClipboard.GetClipboardData(_dropEffectFormat);
-        if (handle == IntPtr.Zero)
-        {
-            return FileOperation.Copy;
-        }
-        var ptr = NativeClipboard.GlobalLock(handle);
-        if (ptr == IntPtr.Zero)
-        {
-            return FileOperation.Copy;
-        }
-        try
-        {
-            return FileDrop.FromDropEffect(Marshal.ReadInt32(ptr));
-        }
-        finally
-        {
-            NativeClipboard.GlobalUnlock(handle);
-        }
+        var bytes = ReadBytes(_dropEffectFormat);
+        return bytes is { Length: >= 4 }
+            ? FileDrop.FromDropEffect(BitConverter.ToInt32(bytes, 0))
+            : FileOperation.Copy;
     }
 
     private static string? TryReadText()
@@ -192,25 +195,10 @@ public sealed class Win32ClipboardReader : IClipboardReader
         {
             return null;
         }
-        var handle = NativeClipboard.GetClipboardData(NativeClipboard.CF_UNICODETEXT);
-        if (handle == IntPtr.Zero)
-        {
-            return null;
-        }
-        // HGLOBAL text: lock, copy the string out, unlock — never leave locked.
-        var ptr = NativeClipboard.GlobalLock(handle);
-        if (ptr == IntPtr.Zero)
-        {
-            return null;
-        }
-        try
-        {
-            return Marshal.PtrToStringUni(ptr);
-        }
-        finally
-        {
-            NativeClipboard.GlobalUnlock(handle);
-        }
+        // Bounded by the block size: the terminator is the source app's
+        // promise, not a guarantee.
+        var bytes = ReadBytes(NativeClipboard.CF_UNICODETEXT);
+        return bytes is null ? null : ClipboardBlocks.DecodeUnicodeText(bytes);
     }
 
     private string? TryReadHtml()

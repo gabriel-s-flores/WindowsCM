@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.Buffers.Binary;
 using System.IO.Compression;
+using WindowsCM.Core.Classification;
 
 namespace WindowsCM.Core.Paste;
 
@@ -66,6 +67,12 @@ public static class PngToDib
                 {
                     throw new ArgumentException("Invalid PNG dimensions.", nameof(png));
                 }
+                // Over the cap the writer offers the PNG format only,
+                // instead of a multi-GB bitmap built on the UI thread.
+                if (!ImageLimits.IsWithin(width, height))
+                {
+                    throw new NotSupportedException($"PNG of {width}x{height} is over the {ImageLimits.MaxPixels} pixel cap.");
+                }
             }
             else if (type == "IDAT")
             {
@@ -89,55 +96,61 @@ public static class PngToDib
         return ToDib(Inflate(idat.ToArray(), height * (1 + width * bytesPerPixel)), width, height, bytesPerPixel);
     }
 
+    // Exactly the declared size: a growing stream doubled its buffer up to
+    // twice the image, and a stream that inflates past it (a zip bomb)
+    // stops at the first extra byte.
     private static byte[] Inflate(byte[] deflated, int expected)
     {
         using var input = new MemoryStream(deflated);
         using var zlib = new ZLibStream(input, CompressionMode.Decompress);
-        using var output = new MemoryStream();
-        zlib.CopyTo(output);
-        if (output.Length != expected)
+        var output = new byte[expected];
+        try
+        {
+            zlib.ReadExactly(output);
+        }
+        catch (Exception ex) when (ex is EndOfStreamException or InvalidDataException)
+        {
+            throw new ArgumentException("PNG pixel data has an unexpected size.", nameof(deflated), ex);
+        }
+        if (zlib.ReadByte() != -1)
         {
             throw new ArgumentException("PNG pixel data has an unexpected size.", nameof(deflated));
         }
-        return output.ToArray();
+        return output;
     }
 
+    // Unfilters row by row straight into the bottom-up bitmap: no full-size
+    // intermediate copy, no byte-at-a-time writer (a 4K image allocated
+    // ~255 MB on the UI thread).
     private static byte[] ToDib(byte[] filtered, int width, int height, int bytesPerPixel)
     {
-        var stride = 1 + width * bytesPerPixel;
-        var raw = new byte[width * height * bytesPerPixel];
-        var prior = new byte[width * bytesPerPixel];
+        var lineLength = width * bytesPerPixel;
+        var stride = 1 + lineLength;
+        var dib = new byte[40 + width * height * 4];
+        var header = dib.AsSpan(0, 40);
+        BinaryPrimitives.WriteInt32LittleEndian(header, 40); // header size
+        BinaryPrimitives.WriteInt32LittleEndian(header[4..], width);
+        BinaryPrimitives.WriteInt32LittleEndian(header[8..], height); // positive: bottom-up
+        BinaryPrimitives.WriteInt16LittleEndian(header[12..], 1); // planes
+        BinaryPrimitives.WriteInt16LittleEndian(header[14..], 32); // 32bpp BI_RGB (alpha ignored by readers)
+        BinaryPrimitives.WriteInt32LittleEndian(header[20..], width * height * 4); // image size
+        var line = new byte[lineLength];
+        var prior = new byte[lineLength];
         for (var row = 0; row < height; row++)
         {
-            var filter = filtered[row * stride];
-            var line = new byte[width * bytesPerPixel];
-            Buffer.BlockCopy(filtered, row * stride + 1, line, 0, line.Length);
-            Unfilter(filter, line, prior, bytesPerPixel);
-            Buffer.BlockCopy(line, 0, raw, row * line.Length, line.Length);
-            prior = line;
-        }
-        using var ms = new MemoryStream();
-        using var w = new BinaryWriter(ms);
-        w.Write(40); // header size
-        w.Write(width);
-        w.Write(height); // positive: bottom-up
-        w.Write((short)1); // planes
-        w.Write((short)32); // 32bpp BI_RGB (alpha channel ignored by readers)
-        w.Write(0); // BI_RGB
-        w.Write(width * height * 4); // image size
-        w.Write(0); w.Write(0); w.Write(0); w.Write(0);
-        for (var row = height - 1; row >= 0; row--)
-        {
-            for (var col = 0; col < width; col++)
+            Buffer.BlockCopy(filtered, row * stride + 1, line, 0, lineLength);
+            Unfilter(filtered[row * stride], line, prior, bytesPerPixel);
+            var d = 40 + (height - 1 - row) * width * 4;
+            for (var s = 0; s < lineLength; s += bytesPerPixel, d += 4)
             {
-                var s = (row * width + col) * bytesPerPixel;
-                w.Write(raw[s + 2]); // B
-                w.Write(raw[s + 1]); // G
-                w.Write(raw[s]); // R
-                w.Write(bytesPerPixel == 4 ? raw[s + 3] : (byte)255); // X
+                dib[d] = line[s + 2]; // B
+                dib[d + 1] = line[s + 1]; // G
+                dib[d + 2] = line[s]; // R
+                dib[d + 3] = bytesPerPixel == 4 ? line[s + 3] : (byte)255; // X
             }
+            (prior, line) = (line, prior);
         }
-        return ms.ToArray();
+        return dib;
     }
 
     private static void Unfilter(byte filter, byte[] line, byte[] prior, int bytesPerPixel)
