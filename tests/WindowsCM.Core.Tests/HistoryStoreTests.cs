@@ -380,6 +380,48 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.Equal("blue", bumped.Tag);
     }
 
+    // Re-copying an item used to wipe its title (set by the user, or by a
+    // link preview) and its metadata (the preview) with the new capture's
+    // nulls.
+    [Fact]
+    public void Recopy_KeepsTitleAndMetadataTheNewCopyDoesNotCarry()
+    {
+        var first = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com"));
+        _store.SetMetadataAndTitle(first.Id, """{"title":"Example","image":"x"}""", "Example");
+
+        var bumped = _store.AddOrUpdate(Sample(kind: ItemKind.Link, content: "https://example.com",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("Example", bumped.Title);
+        Assert.Equal("""{"title":"Example","image":"x"}""", bumped.MetadataJson);
+    }
+
+    [Fact]
+    public void Recopy_WithNewMetadata_TakesIt()
+    {
+        _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"old"}"""));
+
+        var bumped = _store.AddOrUpdate(Sample(content: "same", metadataJson: """{"html":"new"}""",
+            capturedAt: new DateTime(2026, 9, 9, 13, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("""{"html":"new"}""", bumped.MetadataJson);
+    }
+
+    // One row with a date the reader cannot parse (a database edited by hand
+    // or migrated) made every read throw: the popup never opened again.
+    [Fact]
+    public void RowWithUnreadableDate_IsSkippedNotFatal()
+    {
+        var good = _store.AddOrUpdate(Sample(content: "good"));
+        var bad = _store.AddOrUpdate(Sample(content: "bad"));
+        _store.ExecuteForTests("UPDATE clipboard SET datetime = 'yesterday-ish' WHERE id = " + bad.Id);
+
+        Assert.Equal(["good"], _store.List().Select(i => i.Content));
+        Assert.Equal(["good"], _store.Search("").Select(i => i.Content));
+        Assert.Null(_store.GetById(bad.Id));
+        Assert.Equal(good.Id, _store.GetLatest()?.Id);
+    }
+
     [Fact]
     public void RoundTrip_KeepsSubSecondPrecision()
     {

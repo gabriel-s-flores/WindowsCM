@@ -69,7 +69,14 @@ public partial class App : System.Windows.Application
     private bool _servicesReady;
 
     internal AppSettings Settings => _settings;
-    internal IHistoryStore Store => _coordinator ?? (IHistoryStore?)_store ?? throw new InvalidOperationException("Services not built.");
+    // What the popups act on (pin, edit, delete, paste): the history they
+    // show — the normal one when the user switched to it during incognito.
+    internal IHistoryStore Store => ViewedStore;
+
+    private IHistoryStore ViewedStore =>
+        _coordinator is { IsIncognito: true } coordinator && _popupModel is { IsViewingIncognito: false }
+            ? coordinator.PersistentStore
+            : _coordinator ?? (IHistoryStore?)_store ?? throw new InvalidOperationException("Services not built.");
     internal ActionExecutor Executor => _executor ?? throw new InvalidOperationException("Services not built.");
     internal ActionConfig Actions => _actions;
     internal bool IsIncognito => _coordinator?.IsIncognito ?? false;
@@ -289,7 +296,7 @@ public partial class App : System.Windows.Application
         _disposables.Add(_foregroundTracker);
         var pasteOptions = _settings.ToPasteOptions();
         _pasteOptions = pasteOptions;
-        _orchestrator = new PasteOrchestrator(_coordinator, _capture,
+        _orchestrator = new PasteOrchestrator(new ViewedHistoryStore(() => ViewedStore), _capture,
             new FileImageReader(AppFolders.ImagesDir()), new Win32ClipboardWriter(),
             foreground, new Win32ElevationProbe(), new Win32PasteInjector(),
             new SystemPasteDelay(), pasteOptions, clock);
@@ -722,7 +729,7 @@ public partial class App : System.Windows.Application
         {
             return;
         }
-        var item = _coordinator.GetById(request.ItemId);
+        var item = ViewedStore.GetById(request.ItemId);
         if (item is null)
         {
             var missing = ActivationFeedbackPolicy.ForMissingItem(request.ItemId);
@@ -1023,7 +1030,7 @@ public partial class App : System.Windows.Application
             return;
         }
         // Slots 1..9 address the nine tag colors; slot 0 clears the tag.
-        _store.SetTag(item.Id, slot == 0 ? null : ItemTags.All[(slot - 1) % ItemTags.All.Count]);
+        ViewedStore.SetTag(item.Id, slot == 0 ? null : ItemTags.All[(slot - 1) % ItemTags.All.Count]);
         RefreshOpenPopups();
     }
 

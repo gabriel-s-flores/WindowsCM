@@ -674,6 +674,34 @@ public sealed class PopupViewModelTests
 
         Assert.Equal(0, vm.SelectedIndex);
     }
+
+    // With incognito on, the popup can show the normal history. Pin and
+    // delete from that view used to act on the incognito session by id:
+    // another item, or none.
+    [Fact]
+    public void PersistentViewDuringIncognito_PinsAndDeletesInTheNormalHistory()
+    {
+        var images = new FileImageAssetStore(Path.Combine(Path.GetTempPath(), "wcm-vm-" + Guid.NewGuid().ToString("N")));
+        using var persistent = new SqliteHistoryStore("Data Source=:memory:");
+        using var coordinator = new IncognitoSessionCoordinator(persistent, images);
+        var now = new DateTime(2026, 9, 26, 12, 0, 0, DateTimeKind.Utc);
+        var kept = persistent.AddOrUpdate(new ClipboardItem(ItemKind.Text, "normal one", false, null, now, null, null));
+        var gone = persistent.AddOrUpdate(new ClipboardItem(ItemKind.Text, "normal two", false, null, now.AddSeconds(1), null, null));
+        coordinator.SetIncognito(true);
+        coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "secret", false, null, now, null, null));
+        coordinator.AddOrUpdate(new ClipboardItem(ItemKind.Text, "secret two", false, null, now, null, null));
+        var vm = new PopupViewModel(coordinator);
+        vm.Show(incognito: true);
+        vm.SwitchViewToPersistent();
+
+        vm.SetSelectedIndex(vm.VisibleItems.ToList().FindIndex(i => i.Id == kept.Id));
+        Assert.True(vm.TogglePinSelected());
+        vm.SetSelectedIndex(vm.VisibleItems.ToList().FindIndex(i => i.Id == gone.Id));
+        Assert.True(vm.DeleteSelected(force: false));
+
+        Assert.True(persistent.GetById(kept.Id)!.Pinned);
+        Assert.Null(persistent.GetById(gone.Id));
+        Assert.Equal(2, coordinator.List().Count);
+        Assert.All(coordinator.List(), i => Assert.False(i.Pinned));
+    }
 }
-
-

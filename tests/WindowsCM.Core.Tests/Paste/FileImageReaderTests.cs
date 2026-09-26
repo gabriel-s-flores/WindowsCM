@@ -40,4 +40,27 @@ public sealed class FileImageReaderTests : IDisposable
         Assert.Null(reader.LoadPng(new Uri(Path.Combine(_dir, "gone.png")).AbsoluteUri));
         Assert.Null(reader.LoadPng("not-a-uri-at-all"));
     }
+
+    // Incognito images live in their own temp folder: pasting one back
+    // looked for it in the persistent folder and reported it missing.
+    [Fact]
+    public void LoadPng_IncognitoImage_IsReadFromItsSessionFolder()
+    {
+        using var incognito = new EphemeralImageAssetStore(_dir);
+        var content = incognito.SaveIfAbsent("feed01.png", [4, 2]);
+
+        Assert.Equal(new byte[] { 4, 2 }, new FileImageReader(Path.Combine(_dir, "persistent")).LoadPng(content));
+    }
+
+    // Only the app's own image folders are read, whatever a URI says.
+    [Fact]
+    public void LoadPng_FileOutsideTheImageFolders_IsNotRead()
+    {
+        var elsewhere = Path.Combine(_dir, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        var secret = Path.Combine(elsewhere, "secret.png");
+        File.WriteAllBytes(secret, [1]);
+
+        Assert.Null(new FileImageReader(Path.Combine(_dir, "persistent")).LoadPng(new Uri(secret).AbsoluteUri));
+    }
 }
