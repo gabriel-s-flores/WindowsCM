@@ -363,6 +363,20 @@ public partial class App : System.Windows.Application
     {
         _settings.Behavior.AutoPaste = on;
         ApplyAutoPaste();
+        SaveSettingsQuietly();
+        _settingsWindow?.SyncAutoPaste(on);
+    }
+
+    // Free placement: the large window reports where the user dropped or
+    // resized it (per orientation) and it reopens exactly there.
+    internal void SaveLargeFreeBounds(DialogOrientation orientation, WindowBounds bounds)
+    {
+        _settings.Dialog.SetFreeBounds(orientation, bounds);
+        SaveSettingsQuietly();
+    }
+
+    private void SaveSettingsQuietly()
+    {
         try
         {
             SettingsStore.Save(_settingsPath, _settings);
@@ -371,7 +385,6 @@ public partial class App : System.Windows.Application
         {
             LogError("settings-save", ex);
         }
-        _settingsWindow?.SyncAutoPaste(on);
     }
 
     private void ApplyAutoPaste()

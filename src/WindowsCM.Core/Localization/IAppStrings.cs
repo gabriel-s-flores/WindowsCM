@@ -31,6 +31,7 @@ public interface IAppStrings
     string PopupReceiveMobileTooltip { get; }
     string PopupSearchPlaceholder { get; }
     string PopupSearchTooltip { get; }
+    string PopupDragHandleTooltip { get; }
     string PopupFilterTooltip { get; }
     string PopupFilterActiveTooltip { get; }
     string FilterAll { get; }
@@ -186,6 +187,15 @@ public interface IAppStrings
     string SettingsLayoutPosTop { get; }
     string SettingsLayoutPosLeft { get; }
     string SettingsLayoutPosRight { get; }
+    string SettingsLayoutPlacement { get; }
+    string SettingsLayoutPlacementFollowMouse { get; }
+    string SettingsLayoutPlacementFixedMonitor { get; }
+    string SettingsLayoutPlacementFree { get; }
+    string SettingsLayoutMonitor { get; }
+    string SettingsLayoutMonitorIdentify { get; }
+    string SettingsLayoutMonitorItem(int number, int width, int height, bool isPrimary);
+    string SettingsLayoutFreeHint { get; }
+    string SettingsLayoutFreeReset { get; }
     string SettingsLayoutItemOrder { get; }
     string SettingsLayoutOrderRecentLeft { get; }
     string SettingsLayoutOrderRecentRight { get; }
