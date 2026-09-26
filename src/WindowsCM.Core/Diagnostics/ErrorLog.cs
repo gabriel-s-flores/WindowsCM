@@ -29,11 +29,19 @@ public sealed class ErrorLog
     public static string DefaultPath() =>
         System.IO.Path.Combine(AppFolders.LogsDir(), "windowscm.log");
 
-    public void Write(string context, Exception? exception = null)
+    public void Write(string context, Exception? exception = null) =>
+        Append(() => Format(_utcNow(), context, exception));
+
+    // An event worth keeping that is not an exception (a UI hang). The
+    // detail follows the same rule: never clipboard content.
+    public void Note(string context, string detail) =>
+        Append(() => Format(_utcNow(), context, null, detail));
+
+    private void Append(Func<string> format)
     {
         try
         {
-            var entry = Format(_utcNow(), context, exception);
+            var entry = format();
             lock (_gate)
             {
                 var directory = System.IO.Path.GetDirectoryName(Path);
@@ -52,13 +60,17 @@ public sealed class ErrorLog
         }
     }
 
-    public static string Format(DateTime utcNow, string context, Exception? exception)
+    public static string Format(DateTime utcNow, string context, Exception? exception, string? detail = null)
     {
         var builder = new StringBuilder();
         builder.Append(utcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture))
             .Append("Z [")
             .Append(context)
             .Append(']');
+        if (!string.IsNullOrEmpty(detail))
+        {
+            builder.Append(' ').Append(detail);
+        }
         if (exception is not null)
         {
             builder.Append(' ').Append(exception.GetType().FullName).Append(": ").Append(exception.Message);

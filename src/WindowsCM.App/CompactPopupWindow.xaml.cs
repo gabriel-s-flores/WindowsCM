@@ -41,6 +41,7 @@ public partial class CompactPopupWindow : Window
     private readonly App _app;
     private bool _isActivating;
     private long _lastHideTimestamp;
+    private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
 
     public CompactPopupWindow(PopupViewModel model, App app)
     {
@@ -48,6 +49,26 @@ public partial class CompactPopupWindow : Window
         _app = app;
         InitializeComponent();
         ItemsList.ItemsSource = _model.VisibleItems;
+        // File facts (thumbnails, sizes, tags) land from a background probe:
+        // one refresh per burst, like the large popup.
+        _cardRefreshTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(250),
+        };
+        _cardRefreshTimer.Tick += (_, _) =>
+        {
+            _cardRefreshTimer.Stop();
+            if (IsVisible)
+            {
+                ItemsList.Items.Refresh();
+            }
+        };
+        CardFileFacts.Updated += () => Dispatcher.BeginInvoke(() =>
+        {
+            _cardRefreshTimer.Stop();
+            _cardRefreshTimer.Start();
+        });
     }
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
