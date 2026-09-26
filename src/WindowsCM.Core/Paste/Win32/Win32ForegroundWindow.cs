@@ -21,6 +21,14 @@ public sealed class Win32ForegroundWindow : IForegroundWindow
         {
             return false;
         }
+        // A hung target (not pumping messages for 5 s) would make
+        // AttachThreadInput tie our thread to its frozen input queue and
+        // hang WindowsCM with it. Refuse instead: the orchestrator reports
+        // "focus lost" and the item stays on the clipboard.
+        if (NativePaste.IsHungAppWindow(hwnd))
+        {
+            return false;
+        }
 
         var currentForeground = NativePaste.GetForegroundWindow();
         if (currentForeground == hwnd)

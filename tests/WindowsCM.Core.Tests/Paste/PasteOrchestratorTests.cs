@@ -378,4 +378,103 @@ public sealed class PasteOrchestratorTests : IDisposable
         Assert.Equal(targetHwnd, _foreground.Current);
         Assert.Equal(PasteSequence.CtrlV, _injector.Last);
     }
+
+    [Fact]
+    public async Task AutoPasteOff_CopiesAndClosesWithoutInjecting()
+    {
+        _options.AutoPaste = false;
+        var saved = SaveText();
+
+        var outcome = await Subject().ExecuteAsync(
+            saved.Id, new IntPtr(123), shiftHeld: false, Hide);
+
+        Assert.Equal(PasteStatus.CopiedOnly, outcome.Status);
+        Assert.Null(outcome.InjectedChord);
+        Assert.Equal("hello", _writer.Last?.Text);
+        Assert.Empty(_injector.Events);
+        Assert.Empty(_foreground.Restored);
+        Assert.Empty(_delay.Asked);
+        // A pick closes the popup even when it only copies.
+        Assert.Equal(["write", "hide"], _order);
+    }
+
+    [Fact]
+    public async Task AutoPasteOff_ShiftCopyStillKeepsThePopupOpen()
+    {
+        _options.AutoPaste = false;
+        var saved = SaveText();
+
+        var outcome = await Subject().ExecuteAsync(
+            saved.Id, new IntPtr(123), shiftHeld: true, Hide);
+
+        Assert.Equal(PasteStatus.CopiedOnly, outcome.Status);
+        Assert.Equal(0, _hides);
+        Assert.Empty(_injector.Events);
+    }
+
+    [Fact]
+    public async Task NoPasteableTarget_CopiesAndClosesWithoutInjecting()
+    {
+        // The user had clicked the desktop (or nothing) before opening
+        // WindowsCM: PasteTargetPolicy resolves Zero and nothing is injected.
+        var saved = SaveText();
+
+        var outcome = await Subject().ExecuteAsync(
+            saved.Id, IntPtr.Zero, shiftHeld: false, Hide);
+
+        Assert.Equal(PasteStatus.CopiedOnly, outcome.Status);
+        Assert.Equal("hello", _writer.Last?.Text);
+        Assert.Empty(_injector.Events);
+        Assert.Empty(_foreground.Restored);
+        Assert.Equal(1, _hides);
+    }
+
+    [Fact]
+    public async Task AutoPasteOn_IsTheDefault()
+    {
+        Assert.True(new PasteOptions().AutoPaste);
+        var saved = SaveText();
+
+        var outcome = await Subject().ExecuteAsync(
+            saved.Id, new IntPtr(123), shiftHeld: false, Hide);
+
+        Assert.Equal(PasteStatus.Pasted, outcome.Status);
+    }
+
+    [Fact]
+    public async Task Paste_RestoresTheTargetBeforeHidingThePopup()
+    {
+        // Hiding first let Windows re-activate the window that was active
+        // before the popup (the taskbar after a tray click), beating the
+        // target: restore while the popup still owns the foreground.
+        var saved = SaveText();
+        var target = new IntPtr(123);
+        var log = new List<string>();
+        var foreground = new OrderedForeground(log) { Current = target };
+        var orchestrator = new PasteOrchestrator(_store, _capture, _images, _writer, foreground,
+            _elevation, _injector, _delay, _options, _clock);
+
+        await orchestrator.ExecuteAsync(saved.Id, target, shiftHeld: false, () =>
+        {
+            log.Add("hide");
+            return Task.CompletedTask;
+        });
+
+        Assert.True(log.IndexOf("restore") >= 0 && log.IndexOf("restore") < log.IndexOf("hide"),
+            string.Join(",", log));
+    }
+
+    private sealed class OrderedForeground(List<string> log) : IForegroundWindow
+    {
+        public IntPtr Current;
+
+        public IntPtr GetCurrent() => Current;
+
+        public bool RestoreForeground(IntPtr hwnd)
+        {
+            log.Add("restore");
+            Current = hwnd;
+            return true;
+        }
+    }
 }

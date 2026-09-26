@@ -23,4 +23,9 @@ public sealed class PasteOptions
     // Copyous `swap-copy-shortcut` parity: inverts the Enter/Space
     // copy-vs-paste chords end to end.
     public bool SwapCopyPaste { get; set; } = false;
+
+    // Master switch for pasting into the previously focused field. Off: a
+    // pick only copies the item and closes the popup — no keystroke is ever
+    // injected. Toggled from the tray menu and Settings.
+    public bool AutoPaste { get; set; } = true;
 }

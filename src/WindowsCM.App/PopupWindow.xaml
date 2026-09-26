@@ -458,13 +458,21 @@
   </Window.Resources>
   <Border x:Name="WindowRootBorder" Background="{DynamicResource PopupBackgroundBrush}" CornerRadius="8"
           BorderBrush="{DynamicResource PopupBorderBrush}"
-          BorderThickness="1" Padding="12" HorizontalAlignment="Stretch">
+          BorderThickness="1" Padding="12" HorizontalAlignment="Stretch"
+          MouseLeftButtonDown="OnRootMouseLeftButtonDown">
     <Border.Effect>
       <DropShadowEffect BlurRadius="20" ShadowDepth="2"
                         Opacity="{DynamicResource PopupShadowOpacity}"
                         Color="{DynamicResource PopupShadowColor}" />
     </Border.Effect>
     <DockPanel LastChildFill="True">
+      <!-- Free placement: drag handle (the edges resize; see PopupWindow.WndProc) -->
+      <Border x:Name="FreeDragHandle" DockPanel.Dock="Top" Height="12" Margin="0,-8,0,2"
+              Background="Transparent" Cursor="SizeAll" Visibility="Collapsed"
+              ToolTip="{DynamicResource Loc_PopupDragHandleTooltip}">
+        <Border Width="44" Height="4" CornerRadius="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource ScrollBarThumbBrush}" />
+      </Border>
       <!-- Incognito Top Accent Stripe -->
       <Border x:Name="IncognitoTopAccent" DockPanel.Dock="Top" Height="3" CornerRadius="1.5"
               Background="{DynamicResource IncognitoBorderGlowBrush}" Margin="0,0,0,8" Visibility="Collapsed" />

@@ -56,7 +56,7 @@ Instead of plain text snippets, WindowsCM categorizes copies into semantic cards
 
 ### 1. Dual Interface: Agile Compact Popup & Expanded Card Strip
 - **Compact Popup (`Ctrl+Shift+V`)**: Opens directly under the mouse pointer. Features a top search bar, fast arrow-key navigation, and instantaneous paste on `Enter` or copy-only on `Shift+Enter`. Configurable in vertical (`320x480px`) or horizontal (`540x240px`) format.
-- **Large Clipboard Window**: An expansive card strip with horizontal mouse-wheel scrolling (`250x230px` per card). Dockable to the bottom, top, left, or right edges of your display with customizable chronological flow directions (`Recent on Left/Top` vs `Recent on Right/Bottom`).
+- **Large Clipboard Window**: An expansive card strip with horizontal mouse-wheel scrolling (`250x230px` per card). Dockable to the bottom, top, left, or right edges of your display with customizable chronological flow directions (`Recent on Left/Top` vs `Recent on Right/Bottom`). Three placement modes: docked on the monitor under the mouse (default), docked on a **fixed monitor** you pick (with an **Identify** button that flashes each monitor's number), or **free** — drag it by the top, resize it from the edges, and it reopens exactly where you left it.
 
 ### 2. Rich Multi-Format Previews & Shell Thumbnails
 WindowsCM automatically identifies 8 distinct clipboard kinds and presents them with dedicated renderers:
@@ -86,6 +86,7 @@ WindowsCM automatically identifies 8 distinct clipboard kinds and presents them 
 ### 6. UIPI Protection & Safe Paste Orchestration
 - **Elevated Window Detection**: Windows User Interface Privilege Isolation (UIPI) drops synthetic keystrokes sent from standard applications to elevated (Administrator) windows. WindowsCM detects elevated foreground targets (`IsTargetElevated`) and falls back safely to clipboard-copy mode with an informative balloon notification instead of dropping the paste silently.
 - **Idempotent Input Pipeline**: Clean focus restoration and input injection via Win32 `SendInput`, protecting against double-paste race conditions.
+- **Paste Automatically (on by default)**: picking an item pastes it into the field you had clicked before opening WindowsCM — also when you open it from the tray icon, where the taskbar briefly holds the focus. If your last click was on the desktop, the item is only copied. Turn it off from the tray menu (**Paste automatically**) or in Settings to make every pick copy-only.
 
 ### 7. Windows 11 Fluent UI & Accessibility
 - Native Windows 11 design language: rounded corners, Segoe Fluent Icons, subtle surface elevation, and system accent tinting.
@@ -104,9 +105,9 @@ WindowsCM automatically identifies 8 distinct clipboard kinds and presents them 
 | :--- | :--- | :--- |
 | `Ctrl + Shift + V` | Global | Open Compact Clipboard Popup under mouse cursor |
 | `Ctrl + Shift + Alt + V` | Global | Start or open Ephemeral Incognito session |
-| `Enter` | Popup | Paste selected item into active window and close popup |
+| `Enter` | Popup | Paste selected item into the previously focused field and close popup (copy only when **Paste automatically** is off) |
 | `Shift + Enter` | Popup | Copy selected item to clipboard without pasting |
-| `Left-Click` | Popup | Paste clicked item into active window |
+| `Left-Click` | Popup | Paste clicked item into the previously focused field (copy only when **Paste automatically** is off) |
 | `Shift + Left-Click` | Popup | Copy clicked item to clipboard |
 | `Delete` | Popup | Remove selected item from history |
 | `P` | Popup | Pin or unpin selected item (prevents auto-deletion) |

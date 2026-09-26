@@ -22,6 +22,7 @@ public sealed class EnglishAppStrings : IAppStrings
     public string TrayCopyFailedBalloon(string message) => $"Could not copy to the clipboard (another app may be using it): {message}";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Incognito mode";
+    public string TrayAutoPaste => "Paste automatically";
 
     // Popup (Cards & Top Bar)
     public string PopupSettingsTooltip => "Settings";
@@ -31,6 +32,7 @@ public sealed class EnglishAppStrings : IAppStrings
     public string PopupReceiveMobileTooltip => "Send from mobile to PC";
     public string PopupSearchPlaceholder => "Type to search...";
     public string PopupSearchTooltip => "Search history in real time";
+    public string PopupDragHandleTooltip => "Drag to move · resize from the edges";
     public string PopupFilterTooltip => "Filter by content type";
     public string PopupFilterActiveTooltip => "Active filter: {0} (Click to change)";
     public string FilterAll => "All";
@@ -186,6 +188,16 @@ public sealed class EnglishAppStrings : IAppStrings
     public string SettingsLayoutPosTop => "Top (Dock to top of screen)";
     public string SettingsLayoutPosLeft => "Left (Dock to left of screen)";
     public string SettingsLayoutPosRight => "Right (Dock to right of screen)";
+    public string SettingsLayoutPlacement => "Placement";
+    public string SettingsLayoutPlacementFollowMouse => "Docked — monitor under the mouse";
+    public string SettingsLayoutPlacementFixedMonitor => "Docked — a fixed monitor";
+    public string SettingsLayoutPlacementFree => "Free — drag and resize";
+    public string SettingsLayoutMonitor => "Monitor";
+    public string SettingsLayoutMonitorIdentify => "Identify";
+    public string SettingsLayoutMonitorItem(int number, int width, int height, bool isPrimary) =>
+        $"Monitor {number} — {width} × {height}{(isPrimary ? " (primary)" : "")}";
+    public string SettingsLayoutFreeHint => "Drag the bar by its top and resize it from the edges. WindowsCM remembers the position and size.";
+    public string SettingsLayoutFreeReset => "Reset position";
     public string SettingsLayoutItemOrder => "Item Ordering (Flow Direction)";
     public string SettingsLayoutOrderRecentLeft => "Most recent on the left (Default)";
     public string SettingsLayoutOrderRecentRight => "Most recent on the right";
@@ -249,6 +261,8 @@ public sealed class EnglishAppStrings : IAppStrings
     public string SettingsHistoryLimitRestore => "Restore recommended (100)";
     public string SettingsAutostartTitle => "Start with Windows";
     public string SettingsAutostartSubtitle => "Run WindowsCM silently in the system tray when starting the computer.";
+    public string SettingsAutoPasteTitle => "Paste into the selected field automatically";
+    public string SettingsAutoPasteSubtitle => "Picking an item pastes it where you had clicked before opening WindowsCM. When off, the item is only copied to the clipboard.";
     public string SettingsEndOfSessionTitle => "Cleanup on session end";
     public string SettingsEndOfSessionSubtitle => "History behavior when restarting, signing out, or shutting down Windows.";
     public string SettingsEndOfSessionClearAll => "Clear all";

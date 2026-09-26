@@ -6,8 +6,10 @@ namespace WindowsCM.Core.Paste;
 
 // Choosing an item, end to end: plan the clipboard contents, write them,
 // record the copy in history (date policy + echo suppression), then —
-// unless the chord says copy-only — hide the popup, wait for the target to
-// regain focus, assert it is still foreground, and inject the paste chord.
+// unless the chord says copy-only — hand the foreground back to the window
+// that was focused (PasteTargetPolicy) and hide the popup, wait, assert the
+// target is still foreground, and inject the paste chord. With auto-paste
+// off or no pasteable target the popup just closes after the copy.
 // The target handle is captured by the UI at hotkey time and passed in
 // (research 02: never re-resolve it here). Every refusal carries
 // diagnostics; nothing fails silently.
@@ -84,19 +86,26 @@ public sealed class PasteOrchestrator
         {
             return new PasteOutcome(PasteStatus.CopiedOnly, null, null);
         }
-        await hideUi().ConfigureAwait(false);
-        if (capturedTarget != IntPtr.Zero)
+        // Auto-paste off, or nothing pasteable was focused when the popup
+        // was asked for (desktop, no window): the pick is on the clipboard
+        // and the popup closes, but no keystroke goes to a guessed window.
+        if (!_options.AutoPaste || capturedTarget == IntPtr.Zero)
         {
-            _foreground.RestoreForeground(capturedTarget);
+            await hideUi().ConfigureAwait(false);
+            return new PasteOutcome(PasteStatus.CopiedOnly, null, null);
         }
+        // Target first, then hide: while the popup is still active this
+        // process may move the foreground. Hiding first let Windows hand the
+        // activation back to whatever was active before the popup — the
+        // taskbar when it was opened from the tray — and that won the race
+        // against the target (caught by the real-app smoke).
+        _foreground.RestoreForeground(capturedTarget);
+        await hideUi().ConfigureAwait(false);
         await _delay.Delay(_options.PasteDelayMs, ct).ConfigureAwait(false);
         // Foreground first: ensure target is restored and active.
         if (_foreground.GetCurrent() != capturedTarget)
         {
-            if (capturedTarget != IntPtr.Zero)
-            {
-                _foreground.RestoreForeground(capturedTarget);
-            }
+            _foreground.RestoreForeground(capturedTarget);
             if (_foreground.GetCurrent() != capturedTarget)
             {
                 return new PasteOutcome(
