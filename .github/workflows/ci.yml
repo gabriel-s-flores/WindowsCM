@@ -56,6 +56,9 @@ jobs:
       # timing and memory, large-window placement modes and auto-paste end
       # to end (scripts/smoke/app-smoke.ps1). Windows PowerShell for STA
       # clipboard access; the runner is throwaway, so user data is reset.
+      - name: Install dotnet-gcdump (smoke heap measurement)
+        run: dotnet tool install --global dotnet-gcdump
+
       - name: App smoke (real app)
         shell: powershell
         run: >

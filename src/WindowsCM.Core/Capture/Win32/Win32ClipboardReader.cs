@@ -77,8 +77,8 @@ public sealed class Win32ClipboardReader : IClipboardReader
     private (byte[] Bytes, bool IsPng)? TryReadRawImage()
     {
         // PNG first (exact bytes, no conversion), then the first DIBV5/DIB
-        // whose header the encoder accepts (checked on 40 bytes, so only
-        // one full bitmap is copied). CF_BITMAP skipped deliberately:
+        // whose header the encoder accepts (checked on the header alone, so
+        // only one full bitmap is copied). CF_BITMAP skipped deliberately:
         // device-dependent per research 02.
         if (_pngFormat != 0 && NativeClipboard.IsClipboardFormatAvailable(_pngFormat))
         {
@@ -91,7 +91,7 @@ public sealed class Win32ClipboardReader : IClipboardReader
         foreach (var format in new[] { NativeClipboard.CF_DIBV5, NativeClipboard.CF_DIB })
         {
             if (!NativeClipboard.IsClipboardFormatAvailable(format)
-                || !DibToPng.CanConvert(PeekBytes(format, 40)))
+                || !DibToPng.CanConvert(PeekBytes(format, DibToPng.HeaderLength)))
             {
                 continue;
             }
