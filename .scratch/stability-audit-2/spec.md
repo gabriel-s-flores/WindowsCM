@@ -2,7 +2,7 @@
 
 Status: resolved
 Type: fix
-Blocked by: fix/qr-behind-popup (PR #10, branch empilhada)
+Base: main (após o merge do PR #10)
 
 ## Pedido
 
