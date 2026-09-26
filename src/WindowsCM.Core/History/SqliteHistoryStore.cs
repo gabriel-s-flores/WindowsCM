@@ -18,8 +18,18 @@ public sealed class SqliteHistoryStore : IHistoryStore
     {
         EnsureParentDirectory(connectionString);
         _connection = new SqliteConnection(connectionString);
-        _connection.Open();
-        EnsureSchema();
+        try
+        {
+            _connection.Open();
+            EnsureSchema();
+        }
+        catch
+        {
+            // A damaged file fails here; the handle must not outlive the
+            // throw, or the file stays locked and cannot be moved aside.
+            _connection.Dispose();
+            throw;
+        }
     }
 
     public ClipboardItem AddOrUpdate(ClipboardItem item)

@@ -34,10 +34,15 @@ public sealed class NamedPipeForwarder : IIpcForwarder
             };
             using var reader = new StreamReader(client, Utf8NoBom, leaveOpen: true);
             writer.WriteLine(line);
-            response = reader.ReadLine();
+            // The reply has the same budget as the connect: a primary whose
+            // UI thread hangs accepts the connection but never answers, and
+            // the launching process used to wait for it forever.
+            using var replyBudget = new CancellationTokenSource(timeout);
+            response = reader.ReadLineAsync(replyBudget.Token).AsTask().GetAwaiter().GetResult();
             return response is not null;
         }
-        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException or ObjectDisposedException)
+        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException
+            or ObjectDisposedException or OperationCanceledException)
         {
             response = null;
             return false;
@@ -49,16 +54,23 @@ public sealed class NamedPipeServer : IDisposable
 {
     private readonly string _pipeName;
     private readonly IpcDispatcher _dispatcher;
+    private readonly TimeSpan _clientTimeout;
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
     private bool _disposed;
 
-    public NamedPipeServer(string pipeName, IpcDispatcher dispatcher)
+    // A connected client gets this long to send its line. The pipe serves
+    // one connection at a time, so a client that never wrote used to hold
+    // it for good and every later launch reported "not running".
+    public static TimeSpan DefaultClientTimeout { get; } = TimeSpan.FromSeconds(5);
+
+    public NamedPipeServer(string pipeName, IpcDispatcher dispatcher, TimeSpan? clientTimeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pipeName);
         ArgumentNullException.ThrowIfNull(dispatcher);
         _pipeName = pipeName;
         _dispatcher = dispatcher;
+        _clientTimeout = clientTimeout ?? DefaultClientTimeout;
     }
 
     public void Start()
@@ -146,7 +158,11 @@ public sealed class NamedPipeServer : IDisposable
                 {
                     AutoFlush = true,
                 };
-                var line = await reader.ReadLineAsync().ConfigureAwait(false);
+                string? line;
+                using (var lineBudget = new CancellationTokenSource(_clientTimeout))
+                {
+                    line = await reader.ReadLineAsync(lineBudget.Token).ConfigureAwait(false);
+                }
                 string response;
                 try
                 {
@@ -161,7 +177,7 @@ public sealed class NamedPipeServer : IDisposable
                 }
                 await writer.WriteLineAsync(response).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
             {
             }
         }

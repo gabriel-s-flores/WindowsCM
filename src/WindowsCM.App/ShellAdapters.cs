@@ -128,12 +128,16 @@ public sealed class MediaPlayerSoundPlayer(Dispatcher dispatcher, string appDir)
         {
             return;
         }
-        dispatcher.Invoke(() =>
+        // Queued, not waited for: this runs on the clipboard listener thread.
+        dispatcher.BeginInvoke(() =>
         {
             try
             {
                 var player = new MediaPlayer { Volume = Math.Clamp(gain, 0.0, 1.0) };
                 player.MediaEnded += (_, _) => player.Close();
+                // An unplayable file never ends: close it here too, or one
+                // player leaked per copy.
+                player.MediaFailed += (_, _) => player.Close();
                 player.Open(new Uri(path));
                 player.Play();
             }

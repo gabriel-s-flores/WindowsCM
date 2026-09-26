@@ -64,6 +64,7 @@ public partial class App : System.Windows.Application
     private readonly UnhandledErrorPolicy _errorPolicy = new();
     private System.Windows.Threading.DispatcherTimer? _viewRefreshTimer;
     private Win32ForegroundTracker? _foregroundTracker;
+    private ColorScheme _lastSystemScheme = ColorScheme.Dark;
     private bool _servicesReady;
 
     internal AppSettings Settings => _settings;
@@ -190,6 +191,28 @@ public partial class App : System.Windows.Application
             LogError("task", args.Exception);
             args.SetObserved();
         };
+        // The tray icon is WinForms: an exception in its click or menu
+        // handlers never reaches DispatcherUnhandledException. WinForms
+        // showed its own "unhandled exception" dialog instead, whose Quit
+        // ended the process without cleanup and without a log line.
+        try
+        {
+            System.Windows.Forms.Application.SetUnhandledExceptionMode(
+                System.Windows.Forms.UnhandledExceptionMode.CatchException);
+        }
+        catch (InvalidOperationException)
+        {
+            // A WinForms window already exists on this thread: the handler
+            // below still receives the exceptions.
+        }
+        System.Windows.Forms.Application.ThreadException += (_, args) =>
+        {
+            LogError("tray", args.Exception);
+            if (!_errorPolicy.ShouldContinue(DateTime.UtcNow))
+            {
+                Shutdown(1);
+            }
+        };
     }
 
     internal void LogError(string context, Exception exception) => _errorLog.Write(context, exception);
@@ -211,8 +234,15 @@ public partial class App : System.Windows.Application
             RefreshOpenPopups();
         };
 
-        _store = new LockedHistoryStore(
-            new SqliteHistoryStore($"Data Source={_settings.History.ResolveDatabasePath()};Pooling=false"));
+        // Never throws: a damaged or unreachable database used to end every
+        // launch here, before the tray icon existed.
+        var history = HistoryStoreOpener.Open(
+            _settings.History.ResolveDatabasePath(), DatabasePaths.Default(), clock.UtcNow);
+        if (history.Error is not null)
+        {
+            LogError("history-open", history.Error);
+        }
+        _store = new LockedHistoryStore(history.Store);
         _disposables.Add(_store);
 
         var persistentImages = new FileImageAssetStore(AppFolders.ImagesDir());
@@ -225,12 +255,21 @@ public partial class App : System.Windows.Application
             _coordinator, _coordinator, captureOptions, clock);
 
         // Startup rotation + orphan sweep (spec Janitor/history limits).
-        _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
-            clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-        _capture.SweepOrphanImages();
-        // Only the first screenful: a full prewarm would hold every
-        // thumbnail in memory even if the popup is never opened.
-        PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
+        // Housekeeping: a disk error here must not keep the app from
+        // starting.
+        try
+        {
+            _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
+                clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
+            _capture.SweepOrphanImages();
+            // Only the first screenful: a full prewarm would hold every
+            // thumbnail in memory even if the popup is never opened.
+            PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
+        }
+        catch (Exception ex)
+        {
+            LogError("startup-housekeeping", ex);
+        }
 
         var listener = new MessageOnlyClipboardListener();
         _disposables.Add(listener);
@@ -287,10 +326,10 @@ public partial class App : System.Windows.Application
             shell,
             captureTarget: CapturePasteTarget,
             onCaptured: hw => _pasteTarget = hw);
-        var history = new ShellHistory(_coordinator, RefreshOpenPopups);
+        var clearHistory = new ShellHistory(_coordinator, RefreshOpenPopups);
         var settings = new ShellSettingsOpener(dispatcher, () => OpenSettings());
         var exiter = new ShellExiter(() => Shutdown(0));
-        var controller = new TrayController(popup, incognito, history, settings, exiter);
+        var controller = new TrayController(popup, incognito, clearHistory, settings, exiter);
 
         _tray = new TrayManager(controller, incognito, dispatcher, () => ShowCompactPopup(),
             isAutoPaste: () => _settings.Behavior.AutoPaste,
@@ -299,6 +338,19 @@ public partial class App : System.Windows.Application
         if (!string.IsNullOrWhiteSpace(conflictGuidance))
         {
             _tray.ShowBalloon(LocalizationManager.Strings.TrayShortcutConflictTitle, conflictGuidance);
+        }
+        var historyNotice = history.Outcome switch
+        {
+            HistoryOpenOutcome.RecoveredDamaged =>
+                LocalizationManager.Strings.HistoryDatabaseRecoveredBalloon(history.Detail ?? ""),
+            HistoryOpenOutcome.FellBackToDefault =>
+                LocalizationManager.Strings.HistoryDatabaseFallbackBalloon(history.Detail ?? ""),
+            HistoryOpenOutcome.MemoryOnly => LocalizationManager.Strings.HistoryDatabaseMemoryOnlyBalloon,
+            _ => null,
+        };
+        if (historyNotice is not null)
+        {
+            _tray.ShowBalloon("WindowsCM", historyNotice);
         }
 
         var dispatcherFacade = new IpcDispatcher(popup, _coordinator);
@@ -312,18 +364,30 @@ public partial class App : System.Windows.Application
 
         _themeDetector = new Win32WindowsThemeDetector();
         _disposables.Add(_themeDetector);
+        _lastSystemScheme = _themeDetector.DetectSystemScheme();
         _themeDetector.ThemeChanged += (_, scheme) =>
         {
             try
             {
-                dispatcher.Invoke(() => UpdateTheme(scheme));
+                dispatcher.Invoke(() =>
+                {
+                    // Windows raises this for many unrelated preference
+                    // changes; each rebuilt every window's theme, hidden
+                    // popups full of cards included.
+                    if (scheme == _lastSystemScheme)
+                    {
+                        return;
+                    }
+                    _lastSystemScheme = scheme;
+                    UpdateTheme(scheme);
+                });
             }
             catch (Exception ex)
             {
                 LogError("theme", ex);
             }
         };
-        UpdateTheme(_themeDetector.DetectSystemScheme());
+        UpdateTheme(_lastSystemScheme);
 
         WatchActionsFile();
 
@@ -905,7 +969,7 @@ public partial class App : System.Windows.Application
         }
         // Persist before showing so a crash or kill never re-greets.
         _settings.Onboarding.WelcomeShown = true;
-        SettingsStore.Save(_settingsPath, _settings);
+        SaveSettingsQuietly();
         ShowWelcome();
     }
 
