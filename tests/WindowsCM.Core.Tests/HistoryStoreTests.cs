@@ -208,6 +208,31 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.Equal(["Hello World"], found.Select(i => i.Content));
     }
 
+    // SQLite rejects LIKE patterns over 50,000 bytes ("LIKE or GLOB pattern
+    // too complex"): a long line pasted into the search box made every
+    // refresh throw, and the popup could no longer open.
+    [Fact]
+    public void Search_VeryLongQuery_DoesNotThrowAndStillMatches()
+    {
+        var needle = new string('x', 60_000);
+        _store.AddOrUpdate(Sample(content: "head " + needle + " tail"));
+        _store.AddOrUpdate(Sample(content: "other"));
+
+        var found = _store.Search(needle);
+
+        Assert.Equal(["head " + needle + " tail"], found.Select(i => i.Content));
+    }
+
+    [Fact]
+    public void Search_VeryLongMultibyteQuery_DoesNotThrow()
+    {
+        var needle = string.Concat(Enumerable.Repeat("ç😀", 10_000));
+        _store.AddOrUpdate(Sample(content: needle));
+
+        Assert.Single(_store.Search(needle));
+        Assert.Empty(_store.Search(needle + "z"));
+    }
+
     [Fact]
     public void Search_TreatsWildcardsLiterally()
     {

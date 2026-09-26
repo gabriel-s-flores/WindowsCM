@@ -22,6 +22,11 @@ public sealed class PortugueseAppStrings : IAppStrings
     public string TrayMissingItemBalloon(long id) => $"Item {id} não está mais no histórico, então nada foi copiado.";
     public string TrayPasteFailedBalloon(string message) => $"Falha ao colar após a cópia: {message}";
     public string TrayCopyFailedBalloon(string message) => $"Não foi possível copiar para a área de transferência (outro app pode estar usando): {message}";
+    public string TrayActivationFailedBalloon(string message) => $"Não foi possível usar o item: {message}";
+    public string TrayActionFailedBalloon(string message) => $"A ação falhou: {message}";
+    public string HistoryDatabaseRecoveredBalloon(string backupFileName) => $"O banco de dados do histórico estava danificado e foi recriado. O arquivo antigo foi guardado como {backupFileName}.";
+    public string HistoryDatabaseFallbackBalloon(string path) => $"Não foi possível abrir o histórico em {path}. O local padrão está sendo usado nesta sessão.";
+    public string HistoryDatabaseMemoryOnlyBalloon => "Não foi possível abrir o histórico. Nesta sessão ele fica só na memória e não será salvo; veja o log de erros.";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Modo anônimo";
     public string TrayAutoPaste => "Colar automaticamente";

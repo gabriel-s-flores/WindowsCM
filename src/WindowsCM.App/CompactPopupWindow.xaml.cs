@@ -158,11 +158,38 @@ public partial class CompactPopupWindow : Window
         _lastHideTimestamp = Environment.TickCount64;
         ResetScrollToInitial();
         base.Hide();
-        if (!_app.Settings.Behavior.RememberSearch)
+        // Only when there is a search to forget: SetSearch reloads the whole
+        // history, and a paste hides both popups on its way to the target.
+        if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
         {
             _model.SetSearch("");
+        }
+        if (!_app.Settings.Behavior.RememberSearch && SearchBox.Text.Length > 0)
+        {
             SearchBox.Text = "";
         }
+    }
+
+    // Built once for the app's lifetime: Alt+F4 (or any WM_CLOSE) only hides
+    // it. A closed window can never be shown again, so every later hotkey
+    // threw ("Cannot ... after a Window has closed") until the burst limit
+    // ended the app.
+    private bool _closingForExit;
+
+    internal void CloseForExit()
+    {
+        _closingForExit = true;
+        Close();
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_closingForExit)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+        base.OnClosing(e);
     }
 
     public void ResetScrollToInitial()
@@ -382,49 +409,53 @@ public partial class CompactPopupWindow : Window
             return;
         }
 
-        if (e.Key == Key.Escape)
+        // With Alt held WPF reports Key.System and the real key in
+        // SystemKey: Alt+P/S/C never matched.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (key == Key.Escape)
         {
             e.Handled = true;
             Hide();
             return;
         }
 
-        if (e.Key is Key.Enter)
+        if (key is Key.Enter)
         {
             e.Handled = true;
             ActivateCurrentSelection();
             return;
         }
 
-        if (e.Key == Key.Down)
+        if (key == Key.Down)
         {
             e.Handled = true;
             MoveSelection(1);
             return;
         }
 
-        if (e.Key == Key.Up)
+        if (key == Key.Up)
         {
             e.Handled = true;
             MoveSelection(-1);
             return;
         }
 
-        if (e.Key == Key.PageDown)
+        if (key == Key.PageDown)
         {
             e.Handled = true;
             MoveSelection(5);
             return;
         }
 
-        if (e.Key == Key.PageUp)
+        if (key == Key.PageUp)
         {
             e.Handled = true;
             MoveSelection(-5);
             return;
         }
 
-        if (e.Key == Key.Delete)
+        if (key == Key.Delete)
         {
             if (ItemsList.IsKeyboardFocusWithin || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) || Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
@@ -434,21 +465,21 @@ public partial class CompactPopupWindow : Window
             }
         }
 
-        if (e.Key == Key.P && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+        if (key == Key.P && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
         {
             e.Handled = true;
             TogglePinSelected();
             return;
         }
 
-        if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+        if (key == Key.S && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
         {
             e.Handled = true;
             OnSettingsClicked(this, new RoutedEventArgs());
             return;
         }
 
-        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+        if (key == Key.C && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
         {
             e.Handled = true;
             OnClearClicked(this, new RoutedEventArgs());
@@ -474,7 +505,7 @@ public partial class CompactPopupWindow : Window
         {
             return;
         }
-        var isInteractive = FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
+        var isInteractive = VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
         var index = RowIndexAt(e.OriginalSource as DependencyObject);
         if (!PopupClickPolicy.ShouldActivate(IsVisible, index, isInteractive))
         {
@@ -485,11 +516,31 @@ public partial class CompactPopupWindow : Window
         var request = _model.ActivateAt(index!.Value, runDefaultAction: false);
         if (request is not null)
         {
-            if (!shiftHeld)
-            {
-                _isActivating = true;
-            }
-            _ = _app.ActivateAsync(request, shiftHeld);
+            StartActivation(request, shiftHeld);
+        }
+    }
+
+    // A pick that fails before the popup hides (item gone, clipboard held
+    // by another app) left _isActivating set: the popup then stayed on top,
+    // ignored clicks and never hid on focus loss.
+    private void StartActivation(ActivationRequest request, bool shiftHeld)
+    {
+        if (!shiftHeld)
+        {
+            _isActivating = true;
+        }
+        _ = ActivateThenSettleAsync(request, shiftHeld);
+    }
+
+    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld)
+    {
+        try
+        {
+            await _app.ActivateAsync(request, shiftHeld);
+        }
+        finally
+        {
+            _isActivating = false;
         }
     }
 
@@ -514,11 +565,7 @@ public partial class CompactPopupWindow : Window
         var request = _model.ActivateAt(index, runDefaultAction: false);
         if (request is not null)
         {
-            if (!shiftHeld)
-            {
-                _isActivating = true;
-            }
-            _ = _app.ActivateAsync(request, shiftHeld);
+            StartActivation(request, shiftHeld);
         }
     }
 
@@ -647,16 +694,14 @@ public partial class CompactPopupWindow : Window
         var pasteItem = new MenuItem { Header = s.ContextMenuPaste };
         pasteItem.Click += (_, _) =>
         {
-            var req = new ActivationRequest(item.Id, false);
-            _ = _app.ActivateAsync(req, shiftHeld: false);
+            StartActivation(new ActivationRequest(item.Id, false), shiftHeld: false);
         };
         menu.Items.Add(pasteItem);
 
         var copyItem = new MenuItem { Header = s.ContextMenuCopy };
         copyItem.Click += (_, _) =>
         {
-            var req = new ActivationRequest(item.Id, false);
-            _ = _app.ActivateAsync(req, shiftHeld: true);
+            StartActivation(new ActivationRequest(item.Id, false), shiftHeld: true);
         };
         menu.Items.Add(copyItem);
 
@@ -764,26 +809,13 @@ public partial class CompactPopupWindow : Window
 
     private int? RowIndexAt(DependencyObject? source)
     {
-        var item = FindAncestor<ListBoxItem>(source);
+        var item = VisualTreeWalk.FindAncestor<ListBoxItem>(source);
         if (item is null)
         {
             return null;
         }
         var index = ItemsList.ItemContainerGenerator.IndexFromContainer(item);
         return index >= 0 ? index : null;
-    }
-
-    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
-    {
-        while (current is not null)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
-        }
-        return null;
     }
 
     private static T? FindDescendant<T>(DependencyObject? current) where T : DependencyObject

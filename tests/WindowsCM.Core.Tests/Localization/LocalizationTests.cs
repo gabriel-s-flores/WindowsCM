@@ -457,6 +457,27 @@ public class LocalizationTests
     }
 
     [Fact]
+    public void FailureBalloons_HaveParityAndCarryTheirDetail()
+    {
+        IAppStrings pt = new PortugueseAppStrings();
+        IAppStrings en = new EnglishAppStrings();
+
+        foreach (var (ptText, enText, detail) in new[]
+        {
+            (pt.TrayActivationFailedBalloon("disk full"), en.TrayActivationFailedBalloon("disk full"), "disk full"),
+            (pt.TrayActionFailedBalloon("exit 2"), en.TrayActionFailedBalloon("exit 2"), "exit 2"),
+            (pt.HistoryDatabaseRecoveredBalloon("clipboard.db.corrupt-1"), en.HistoryDatabaseRecoveredBalloon("clipboard.db.corrupt-1"), "clipboard.db.corrupt-1"),
+            (pt.HistoryDatabaseFallbackBalloon(@"E:\history.db"), en.HistoryDatabaseFallbackBalloon(@"E:\history.db"), @"E:\history.db"),
+        })
+        {
+            Assert.Contains(detail, ptText);
+            Assert.Contains(detail, enText);
+            Assert.NotEqual(ptText, enText);
+        }
+        Assert.NotEqual(en.TrayActivationFailedBalloon("x"), en.TrayActionFailedBalloon("x"));
+    }
+
+    [Fact]
     public void AutoPasteStrings_HaveParityInBothLanguages()
     {
         IAppStrings pt = new PortugueseAppStrings();

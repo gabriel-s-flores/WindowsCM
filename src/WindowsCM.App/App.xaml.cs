@@ -81,9 +81,32 @@ public partial class App : System.Windows.Application
         }
         _coordinator.SetIncognito(on);
         _popupModel.SetIncognito(on);
-        _popup.RefreshView();
-        _compactPopup?.RefreshView();
+        RefreshOpenPopups();
         _tray?.UpdateIncognitoState(on);
+    }
+
+    // The two popups share one PopupViewModel but may order it differently
+    // (recent first or last, per popup). Refreshing both re-queried the
+    // model in the compact popup's order while the large popup kept showing
+    // its own, so clicking card i there pasted a different item. Only an
+    // open popup is refreshed, in its own order; a hidden one reloads when
+    // it is shown.
+    internal void RefreshOpenPopups()
+    {
+        if (_popupModel is null)
+        {
+            return;
+        }
+        if (_popup?.IsVisible == true)
+        {
+            _popupModel.Refresh();
+            _popup.RefreshView();
+        }
+        else if (_compactPopup?.IsVisible == true)
+        {
+            _popupModel.Refresh();
+            _compactPopup.RefreshView();
+        }
     }
 
     private void OnStartup(object sender, StartupEventArgs e)
@@ -185,9 +208,7 @@ public partial class App : System.Windows.Application
         _viewRefreshTimer.Tick += (_, _) =>
         {
             _viewRefreshTimer.Stop();
-            _popupModel?.Refresh();
-            _popup?.RefreshView();
-            _compactPopup?.RefreshView();
+            RefreshOpenPopups();
         };
 
         _store = new LockedHistoryStore(
@@ -266,7 +287,7 @@ public partial class App : System.Windows.Application
             shell,
             captureTarget: CapturePasteTarget,
             onCaptured: hw => _pasteTarget = hw);
-        var history = new ShellHistory(_coordinator, _popupModel, _popup);
+        var history = new ShellHistory(_coordinator, RefreshOpenPopups);
         var settings = new ShellSettingsOpener(dispatcher, () => OpenSettings());
         var exiter = new ShellExiter(() => Shutdown(0));
         var controller = new TrayController(popup, incognito, history, settings, exiter);
@@ -277,7 +298,7 @@ public partial class App : System.Windows.Application
         _disposables.Add(_tray);
         if (!string.IsNullOrWhiteSpace(conflictGuidance))
         {
-            _tray.ShowBalloon("Conflito de atalhos", conflictGuidance);
+            _tray.ShowBalloon(LocalizationManager.Strings.TrayShortcutConflictTitle, conflictGuidance);
         }
 
         var dispatcherFacade = new IpcDispatcher(popup, _coordinator);
@@ -584,7 +605,23 @@ public partial class App : System.Windows.Application
         });
     }
 
+    // Popups fire and forget these (a click, Enter): nothing may escape, or
+    // the failure only surfaced when the GC finalized the task and the user
+    // saw nothing happen.
     internal async Task ActivateAsync(ActivationRequest request, bool shiftHeld)
+    {
+        try
+        {
+            await ActivateCoreAsync(request, shiftHeld).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LogError("activate", ex);
+            _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TrayActivationFailedBalloon(ex.Message));
+        }
+    }
+
+    private async Task ActivateCoreAsync(ActivationRequest request, bool shiftHeld)
     {
         if (_coordinator is null || _orchestrator is null || _executor is null || _popup is null)
         {
@@ -597,9 +634,7 @@ public partial class App : System.Windows.Application
             // Never silent: the list went stale (e.g. cleared via tray/pipe
             // between show and Enter), so refresh and explain instead of
             // vanishing.
-            _popupModel?.Refresh();
-            _popup.RefreshView();
-            _compactPopup?.RefreshView();
+            RefreshOpenPopups();
             if (!string.IsNullOrWhiteSpace(missing.BalloonText))
             {
                 _tray?.ShowBalloon("WindowsCM", missing.BalloonText);
@@ -645,8 +680,16 @@ public partial class App : System.Windows.Application
         {
             return;
         }
-        var result = await _executor.ExecuteAsync(action, item).ConfigureAwait(true);
-        await HandleActionResultAsync(result, item).ConfigureAwait(true);
+        try
+        {
+            var result = await _executor.ExecuteAsync(action, item).ConfigureAwait(true);
+            await HandleActionResultAsync(result, item).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LogError("action", ex);
+            _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TrayActionFailedBalloon(ex.Message));
+        }
     }
 
     internal void ShowQr(string payload)
@@ -730,9 +773,7 @@ public partial class App : System.Windows.Application
                     new ClipboardPayload(Image: null, Files: null, Text: payload.Text, Formats: ["CF_UNICODETEXT"], Html: null),
                     "Mobile Transfer");
 
-                _popupModel?.Refresh();
-                _popup?.RefreshView();
-                _compactPopup?.RefreshView();
+                RefreshOpenPopups();
 
                 SubtleToastWindow.ShowToast(LocalizationManager.Strings.MobileTextCopiedSuccess);
             }
@@ -756,9 +797,7 @@ public partial class App : System.Windows.Application
                         new ClipboardPayload(Image: null, Files: new FileSnapshot(paths, FileOperation.Copy), Text: null, Formats: ["CF_HDROP"], Html: null),
                         "Mobile Transfer");
 
-                    _popupModel?.Refresh();
-                    _popup?.RefreshView();
-                    _compactPopup?.RefreshView();
+                    RefreshOpenPopups();
 
                     var first = payload.Files[0].FileName;
                     var count = payload.Files.Count;
@@ -855,9 +894,7 @@ public partial class App : System.Windows.Application
         }
         // Slots 1..9 address the nine tag colors; slot 0 clears the tag.
         _store.SetTag(item.Id, slot == 0 ? null : ItemTags.All[(slot - 1) % ItemTags.All.Count]);
-        _popupModel.Refresh();
-        _popup.RefreshView();
-        _compactPopup?.RefreshView();
+        RefreshOpenPopups();
     }
 
     private void ShowWelcomeOnFirstRun()
@@ -1040,7 +1077,8 @@ public partial class App : System.Windows.Application
             }
         }
         _hotkeyWindow?.Close();
-        _compactPopup?.Close();
+        _compactPopup?.CloseForExit();
+        _popup?.CloseForExit();
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]

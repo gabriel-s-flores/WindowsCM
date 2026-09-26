@@ -20,6 +20,11 @@ public sealed class EnglishAppStrings : IAppStrings
     public string TrayMissingItemBalloon(long id) => $"Item {id} is no longer in history, so nothing was copied.";
     public string TrayPasteFailedBalloon(string message) => $"Failed to paste after copying: {message}";
     public string TrayCopyFailedBalloon(string message) => $"Could not copy to the clipboard (another app may be using it): {message}";
+    public string TrayActivationFailedBalloon(string message) => $"Could not use the item: {message}";
+    public string TrayActionFailedBalloon(string message) => $"The action failed: {message}";
+    public string HistoryDatabaseRecoveredBalloon(string backupFileName) => $"The history database was damaged and has been recreated. The old file was kept as {backupFileName}.";
+    public string HistoryDatabaseFallbackBalloon(string path) => $"Could not open the history at {path}. The default location is being used for this session.";
+    public string HistoryDatabaseMemoryOnlyBalloon => "The history could not be opened. For this session it stays in memory only and will not be saved; see the error log.";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Incognito mode";
     public string TrayAutoPaste => "Paste automatically";
