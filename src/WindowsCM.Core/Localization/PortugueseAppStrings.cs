@@ -27,6 +27,7 @@ public sealed class PortugueseAppStrings : IAppStrings
     public string HistoryDatabaseRecoveredBalloon(string backupFileName) => $"O banco de dados do histórico estava danificado e foi recriado. O arquivo antigo foi guardado como {backupFileName}.";
     public string HistoryDatabaseFallbackBalloon(string path) => $"Não foi possível abrir o histórico em {path}. O local padrão está sendo usado nesta sessão.";
     public string HistoryDatabaseMemoryOnlyBalloon => "Não foi possível abrir o histórico. Nesta sessão ele fica só na memória e não será salvo; veja o log de erros.";
+    public string LinkPreviewYouTubeFallbackTitle => "Vídeo do YouTube";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Modo anônimo";
     public string TrayAutoPaste => "Colar automaticamente";

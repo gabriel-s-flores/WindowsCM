@@ -114,12 +114,11 @@ public sealed partial class LinkPreviewService
             return new LinkPreviewResult(
                 metadata, _cache.SaveIfAbsent(url, image.Body), false);
         }
-        catch (LinkPreviewUnavailableException)
+        catch (Exception ex) when (ex is LinkPreviewUnavailableException or OperationCanceledException
+            or IOException or UnauthorizedAccessException)
         {
-            return new LinkPreviewResult(metadata, null, false);
-        }
-        catch (OperationCanceledException)
-        {
+            // No thumbnail (unreachable, too large, cache not writable): the
+            // title and description still make a preview.
             return new LinkPreviewResult(metadata, null, false);
         }
     }
@@ -136,7 +135,14 @@ public sealed partial class LinkPreviewService
         {
             return new LinkPreviewResult(metadata, cached, true);
         }
-        return new LinkPreviewResult(metadata, _cache.SaveIfAbsent(url, bytes), false);
+        try
+        {
+            return new LinkPreviewResult(metadata, _cache.SaveIfAbsent(url, bytes), false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new LinkPreviewResult(metadata, null, false);
+        }
     }
 
     public static bool TryExtractYouTubeVideoId(string url, [NotNullWhen(true)] out string? videoId)
@@ -194,7 +200,7 @@ public sealed partial class LinkPreviewService
             // oEmbed failed; degrade gracefully to standard title fallback
         }
 
-        title ??= "Vídeo do YouTube";
+        title ??= Localization.LocalizationManager.Strings.LinkPreviewYouTubeFallbackTitle;
         var metadata = new LinkMetadata(title, author, thumbUrl);
 
         if (!_options.ShowImage)
@@ -218,7 +224,8 @@ public sealed partial class LinkPreviewService
             }
             return new LinkPreviewResult(metadata, null, false);
         }
-        catch (Exception ex) when (ex is LinkPreviewUnavailableException or OperationCanceledException)
+        catch (Exception ex) when (ex is LinkPreviewUnavailableException or OperationCanceledException
+            or IOException or UnauthorizedAccessException)
         {
             return new LinkPreviewResult(metadata, null, false);
         }

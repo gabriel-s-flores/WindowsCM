@@ -24,6 +24,7 @@ public interface IAppStrings
     string HistoryDatabaseRecoveredBalloon(string backupFileName);
     string HistoryDatabaseFallbackBalloon(string path);
     string HistoryDatabaseMemoryOnlyBalloon { get; }
+    string LinkPreviewYouTubeFallbackTitle { get; }
     string TrayIconTooltip { get; }
     string TrayIconTooltipIncognito { get; }
     string TrayAutoPaste { get; }

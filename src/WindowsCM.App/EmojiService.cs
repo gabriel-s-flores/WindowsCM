@@ -10,6 +10,7 @@ using Windows.Win32.Graphics.Direct2D.Common;
 using Windows.Win32.Graphics.DirectWrite;
 using Windows.Win32.Graphics.Gdi;
 using WindowsCM.Core.Classification;
+using WindowsCM.Core.Diagnostics;
 
 namespace WindowsCM.App;
 
@@ -18,8 +19,14 @@ namespace WindowsCM.App;
 // Caches rendered bitmaps in memory (0ms overhead during popup scrolling) and scales dynamically for multi-emoji cards.
 public static class EmojiService
 {
-    private static readonly ConcurrentDictionary<string, ImageSource> Cache = new(StringComparer.Ordinal);
+    // Bounded (it grew by every distinct emoji text ever copied), and a
+    // failed render is remembered too instead of retried on every scroll.
+    private static readonly LruCache<string, ImageSource?> Cache = new(64, StringComparer.Ordinal);
     private static readonly object RenderLock = new();
+
+    // The tile shows a couple of lines of emoji at most: laying out a whole
+    // all-emoji paste (thousands of glyphs) cost time for nothing.
+    private const int MaxRenderedEmojis = 24;
 
     public static ImageSource? GetEmojiThumbnail(string? rawText)
     {
@@ -29,30 +36,40 @@ public static class EmojiService
         }
 
         var text = rawText.Trim();
+        if (Cache.TryGet(text, out var cached))
+        {
+            return cached;
+        }
         if (!EmojiDetector.IsAllEmojis(text))
         {
             return null;
         }
 
-        if (Cache.TryGetValue(text, out var cached))
-        {
-            return cached;
-        }
-
         lock (RenderLock)
         {
-            if (Cache.TryGetValue(text, out cached))
+            if (Cache.TryGet(text, out cached))
             {
                 return cached;
             }
 
-            var rendered = RenderColorEmoji(text);
-            if (rendered != null)
-            {
-                Cache[text] = rendered;
-            }
+            var rendered = RenderColorEmoji(FirstTextElements(text, MaxRenderedEmojis));
+            Cache.Set(text, rendered);
             return rendered;
         }
+    }
+
+    private static string FirstTextElements(string text, int max)
+    {
+        var elements = System.Globalization.StringInfo.GetTextElementEnumerator(text);
+        var taken = 0;
+        while (elements.MoveNext())
+        {
+            if (++taken > max)
+            {
+                return text[..elements.ElementIndex];
+            }
+        }
+        return text;
     }
 
     private static unsafe BitmapSource? RenderColorEmoji(string text)
@@ -121,11 +138,16 @@ public static class EmojiService
 
             HGDIOBJ oldBmp = PInvoke.SelectObject(hdc, hBmp);
 
+            // Released here, in reverse order: left to the finalizer, every
+            // rendered emoji kept a Direct2D factory, a render target and
+            // DirectWrite objects alive until a collection came by.
+            var com = new List<object>(5);
             try
             {
                 var guidFactory = typeof(ID2D1Factory).GUID;
                 PInvoke.D2D1CreateFactory(D2D1_FACTORY_TYPE.D2D1_FACTORY_TYPE_SINGLE_THREADED, &guidFactory, null, out var factoryObj);
                 var d2dFactory = (ID2D1Factory)factoryObj;
+                com.Add(d2dFactory);
 
                 var rtProps = new D2D1_RENDER_TARGET_PROPERTIES
                 {
@@ -142,6 +164,7 @@ public static class EmojiService
                 };
 
                 d2dFactory.CreateDCRenderTarget(&rtProps, out var dcRenderTarget);
+                com.Add(dcRenderTarget);
 
                 var rect = new RECT { left = 0, top = 0, right = width, bottom = height };
                 dcRenderTarget.BindDC(hdc, &rect);
@@ -149,6 +172,7 @@ public static class EmojiService
                 var guidDW = typeof(IDWriteFactory).GUID;
                 PInvoke.DWriteCreateFactory(DWRITE_FACTORY_TYPE.DWRITE_FACTORY_TYPE_SHARED, &guidDW, out var dwFactoryObj);
                 var dwFactory = (IDWriteFactory)dwFactoryObj;
+                com.Add(dwFactory);
 
                 dwFactory.CreateTextFormat(
                     "Segoe UI Emoji",
@@ -159,12 +183,14 @@ public static class EmojiService
                     fontSize,
                     "en-US",
                     out var textFormat);
+                com.Add(textFormat);
 
                 textFormat.SetTextAlignment(DWRITE_TEXT_ALIGNMENT.DWRITE_TEXT_ALIGNMENT_CENTER);
                 textFormat.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT.DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
                 var black = new D2D1_COLOR_F { r = 0, g = 0, b = 0, a = 1 };
                 dcRenderTarget.CreateSolidColorBrush(&black, null, out var brush);
+                com.Add(brush);
 
                 var d2dRect = new D2D_RECT_F { left = 0, top = 0, right = width, bottom = height };
 
@@ -196,6 +222,17 @@ public static class EmojiService
             }
             finally
             {
+                for (var i = com.Count - 1; i >= 0; i--)
+                {
+                    try
+                    {
+                        Marshal.ReleaseComObject(com[i]);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Not an RCW: nothing to release early.
+                    }
+                }
                 PInvoke.SelectObject(hdc, oldBmp);
                 PInvoke.DeleteObject(hBmp);
                 PInvoke.DeleteDC(hdc);

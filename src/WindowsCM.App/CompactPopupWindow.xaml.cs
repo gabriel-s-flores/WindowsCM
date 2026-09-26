@@ -42,6 +42,7 @@ public partial class CompactPopupWindow : Window
     private bool _isActivating;
     private long _lastHideTimestamp;
     private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
+    private readonly System.Windows.Threading.DispatcherTimer _searchTimer;
 
     public CompactPopupWindow(PopupViewModel model, App app)
     {
@@ -64,12 +65,27 @@ public partial class CompactPopupWindow : Window
                 ItemsList.Items.Refresh();
             }
         };
-        CardFileFacts.Updated += () => Dispatcher.BeginInvoke(() =>
+        // Each keystroke reloaded the history and rebuilt every visible card:
+        // the search applies once typing pauses, and before any key that
+        // acts on the list, so Enter never picks from a stale list.
+        _searchTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Input, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(120),
+        };
+        _searchTimer.Tick += (_, _) => ApplyPendingSearch();
+        CardFileFacts.Updated += RequestCardRefresh;
+        ImageThumbnailCache.Updated += RequestCardRefresh;
+        FaviconService.FaviconUpdated += _ => RequestCardRefresh();
+    }
+
+    // Thread-safe: file facts and thumbnails arrive from background work.
+    private void RequestCardRefresh() =>
+        Dispatcher.BeginInvoke(() =>
         {
             _cardRefreshTimer.Stop();
             _cardRefreshTimer.Start();
         });
-    }
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
 
@@ -154,6 +170,11 @@ public partial class CompactPopupWindow : Window
 
     public new void Hide()
     {
+        if (_searchTimer.IsEnabled)
+        {
+            // Kept for RememberSearch; forgotten just below otherwise.
+            ApplyPendingSearch();
+        }
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
         ResetScrollToInitial();
@@ -375,12 +396,24 @@ public partial class CompactPopupWindow : Window
             return;
         }
         UpdateSearchVisuals();
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private void ApplyPendingSearch()
+    {
+        _searchTimer.Stop();
+        if (_model.SearchText == SearchBox.Text)
+        {
+            return;
+        }
         _model.SetSearch(SearchBox.Text);
         RefreshView();
     }
 
     private void OnClearSearchClicked(object sender, RoutedEventArgs e)
     {
+        _searchTimer.Stop();
         SearchBox.Text = "";
         _model.SetSearch("");
         UpdateSearchVisuals();
@@ -412,6 +445,10 @@ public partial class CompactPopupWindow : Window
         // With Alt held WPF reports Key.System and the real key in
         // SystemKey: Alt+P/S/C never matched.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (_searchTimer.IsEnabled && PopupWindow.PendingSearchKeys(key))
+        {
+            ApplyPendingSearch();
+        }
 
         if (key == Key.Escape)
         {

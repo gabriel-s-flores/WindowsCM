@@ -14,6 +14,12 @@ public sealed class SqliteHistoryStore : IHistoryStore
     // SQLITE_MAX_LIKE_PATTERN_LENGTH is 50,000 bytes; stay clear of it.
     private const int MaxLikePatternBytes = 40_000;
 
+    // Corrupt metadata reads as NULL. SQLite validates it in place: parsing
+    // every row's JSON in .NET on every read cost ~80 ms per popup open with
+    // 30 items copied from a browser or VS Code (their CF_HTML is stored in
+    // the metadata, hundreds of KB each).
+    private const string MetadataColumn = "CASE WHEN json_valid(metadata) THEN metadata END";
+
     public SqliteHistoryStore(string connectionString)
     {
         EnsureParentDirectory(connectionString);
@@ -64,8 +70,8 @@ public sealed class SqliteHistoryStore : IHistoryStore
     public IReadOnlyList<ClipboardItem> List()
     {
         using var query = _connection.CreateCommand();
-        query.CommandText = """
-            SELECT id, type, content, pinned, tag, datetime, metadata, title
+        query.CommandText = $"""
+            SELECT id, type, content, pinned, tag, datetime, {MetadataColumn}, title
             FROM clipboard
             ORDER BY datetime DESC
             """;
@@ -80,8 +86,8 @@ public sealed class SqliteHistoryStore : IHistoryStore
     public ClipboardItem? GetLatest()
     {
         using var query = _connection.CreateCommand();
-        query.CommandText = """
-            SELECT id, type, content, pinned, tag, datetime, metadata, title
+        query.CommandText = $"""
+            SELECT id, type, content, pinned, tag, datetime, {MetadataColumn}, title
             FROM clipboard
             ORDER BY datetime DESC
             """;
@@ -146,8 +152,8 @@ public sealed class SqliteHistoryStore : IHistoryStore
         ItemKind? kind = null, bool excludePinned = false, bool excludeTagged = false)
     {
         using var search = _connection.CreateCommand();
-        var sql = new System.Text.StringBuilder("""
-            SELECT id, type, content, pinned, tag, datetime, metadata, title
+        var sql = new System.Text.StringBuilder($"""
+            SELECT id, type, content, pinned, tag, datetime, {MetadataColumn}, title
             FROM clipboard WHERE 1 = 1
             """);
         if (!string.IsNullOrEmpty(query))
@@ -257,8 +263,8 @@ public sealed class SqliteHistoryStore : IHistoryStore
     private ClipboardItem? ReadById(long id)
     {
         using var query = _connection.CreateCommand();
-        query.CommandText = """
-            SELECT id, type, content, pinned, tag, datetime, metadata, title
+        query.CommandText = $"""
+            SELECT id, type, content, pinned, tag, datetime, {MetadataColumn}, title
             FROM clipboard WHERE id = $id
             """;
         query.Parameters.AddWithValue("$id", id);
@@ -412,25 +418,11 @@ public sealed class SqliteHistoryStore : IHistoryStore
         Id: reader.GetInt64(0));
     }
 
-    // Corrupt metadata degrades to null: content is user data, metadata is
-    // enrichment. Never drop the item for a broken enrichment payload.
-    private static string? CoerceMetadata(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw) || raw.Trim() == "null")
-        {
-            return null;
-        }
-        try
-        {
-            using var _ = System.Text.Json.JsonDocument.Parse(raw);
-            return raw;
-        }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException
-            || ex is NotSupportedException)
-        {
-            return null;
-        }
-    }
+    // Corrupt metadata degrades to null (json_valid in the query): content
+    // is user data, metadata is enrichment. Never drop the item for a
+    // broken enrichment payload.
+    private static string? CoerceMetadata(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || raw.AsSpan().Trim().SequenceEqual("null") ? null : raw;
 
     private static string EscapeLike(string query) => query
         .Replace("\\", "\\\\")

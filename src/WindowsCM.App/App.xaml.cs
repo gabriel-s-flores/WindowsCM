@@ -297,8 +297,19 @@ public partial class App : System.Windows.Application
 
         _executor = new ActionExecutor(new ProcessRunner(), new ShellLauncher());
 
+        var linkImages = new LinkImageCache(Path.Combine(AppFolders.CacheDir(), "link-images"));
         _linkPreviewService = new LinkPreviewService(new LinkPreviewHttpClient(),
-            new LinkImageCache(Path.Combine(AppFolders.CacheDir(), "link-images")), _settings.ToLinkPreviewOptions());
+            linkImages, _settings.ToLinkPreviewOptions());
+        try
+        {
+            // Nothing else removes preview images of links that left the
+            // history: the folder only grew.
+            linkImages.SweepOrphans(_store.Search("", kind: ItemKind.Link).Select(i => i.Content));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogError("link-image-sweep", ex);
+        }
 
         _transferServer = new MiniTransferHttpServer();
         _transferServer.PayloadReceived += OnTransferPayloadReceived;
@@ -604,19 +615,27 @@ public partial class App : System.Windows.Application
             _viewRefreshTimer.Start();
         });
 
+    // Runs on every popup open. A link whose fetch failed or found nothing
+    // (offline, a 404, a PDF, a page with only a description) was fetched
+    // again on every open; each is now retried after a while.
     internal void EnsureLinkPreviewsForRecentItems()
     {
         if (_coordinator is null || _linkPreviewService is null) return;
+        var now = DateTime.UtcNow;
         var links = _coordinator.Search("", kind: ItemKind.Link).Take(15);
         foreach (var link in links)
         {
             var (title, _, img) = ItemMetadataJson.GetLink(link.MetadataJson);
-            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(img))
+            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(img)
+                && !(_linkPreviewAttempts.TryGetValue(link.Content, out var at) && now - at < LinkPreviewRetryAfter))
             {
                 FetchPreviewInBackground(link);
             }
         }
     }
+
+    private static readonly TimeSpan LinkPreviewRetryAfter = TimeSpan.FromMinutes(30);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _linkPreviewAttempts = new();
 
     private void FetchPreviewInBackground(ClipboardItem item)
     {
@@ -632,6 +651,11 @@ public partial class App : System.Windows.Application
         {
             return;
         }
+        if (_linkPreviewAttempts.Count > 500)
+        {
+            _linkPreviewAttempts.Clear();
+        }
+        _linkPreviewAttempts[item.Content] = DateTime.UtcNow;
 
         _ = Task.Run(async () =>
         {
@@ -645,7 +669,10 @@ public partial class App : System.Windows.Application
 
                 var title = result.Metadata.Title;
                 var description = result.Metadata.Description;
-                var image = result.CachedImagePath ?? result.Metadata.ImageUrl;
+                // Only the cached copy: a remote URL (download failed, or
+                // preview images turned off) was never displayed and made
+                // each card realization start a throwaway download.
+                var image = result.CachedImagePath;
 
                 if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description) && string.IsNullOrWhiteSpace(image))
                 {

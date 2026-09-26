@@ -78,7 +78,7 @@ public sealed class YouTubeAndLinkPreviewTests
         var result = await service.FetchAsync(videoUrl);
 
         Assert.NotNull(result);
-        Assert.Equal("Vídeo do YouTube", result.Metadata.Title);
+        Assert.Equal(WindowsCM.Core.Localization.LocalizationManager.Strings.LinkPreviewYouTubeFallbackTitle, result.Metadata.Title);
         Assert.Equal("YouTube", result.Metadata.Description);
         Assert.Equal(thumbUrl, result.Metadata.ImageUrl);
         Assert.NotNull(result.CachedImagePath);

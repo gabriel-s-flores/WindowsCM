@@ -16,11 +16,20 @@ public static class ItemMetadataJson
         PropertyNameCaseInsensitive = true,
     };
 
+    // The default encoder writes every <, >, &, ' and non-ASCII character as
+    // a six-character escape: the CF_HTML of a browser or VS Code copy took
+    // up to six times its size in the database and on every read. This JSON
+    // is only ever parsed back, never embedded in a page.
+    public static readonly JsonSerializerOptions StorageOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     public static string EncodeLink(string? title, string? description, string? image) =>
-        JsonSerializer.Serialize(new { title, description, image });
+        JsonSerializer.Serialize(new { title, description, image }, StorageOptions);
 
     public static string EncodeCode(string id, string name) =>
-        JsonSerializer.Serialize(new { language = new { id, name } });
+        JsonSerializer.Serialize(new { language = new { id, name } }, StorageOptions);
 
     // Merges overlay keys into the base object; corrupt base counts as {}.
     // Top-level keys merge (so {language:{...}} joins {html:...} without
@@ -32,7 +41,7 @@ public static class ItemMetadataJson
         {
             merged[key] = value;
         }
-        return JsonSerializer.Serialize(merged);
+        return JsonSerializer.Serialize(merged, StorageOptions);
     }
 
     public static string? GetString(string? json, string property)
@@ -94,8 +103,62 @@ public static class ItemMetadataJson
         }
     }
 
-    public static (string? Title, string? Description, string? Image) GetLink(string? json) =>
-        (GetString(json, "title"), GetString(json, "description"), GetString(json, "image"));
+    // A link card binds seven converters to one item's link fields; each
+    // parsed the whole metadata three times (21 parses per card, and the
+    // metadata can hold hundreds of KB of CF_HTML). One parse per metadata
+    // string now: the same instance is shared by every binding of the card.
+    public static (string? Title, string? Description, string? Image) GetLink(string? json)
+    {
+        if (string.IsNullOrEmpty(json))
+        {
+            return (null, null, null);
+        }
+        var fields = LinkCache.GetValue(json, ParseLink);
+        return (fields.Title, fields.Description, fields.Image);
+    }
+
+    private sealed record LinkFields(string? Title, string? Description, string? Image);
+
+    private static readonly LinkFields NoLink = new(null, null, null);
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string, LinkFields> LinkCache = new();
+
+    // GetString semantics per field: the first property with the name
+    // (case-insensitive) wins, and only a string value counts.
+    private static LinkFields ParseLink(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return NoLink;
+            }
+            string? title = null, description = null, image = null;
+            bool seenTitle = false, seenDescription = false, seenImage = false;
+            foreach (var prop in document.RootElement.EnumerateObject())
+            {
+                var value = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : null;
+                if (!seenTitle && prop.Name.Equals("title", StringComparison.OrdinalIgnoreCase))
+                {
+                    (title, seenTitle) = (value, true);
+                }
+                else if (!seenDescription && prop.Name.Equals("description", StringComparison.OrdinalIgnoreCase))
+                {
+                    (description, seenDescription) = (value, true);
+                }
+                else if (!seenImage && prop.Name.Equals("image", StringComparison.OrdinalIgnoreCase))
+                {
+                    (image, seenImage) = (value, true);
+                }
+            }
+            return new LinkFields(title, description, image);
+        }
+        catch (JsonException)
+        {
+            return NoLink;
+        }
+    }
 
     private static string? GetChild(JsonElement element, string name)
     {

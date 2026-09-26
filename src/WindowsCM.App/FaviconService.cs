@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.Popup;
 using WindowsCM.Core.Settings;
 
@@ -14,21 +15,21 @@ namespace WindowsCM.App;
 // Provides frozen BitmapSource instances for 0ms rendering overhead and high UI framerate.
 public static class FaviconService
 {
-    private static readonly ConcurrentDictionary<string, ImageSource> MemoryCache = new(StringComparer.OrdinalIgnoreCase);
+    // Bounded: it grew by every domain ever copied.
+    private static readonly LruCache<string, ImageSource> MemoryCache = new(256, StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, byte> ActiveDownloads = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(3) };
+    // Offline, or a domain the service does not know: every card realization
+    // started a new download for it. Retried after a while instead.
+    private static readonly ConcurrentDictionary<string, DateTime> FailedUntil = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(15);
+    private static readonly HttpClient HttpClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(3),
+        MaxResponseContentBufferSize = 1024 * 1024,
+    };
+    private static readonly string FaviconDir = Path.Combine(AppFolders.CacheDir(), "favicons");
 
     public static event Action<string>? FaviconUpdated;
-
-    private static string GetFaviconDir()
-    {
-        var dir = Path.Combine(AppFolders.CacheDir(), "favicons");
-        if (!Directory.Exists(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-        return dir;
-    }
 
     public static ImageSource? GetFavicon(string? rawUrl)
     {
@@ -39,21 +40,26 @@ public static class FaviconService
         }
 
         // 1. Check in-memory cache
-        if (MemoryCache.TryGetValue(domain, out var cached))
+        if (MemoryCache.TryGet(domain, out var cached))
         {
             return cached;
         }
 
         // 2. Check local disk cache
-        var localPath = Path.Combine(GetFaviconDir(), $"{SanitizeFileName(domain)}.png");
+        var localPath = Path.Combine(FaviconDir, $"{SanitizeFileName(domain)}.png");
         if (File.Exists(localPath))
         {
             var loaded = LoadFrozenBitmap(localPath);
             if (loaded != null)
             {
-                MemoryCache[domain] = loaded;
+                MemoryCache.Set(domain, loaded);
                 return loaded;
             }
+        }
+
+        if (FailedUntil.TryGetValue(domain, out var retryAt) && retryAt > DateTime.UtcNow)
+        {
+            return null;
         }
 
         // 3. Trigger asynchronous background download if not already in flight
@@ -67,6 +73,7 @@ public static class FaviconService
 
     private static async Task DownloadFaviconAsync(string domain, string localPath)
     {
+        var loadedOk = false;
         try
         {
             var cdnUrl = $"https://www.google.com/s2/favicons?domain={Uri.EscapeDataString(domain)}&sz=64";
@@ -76,6 +83,8 @@ public static class FaviconService
                 var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                 if (bytes.Length > 100) // Valid image payload
                 {
+                    // "Clear cache" deletes the folder while the app runs.
+                    Directory.CreateDirectory(FaviconDir);
                     var tempPath = localPath + ".tmp" + Guid.NewGuid().ToString("N")[..6];
                     await File.WriteAllBytesAsync(tempPath, bytes).ConfigureAwait(false);
                     File.Move(tempPath, localPath, overwrite: true);
@@ -84,7 +93,9 @@ public static class FaviconService
                     var bitmap = LoadFrozenBitmap(localPath);
                     if (bitmap != null)
                     {
-                        MemoryCache[domain] = bitmap;
+                        loadedOk = true;
+                        FailedUntil.TryRemove(domain, out _);
+                        MemoryCache.Set(domain, bitmap);
                         // Fire event on dispatcher if active
                         if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
                         {
@@ -104,6 +115,10 @@ public static class FaviconService
         }
         finally
         {
+            if (!loadedOk)
+            {
+                FailedUntil[domain] = DateTime.UtcNow + RetryAfter;
+            }
             ActiveDownloads.TryRemove(domain, out _);
         }
     }

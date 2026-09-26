@@ -262,6 +262,9 @@ public sealed class CaptureServiceTests : IDisposable
 
         Assert.NotNull(saved);
         Assert.Contains("StartFragment", saved.MetadataJson);
+        // Stored compactly (no \u003C escapes) and read back verbatim.
+        Assert.Contains("<!--StartFragment-->hi<!--EndFragment-->", saved.MetadataJson);
+        Assert.Equal(payload.Html, WindowsCM.Core.Previews.ItemMetadataJson.GetString(saved.MetadataJson, "html"));
         // The text itself still classifies normally.
         Assert.Equal("just a note to self", saved.Content);
     }

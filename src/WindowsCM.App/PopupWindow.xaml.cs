@@ -37,6 +37,7 @@ public partial class PopupWindow : Window
     private bool _isRenderingHooked;
     private long _lastRenderTicks;
     private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
+    private readonly System.Windows.Threading.DispatcherTimer _searchTimer;
     // Free placement (ADR 0006): drag by the top, resize from the edges.
     private bool _isFreePlacement;
 
@@ -72,8 +73,19 @@ public partial class PopupWindow : Window
                 ItemsList.Items.Refresh();
             }
         };
+        // Each keystroke reloaded the history and rebuilt every visible card:
+        // the search applies once typing pauses, and before any key that
+        // acts on the list (PendingSearchKeys), so Enter never picks from
+        // the list the user was still filtering.
+        _searchTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Input, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(120),
+        };
+        _searchTimer.Tick += (_, _) => ApplyPendingSearch();
         FaviconService.FaviconUpdated += _ => RequestCardRefresh();
         CardFileFacts.Updated += RequestCardRefresh;
+        ImageThumbnailCache.Updated += RequestCardRefresh;
     }
 
     // Thread-safe: file facts arrive on their probe thread.
@@ -212,6 +224,11 @@ public partial class PopupWindow : Window
 
     public new void Hide()
     {
+        if (_searchTimer.IsEnabled)
+        {
+            // Kept for RememberSearch; forgotten just below otherwise.
+            ApplyPendingSearch();
+        }
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
         ResetScrollToInitial();
@@ -693,11 +710,29 @@ public partial class PopupWindow : Window
             return;
         }
         UpdateSearchPlaceholder();
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private void ApplyPendingSearch()
+    {
+        _searchTimer.Stop();
+        if (_model.SearchText == SearchBox.Text)
+        {
+            return;
+        }
         // By design this never repositions or resizes: SizeToContent is
         // Manual while open (ticket 21), so filtering only swaps rows.
         _model.SetSearch(SearchBox.Text);
         RefreshView();
     }
+
+    // Keys that act on the list rather than edit the search text.
+    internal static bool PendingSearchKeys(Key key) =>
+        key is Key.Enter or Key.Up or Key.Down or Key.Left or Key.Right or Key.Tab
+            or Key.PageUp or Key.PageDown or Key.Home or Key.End or Key.Delete
+        || Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+        || Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
 
     private void OnPinsClicked(object sender, RoutedEventArgs e)
     {
@@ -903,6 +938,10 @@ public partial class PopupWindow : Window
 
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (_searchTimer.IsEnabled && PendingSearchKeys(e.Key == Key.System ? e.SystemKey : e.Key))
+        {
+            ApplyPendingSearch();
+        }
         // Ctrl+Q (QR) never reaches the keymap — PopupKey has no Q chord —
         // so the shell owns it directly (QrActions eligibility + dialog).
         if (e.Key == Key.Q
