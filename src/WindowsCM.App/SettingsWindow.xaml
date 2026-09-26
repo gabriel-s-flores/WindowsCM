@@ -580,8 +580,53 @@
                 </ComboBox>
               </Grid>
 
-              <!-- Setting: Screen Position (Dock) -->
+              <!-- Setting: Placement Mode (docked on the mouse monitor, docked on a fixed monitor, free) -->
               <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutPlacement}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                </StackPanel>
+                <ComboBox x:Name="LargePlacementCombo" Grid.Column="1" Width="260" SelectionChanged="OnLargePlacementChanged">
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPlacementFollowMouse}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPlacementFixedMonitor}" />
+                  <ComboBoxItem Content="{DynamicResource Loc_SettingsLayoutPlacementFree}" />
+                </ComboBox>
+              </Grid>
+
+              <!-- Setting: Fixed Monitor (visible only with the fixed-monitor placement) -->
+              <Grid x:Name="LargeMonitorRow" Margin="0,0,0,12" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="{DynamicResource Loc_SettingsLayoutMonitor}" FontWeight="Medium" FontSize="13" Foreground="{DynamicResource CardTitleBrush}" />
+                  <Button Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsLayoutMonitorIdentify}"
+                          Click="OnIdentifyMonitorsClicked" Padding="10,4" FontSize="11"
+                          HorizontalAlignment="Left" Margin="0,6,0,0" />
+                </StackPanel>
+                <ComboBox x:Name="LargeMonitorCombo" Grid.Column="1" Width="260" VerticalAlignment="Center"
+                          SelectionChanged="OnLargeMonitorChanged" DropDownOpened="OnLargeMonitorDropDownOpened" />
+              </Grid>
+
+              <!-- Setting: Free placement (visible only with the free placement) -->
+              <Grid x:Name="LargeFreeRow" Margin="0,0,0,12" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{DynamicResource Loc_SettingsLayoutFreeHint}" FontSize="12"
+                           Foreground="{DynamicResource CardSubtitleBrush}" TextWrapping="Wrap"
+                           Margin="0,0,16,0" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Style="{StaticResource FluentButton}" Content="{DynamicResource Loc_SettingsLayoutFreeReset}"
+                        Click="OnResetFreePositionClicked" Padding="10,4" FontSize="11" VerticalAlignment="Center" />
+              </Grid>
+
+              <!-- Setting: Screen Position (Dock) -->
+              <Grid x:Name="LargePositionRow" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />

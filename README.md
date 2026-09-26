@@ -56,7 +56,7 @@ Instead of plain text snippets, WindowsCM categorizes copies into semantic cards
 
 ### 1. Dual Interface: Agile Compact Popup & Expanded Card Strip
 - **Compact Popup (`Ctrl+Shift+V`)**: Opens directly under the mouse pointer. Features a top search bar, fast arrow-key navigation, and instantaneous paste on `Enter` or copy-only on `Shift+Enter`. Configurable in vertical (`320x480px`) or horizontal (`540x240px`) format.
-- **Large Clipboard Window**: An expansive card strip with horizontal mouse-wheel scrolling (`250x230px` per card). Dockable to the bottom, top, left, or right edges of your display with customizable chronological flow directions (`Recent on Left/Top` vs `Recent on Right/Bottom`).
+- **Large Clipboard Window**: An expansive card strip with horizontal mouse-wheel scrolling (`250x230px` per card). Dockable to the bottom, top, left, or right edges of your display with customizable chronological flow directions (`Recent on Left/Top` vs `Recent on Right/Bottom`). Three placement modes: docked on the monitor under the mouse (default), docked on a **fixed monitor** you pick (with an **Identify** button that flashes each monitor's number), or **free** — drag it by the top, resize it from the edges, and it reopens exactly where you left it.
 
 ### 2. Rich Multi-Format Previews & Shell Thumbnails
 WindowsCM automatically identifies 8 distinct clipboard kinds and presents them with dedicated renderers:

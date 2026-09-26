@@ -24,6 +24,14 @@
     <Resource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- A tray app lives for days: have the GC compact the large-object heap
+       and hand memory back sooner. Measured by the app smoke over 600
+       copies: working set 386 -> 281 MB, private bytes after a full GC
+       ~270 -> ~170 MB, popup latency unchanged (p50 66 ms). -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.333" PrivateAssets="all" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
