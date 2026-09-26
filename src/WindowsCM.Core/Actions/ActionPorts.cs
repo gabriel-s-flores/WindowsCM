@@ -58,25 +58,16 @@ public sealed class ProcessRunner : IProcessRunner
         };
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                stdout.AppendLine(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                stderr.AppendLine(e.Data);
-            }
-        };
+        process.OutputDataReceived += (_, e) => AppendCapped(stdout, e.Data);
+        process.ErrorDataReceived += (_, e) => AppendCapped(stderr, e.Data);
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), ct).ConfigureAwait(false);
-        process.StandardInput.Close();
+        // The item is fed alongside, not before, the timed wait: the timeout
+        // used to start only once the whole item was written, so a command
+        // that never reads stdin (a pipe holds a few KB) blocked the write
+        // forever and was never killed.
+        var feeding = FeedAsync(process, request.StandardInput);
 
         using var timeout = new CancellationTokenSource(request.TimeoutMs);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
@@ -95,11 +86,54 @@ public sealed class ProcessRunner : IProcessRunner
                 // Raced with a natural exit just under the timeout.
             }
             process.WaitForExit();
-            return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString(), true);
+            await feeding.ConfigureAwait(false);
+            return new ProcessResult(process.ExitCode, Snapshot(stdout), Snapshot(stderr), true);
         }
         // Post-true drain so the async handlers finish before we read.
         process.WaitForExit();
-        return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString(), false);
+        await feeding.ConfigureAwait(false);
+        return new ProcessResult(process.ExitCode, Snapshot(stdout), Snapshot(stderr), false);
+    }
+
+    // Output kept per stream: a command printing gigabytes used to grow the
+    // tray process without bound.
+    internal const int MaxOutputChars = 8 * 1024 * 1024;
+
+    private static void AppendCapped(StringBuilder target, string? line)
+    {
+        if (line is null)
+        {
+            return;
+        }
+        lock (target)
+        {
+            if (target.Length + line.Length < MaxOutputChars)
+            {
+                target.AppendLine(line);
+            }
+        }
+    }
+
+    private static string Snapshot(StringBuilder source)
+    {
+        lock (source)
+        {
+            return source.ToString();
+        }
+    }
+
+    // A command may exit (or close its input) without reading all of it:
+    // the broken pipe used to escape and lose the command's result.
+    private static async Task FeedAsync(Process process, string input)
+    {
+        try
+        {
+            await process.StandardInput.WriteAsync(input.AsMemory()).ConfigureAwait(false);
+            process.StandardInput.Close();
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
     }
 }
 
