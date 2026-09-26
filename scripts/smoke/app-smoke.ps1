@@ -24,6 +24,10 @@ param(
     [Parameter(Mandatory = $true)][string]$Exe,
     [string]$OutDir = "smoke-results",
     [int]$Copies = 300,
+    # Diagnostics: GC conserve level for the app process (0 = default) and
+    # stopping after the stress phase.
+    [int]$GcConserveMemory = 0,
+    [switch]$StressOnly,
     [switch]$ResetUserData
 )
 
@@ -229,6 +233,7 @@ function Write-Settings([hashtable]$dialog = @{}, [bool]$autoPaste = $true) {
 
 $script:app = $null
 function Start-App {
+    if ($GcConserveMemory -gt 0) { $env:DOTNET_GCConserveMemory = "$GcConserveMemory" } else { Remove-Item Env:DOTNET_GCConserveMemory -ErrorAction SilentlyContinue }
     $script:app = Start-Process -FilePath $Exe -ArgumentList '--hidden' -PassThru
     $deadline = (Get-Date).AddSeconds(30)
     while ((Get-Date) -lt $deadline) {
@@ -376,6 +381,7 @@ $samples.Add($startup)
 $openTimes = New-Object System.Collections.Generic.List[double]
 
 $clipboardFailures = New-Object System.Collections.Generic.List[string]
+$heapPoints = New-Object System.Collections.Generic.List[object]
 $copyWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 for ($i = 1; $i -le $Copies; $i++) {
@@ -397,7 +403,13 @@ for ($i = 1; $i -le $Copies; $i++) {
         Pipe 'hide' | Out-Null
         if ($reply -ne 'ok') { $failures.Add("pipe show answered '$reply' at copy $i") }
         $samples.Add((Sample-Process "copy $i"))
-        if ($i -eq 150) { $heapMid = Heap-After-GC 'copy150' }
+        if ($i % 150 -eq 0) {
+            $point = Heap-After-GC "copy$i"
+            if ($point) {
+                $after = Sample-Process "after GC at copy $i"
+                $heapPoints.Add(@{ copy = $i; heapMB = $point.MB; privateMB = $after.privateMB; top = $point.Top })
+            }
+        }
     }
 }
 $copyWatch.Stop()
@@ -436,19 +448,22 @@ if (Alive) {
     }
     $metrics.copiesPerSecond = [math]::Round($Copies / $copyWatch.Elapsed.TotalSeconds, 1)
     foreach ($sample in $samples) { Note ("  memory at {0}: private {1} MB, working set {2} MB, {3} handles, {4} threads" -f $sample.at, $sample.privateMB, $sample.workingSetMB, $sample.handles, $sample.threads) }
-    $heapEnd = Heap-After-GC 'end'
-    if ($heapMid -and $heapEnd -and $heapMid.MB -and $heapEnd.MB) {
-        $afterGc = Sample-Process 'after full GC'
-        Note "  managed heap after a full GC: $($heapMid.MB) MB at copy 150 -> $($heapEnd.MB) MB at copy $Copies (private bytes then: $($afterGc.privateMB) MB)"
+    foreach ($point in $heapPoints) { Note "  after a full GC at copy $($point.copy): managed heap $($point.heapMB) MB, private bytes $($point.privateMB) MB" }
+    if ($heapPoints.Count -ge 2) {
+        $first = $heapPoints[0]
+        $last = $heapPoints[$heapPoints.Count - 1]
         Note '  largest types at the end:'
         Note '```'
-        Note $heapEnd.Top
+        Note $last.top
         Note '```'
-        Check (($heapEnd.MB - $heapMid.MB) -lt 20) "no managed memory leak: the heap after a full GC stays flat once the history is full (+$([math]::Round($heapEnd.MB - $heapMid.MB, 1)) MB over 150 copies)"
-        $metrics.managedHeapAfterGcMB = @{ copy150 = $heapMid.MB; end = $heapEnd.MB }
+        Check (($last.heapMB - $first.heapMB) -lt 20) "no managed memory leak: the heap after a full GC stays flat once the history is full (+$([math]::Round($last.heapMB - $first.heapMB, 1)) MB from copy $($first.copy) to $($last.copy))"
+        $metrics.afterFullGc = $heapPoints | ForEach-Object { @{ copy = $_.copy; heapMB = $_.heapMB; privateMB = $_.privateMB } }
     } else {
         Note "  (dotnet-gcdump unavailable: managed heap not measured)"
     }
+    # The history itself, for diagnosis (type, time, title, content start).
+    $dump = "import sqlite3,sys; c=sqlite3.connect(sys.argv[1])`nfor r in c.execute('select id, type, datetime, title, substr(replace(content, char(10), \' \'), 1, 70) from clipboard order by datetime desc'): print(*r, sep=' | ')"
+    & python -c $dump $dbPath | Set-Content (Join-Path $OutDir 'history.txt') -Encoding UTF8
     # The same popup, app idle: separates rendering cost from load.
     $idleTimes = New-Object System.Collections.Generic.List[double]
     for ($k = 0; $k -lt 6; $k++) {
@@ -468,6 +483,8 @@ if (Alive) {
 }
 $metrics.processSamples = $samples
 Stop-App
+
+if ($StressOnly) { throw 'StressOnly: stopping after the stress phase' }
 
 # ------------------------------------------------------------- 2. placement
 
@@ -603,10 +620,12 @@ if (Test-Path $logPath) {
 }
 
 } catch {
+    if ($_.Exception.Message -like 'StressOnly*') { Note ""; Note "(stopped after the stress phase)" } else {
     Note ""
     Note "ABORTED: $($_.Exception.Message)"
     Note "$($_.ScriptStackTrace)"
     $failures.Add("smoke aborted: $($_.Exception.Message)")
+    }
 } finally {
     Stop-App
 }
