@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.Buffers.Binary;
 using System.IO.Compression;
+using WindowsCM.Core.Classification;
 
 namespace WindowsCM.Core.Capture.Win32;
 
@@ -11,6 +12,45 @@ namespace WindowsCM.Core.Capture.Win32;
 public static class DibToPng
 {
     private const int BI_RGB = 0;
+
+    // Header-only check (the first 40 bytes): whether FromDib will accept
+    // this DIB flavor. The clipboard reader uses it to pick a format while
+    // the clipboard is open and runs the (slow) PNG encoding only after
+    // closing it — encoding a 4K screenshot with the clipboard held took
+    // ~0.5 s, during which every other app's copy and paste failed.
+    public static bool CanConvert(ReadOnlySpan<byte> header)
+    {
+        if (header.Length < 40)
+        {
+            return false;
+        }
+        var headerSize = BinaryPrimitives.ReadInt32LittleEndian(header[..4]);
+        var width = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(4, 4));
+        var height = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(8, 4));
+        var bitCount = BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(14, 2));
+        var compression = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(16, 4));
+        return headerSize >= 40 && width > 0 && height != 0
+            && compression == BI_RGB && bitCount is 24 or 32;
+    }
+
+    // The deferred half of the clipboard read: PNG bytes pass through, a
+    // DIB is encoded; an unusable DIB yields no image instead of throwing
+    // (the text/file parts of the same copy are still captured).
+    public static ImageSnapshot? ToSnapshot(byte[] bytes, bool isPng)
+    {
+        if (isPng)
+        {
+            return bytes.Length > 0 ? new ImageSnapshot("image/png", bytes) : null;
+        }
+        try
+        {
+            return new ImageSnapshot("image/png", FromDib(bytes));
+        }
+        catch (Exception ex) when (ex is NotSupportedException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
     public static byte[] FromDib(byte[] dib)
     {

@@ -45,4 +45,39 @@ public sealed class DibToPngTests
 
         Assert.Throws<NotSupportedException>(() => DibToPng.FromDib(dib));
     }
+
+    [Fact]
+    public void CanConvert_AcceptsExactlyWhatFromDibEncodes()
+    {
+        var rgb32 = DIB1x1(1, 2, 3);
+        var rgb24 = DIB1x1(1, 2, 3);
+        rgb24[14] = 24;
+        var paletted = DIB1x1(1, 2, 3);
+        paletted[14] = 8;
+        var bitfields = DIB1x1(1, 2, 3);
+        bitfields[16] = 3; // BI_BITFIELDS, typical of CF_DIBV5 from 32bpp sources
+
+        Assert.True(DibToPng.CanConvert(rgb32.AsSpan(0, 40)));
+        Assert.True(DibToPng.CanConvert(rgb24.AsSpan(0, 40)));
+        Assert.False(DibToPng.CanConvert(paletted.AsSpan(0, 40)));
+        Assert.False(DibToPng.CanConvert(bitfields.AsSpan(0, 40)));
+        Assert.False(DibToPng.CanConvert(rgb32.AsSpan(0, 20)));
+        Assert.Throws<NotSupportedException>(() => DibToPng.FromDib(bitfields));
+    }
+
+    [Fact]
+    public void ToSnapshot_EncodesDibsPassesPngAndNeverThrows()
+    {
+        var fromDib = DibToPng.ToSnapshot(DIB1x1(0, 0, 255), isPng: false);
+        var png = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10, 1, 2 };
+        var passthrough = DibToPng.ToSnapshot(png, isPng: true);
+        var truncated = DIB1x1(0, 0, 255);
+        truncated[4] = 50; // claims 50 px wide: pixel data too short
+
+        Assert.Equal("image/png", fromDib?.MimeType);
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, fromDib?.Data[..8]);
+        Assert.Same(png, passthrough?.Data);
+        Assert.Null(DibToPng.ToSnapshot(truncated, isPng: false));
+        Assert.Null(DibToPng.ToSnapshot([], isPng: true));
+    }
 }
