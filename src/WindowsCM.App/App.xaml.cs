@@ -651,7 +651,7 @@ public partial class App : System.Windows.Application
 
     internal void ShowQr(string payload)
     {
-        new QrWindow(payload).Show();
+        ShowInFront(new QrWindow(payload));
     }
 
     internal void ShowQr(ClipboardItem item)
@@ -685,14 +685,14 @@ public partial class App : System.Windows.Application
 
             var ip = LocalNetworkResolver.GetPreferredLocalIp();
             var url = _transferServer.BuildUrl(ip, $"/d/{session.Token}");
-            new QrWindow(session, url, this).Show();
+            ShowInFront(new QrWindow(session, url, this));
             return;
         }
 
         var textPayload = WindowsCM.Core.Actions.QrActions.Payload(item.Kind, item.Content);
         if (textPayload != null)
         {
-            new QrWindow(textPayload).Show();
+            ShowInFront(new QrWindow(textPayload));
         }
     }
 
@@ -700,7 +700,16 @@ public partial class App : System.Windows.Application
     {
         if (_transferServer == null) return;
         var ip = LocalNetworkResolver.GetPreferredLocalIp();
-        new MobileTransferWindow(_transferServer, ip).Show();
+        ShowInFront(new MobileTransferWindow(_transferServer, ip));
+    }
+
+    // The large popup stays up behind a QR opened from it and is Topmost, so
+    // a plain Show() left the QR covered by the strip.
+    private void ShowInFront(Window window)
+    {
+        _popup?.LeaveTopmostBand();
+        window.Show();
+        window.Activate();
     }
 
     private void OnTransferPayloadReceived(IncomingTransferPayload payload)
@@ -809,7 +818,7 @@ public partial class App : System.Windows.Application
                 break;
             case ActionStatus.ShowQr when result.Output is not null:
                 _popup.Hide();
-                new QrWindow(result.Output).Show();
+                ShowInFront(new QrWindow(result.Output));
                 break;
             case ActionStatus.Failed:
                 _popup.Hide();
