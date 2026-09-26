@@ -260,14 +260,14 @@
     <!-- MAIN CONTENT AREA -->
     <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="28,24,28,24">
       <Grid>
-        <!-- 1. PAINEL GERAL & HISTÓRICO -->
+        <!-- 1. GENERAL & HISTORY PANEL -->
         <StackPanel x:Name="PanelGeneral" Visibility="Visible">
           <TextBlock Text="{DynamicResource Loc_SettingsSectionGeneralTitle}" FontSize="20" FontWeight="SemiBold"
                      Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
           <TextBlock Text="{DynamicResource Loc_SettingsSectionGeneralSubtitle}"
                      FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
 
-          <!-- Card: Tema e Aparência da Interface -->
+          <!-- Card: Interface Theme and Appearance -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -290,7 +290,7 @@
             </Grid>
           </Border>
 
-          <!-- Card: Idioma do Aplicativo -->
+          <!-- Card: App Language -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -312,7 +312,7 @@
             </Grid>
           </Border>
 
-          <!-- Card: Limite da Clipboard -->
+          <!-- Card: Clipboard Limit -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.RowDefinitions>
@@ -352,7 +352,7 @@
             </Grid>
           </Border>
 
-          <!-- Card: Inicialização Automática -->
+          <!-- Card: Automatic Startup -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -370,7 +370,7 @@
             </Grid>
           </Border>
 
-          <!-- Card: Colar Automaticamente -->
+          <!-- Card: Auto-Paste -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -388,7 +388,7 @@
             </Grid>
           </Border>
 
-          <!-- Card: Encerramento de Sessão -->
+          <!-- Card: End of Session -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -411,7 +411,7 @@
           </Border>
         </StackPanel>
 
-        <!-- 2. PAINEL DE LAYOUT & POSICIONAMENTO -->
+        <!-- 2. LAYOUT & PLACEMENT PANEL -->
         <StackPanel x:Name="PanelLayout" Visibility="Collapsed">
           <TextBlock Text="{DynamicResource Loc_SettingsSectionLayoutTitle}" FontSize="20" FontWeight="SemiBold"
                      Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
@@ -557,7 +557,7 @@
             </StackPanel>
           </Border>
 
-          <!-- Card: Large Window Configuration (Área Principal) -->
+          <!-- Card: Large Window Configuration (Main Window) -->
           <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,16">
             <StackPanel>
               <TextBlock Text="{DynamicResource Loc_SettingsLayoutLargeTitle}" FontWeight="SemiBold" FontSize="14"
@@ -758,7 +758,7 @@
           </Border>
         </StackPanel>
 
-        <!-- 3. PAINEL CORES E TIPOS DE ITENS (UNIFICADO) -->
+        <!-- 3. ITEM COLORS AND TYPES PANEL (UNIFIED) -->
         <StackPanel x:Name="PanelColors" Visibility="Collapsed">
           <Grid Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
@@ -780,7 +780,7 @@
             </StackPanel>
           </Grid>
 
-          <!-- Card para Adicionar Nova Categoria (inicialmente oculto) -->
+          <!-- Card to Add a New Category (initially hidden) -->
           <Border x:Name="NewCategoryPanel" Style="{StaticResource SettingsCard}" Visibility="Collapsed"
                   BorderBrush="#0078D4" BorderThickness="1.5">
             <StackPanel>
@@ -812,18 +812,18 @@
             </StackPanel>
           </Border>
 
-          <!-- Lista Unificada de Tipos e Categorias -->
+          <!-- Unified List of Types and Categories -->
           <StackPanel x:Name="FileCategoriesPanel" />
         </StackPanel>
 
-        <!-- 3. PAINEL CACHE & PASTAS -->
+        <!-- 3. CACHE & FOLDERS PANEL -->
         <StackPanel x:Name="PanelStorage" Visibility="Collapsed">
           <TextBlock Text="{DynamicResource Loc_SettingsSectionStorageTitle}" FontSize="20" FontWeight="SemiBold"
                      Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
           <TextBlock Text="{DynamicResource Loc_SettingsSectionStorageSubtitle}"
                      FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
 
-          <!-- Card: Limpar Cache Diretamente -->
+          <!-- Card: Clear Cache Directly -->
           <Border Style="{StaticResource SettingsCard}">
             <StackPanel>
               <Grid>
@@ -859,7 +859,7 @@
             </StackPanel>
           </Border>
 
-          <!-- Card: Pastas de Dados -->
+          <!-- Card: Data Folders -->
           <Border Style="{StaticResource SettingsCard}">
             <StackPanel>
               <TextBlock Text="{DynamicResource Loc_SettingsStorageFoldersTitle}" FontWeight="SemiBold" FontSize="14"
@@ -886,14 +886,14 @@
           </Border>
         </StackPanel>
 
-        <!-- 4. PAINEL ATALHOS -->
+        <!-- 4. SHORTCUTS PANEL -->
         <StackPanel x:Name="PanelShortcuts" Visibility="Collapsed">
           <TextBlock Text="{DynamicResource Loc_SettingsSectionShortcutsTitle}" FontSize="20" FontWeight="SemiBold"
                      Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
           <TextBlock Text="{DynamicResource Loc_SettingsSectionShortcutsSubtitle}"
                      FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
 
-          <!-- Card: Abrir Histórico -->
+          <!-- Card: Open History -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.RowDefinitions>
@@ -927,7 +927,7 @@
             </Grid>
           </Border>
 
-          <!-- Card: Modo Anônimo -->
+          <!-- Card: Incognito Mode -->
           <Border Style="{StaticResource SettingsCard}">
             <Grid>
               <Grid.RowDefinitions>
@@ -980,14 +980,14 @@
           </Border>
         </StackPanel>
 
-        <!-- 5. PAINEL SOBRE & SISTEMA -->
+        <!-- 5. ABOUT & SYSTEM PANEL -->
         <StackPanel x:Name="PanelAbout" Visibility="Collapsed">
           <TextBlock Text="{DynamicResource Loc_SettingsSectionAboutTitle}" FontSize="20" FontWeight="SemiBold"
                      Foreground="{DynamicResource CardTitleBrush}" Margin="0,0,0,4" />
           <TextBlock Text="{DynamicResource Loc_SettingsSectionAboutSubtitle}"
                      FontSize="12" Foreground="{DynamicResource CardSubtitleBrush}" Margin="0,0,0,20" />
 
-          <!-- Card: Versão e Ambiente -->
+          <!-- Card: Version and Environment -->
           <Border Style="{StaticResource SettingsCard}">
             <StackPanel>
               <TextBlock Text="{DynamicResource Loc_SettingsVersionTitle}" FontWeight="SemiBold" FontSize="14"
@@ -997,7 +997,7 @@
             </StackPanel>
           </Border>
 
-          <!-- Card: Bandeja do Windows -->
+          <!-- Card: Windows Tray -->
           <Border Style="{StaticResource SettingsCard}">
             <StackPanel>
               <TextBlock Text="{DynamicResource Loc_SettingsTrayGuidanceTitle}" FontWeight="SemiBold" FontSize="14"
@@ -1009,7 +1009,7 @@
             </StackPanel>
           </Border>
 
-          <!-- Card: Créditos -->
+          <!-- Card: Credits -->
           <Border Style="{StaticResource SettingsCard}">
             <StackPanel>
               <TextBlock Text="{DynamicResource Loc_SettingsCreditsTitle}" FontWeight="SemiBold" FontSize="14"

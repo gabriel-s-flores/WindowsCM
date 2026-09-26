@@ -15,7 +15,7 @@
 ;   is kept and even when autostart was enabled later in the app
 ;   (Settings / welcome guide), which [Registry] cannot know about.
 ; - LICENSE is shown at install time (LicenseFile) and a copy is
-;   installed next to the exe (grilling 08: LICENSE raiz + copia).
+;   installed next to the exe (grilling 08: root LICENSE + a copy).
 ; - Upgrades preserve data structurally: history, settings, actions,
 ;   images and caches live under %LocalAppData%\WindowsCM and
 ;   %AppData%\WindowsCM (UserDataPolicy), outside {app}, so replacing

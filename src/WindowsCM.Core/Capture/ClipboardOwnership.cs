@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 namespace WindowsCM.Core.Capture;
 
-// Clipboard ownership rules (research 02 § "Regras de ownership") as testable
+// Clipboard ownership rules (research 02 § "Ownership rules") as testable
 // helpers. The Win32 reader calls these; the rules themselves are pure:
 // - STA thread (WPF is STA; Forms/WPF Clipboard demand it)
 // - OpenClipboard retry with backoff (another window may hold it)

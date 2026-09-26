@@ -108,7 +108,7 @@ public sealed class DialogSettings
     public bool AutoHideSearch { get; set; } = false;
     public bool ShowScrollbar { get; set; } = true;
 
-    // Configurações da Área Grande (PopupWindow)
+    // Large window settings (PopupWindow)
     public LargeHorizontalPosition LargeHorizontalPosition { get; set; } = LargeHorizontalPosition.Bottom;
     public LargeVerticalPosition LargeVerticalPosition { get; set; } = LargeVerticalPosition.Left;
     public HorizontalItemOrder LargeHorizontalOrder { get; set; } = HorizontalItemOrder.RecentOnLeft;
@@ -141,11 +141,11 @@ public sealed class DialogSettings
         }
     }
 
-    // Posicionamento da barra de scroll (customizável por orientação)
+    // Scrollbar placement (customizable per orientation)
     public VerticalScrollbarPosition VerticalScrollbarPosition { get; set; } = VerticalScrollbarPosition.Right;
     public HorizontalScrollbarPosition HorizontalScrollbarPosition { get; set; } = HorizontalScrollbarPosition.Bottom;
 
-    // Configurações do Menu Compacto (CompactPopupWindow)
+    // Compact menu settings (CompactPopupWindow)
     public DialogOrientation CompactOrientation { get; set; } = DialogOrientation.Vertical;
     public VerticalItemOrder CompactVerticalOrder { get; set; } = VerticalItemOrder.RecentOnTop;
     public HorizontalItemOrder CompactHorizontalOrder { get; set; } = HorizontalItemOrder.RecentOnLeft;

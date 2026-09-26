@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace WindowsCM.Core.Paste.Win32;
 
-// Injects the paste chord into the foreground app (research 02 § "Colar"):
+// Injects the paste chord into the foreground app (research 02 § "Pasting"):
 // Ctrl+V by default (Ctrl down, V down/up, Ctrl up), Shift+Insert as the
 // manual opt-in. UIPI blocks delivery to higher-integrity apps without any
 // signal in the return value — that refusal is diagnosed by the elevation

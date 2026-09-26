@@ -283,7 +283,7 @@ public class LocalizationTests
     [Fact]
     public void CodeSyntaxTokenizer_DetectLanguage_ReturnsNullWhenUnknown()
     {
-        // Must not return hardcoded Portuguese "Código" when unknown!
+        // Must not fall back to a hardcoded Portuguese label when unknown!
         Assert.Null(WindowsCM.Core.Previews.CodeSyntaxTokenizer.DetectLanguage(""));
         Assert.Null(WindowsCM.Core.Previews.CodeSyntaxTokenizer.DetectLanguage("   "));
         Assert.Null(WindowsCM.Core.Previews.CodeSyntaxTokenizer.DetectLanguage("just some words without code syntax"));
