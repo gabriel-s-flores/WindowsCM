@@ -58,6 +58,10 @@ _Avoid_: window mode, layout style
 The screen edge to which the large clipboard window anchors: Top or Bottom (when horizontal) and Left or Right (when vertical).
 _Avoid_: alignment, gravity
 
+**Large window placement**:
+How the large clipboard window is placed: `FollowMouse` (docked to a screen dock position on the monitor under the mouse — the default), `FixedMonitor` (docked on a monitor the user picked, remembered by its device name; the primary stands in while it is disconnected) or `Free` (wherever the user dragged it, at the size they left it, remembered per clipboard orientation and pulled back on-screen if its monitor is gone).
+_Avoid_: window mode, floating mode, multi-monitor mode (it does not span monitors)
+
 **Item flow direction**:
 The spatial progression of clipboard records based on chronological recency: `RecentOnLeft` vs `RecentOnRight` for horizontal arrangements, and `RecentOnTop` vs `RecentOnBottom` for vertical arrangements.
 _Avoid_: reverse mode, flip
