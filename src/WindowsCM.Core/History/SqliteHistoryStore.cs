@@ -11,6 +11,9 @@ public sealed class SqliteHistoryStore : IHistoryStore
     private readonly SqliteConnection _connection;
     private bool _disposed;
 
+    // SQLITE_MAX_LIKE_PATTERN_LENGTH is 50,000 bytes; stay clear of it.
+    private const int MaxLikePatternBytes = 40_000;
+
     public SqliteHistoryStore(string connectionString)
     {
         EnsureParentDirectory(connectionString);
@@ -139,9 +142,21 @@ public sealed class SqliteHistoryStore : IHistoryStore
             """);
         if (!string.IsNullOrEmpty(query))
         {
-            sql.Append(" AND (content LIKE $like ESCAPE '\\' COLLATE NOCASE");
-            sql.Append(" OR title LIKE $like ESCAPE '\\' COLLATE NOCASE)");
-            search.Parameters.AddWithValue("$like", $"%{EscapeLike(query)}%");
+            var like = $"%{EscapeLike(query)}%";
+            if (System.Text.Encoding.UTF8.GetByteCount(like) <= MaxLikePatternBytes)
+            {
+                sql.Append(" AND (content LIKE $like ESCAPE '\\' COLLATE NOCASE");
+                sql.Append(" OR title LIKE $like ESCAPE '\\' COLLATE NOCASE)");
+                search.Parameters.AddWithValue("$like", like);
+            }
+            else
+            {
+                // SQLite refuses LIKE patterns over 50,000 bytes ("pattern
+                // too complex"), so a long pasted line threw on every
+                // refresh. Such a query is matched literally instead.
+                sql.Append(" AND (instr(content, $needle) > 0 OR instr(title, $needle) > 0)");
+                search.Parameters.AddWithValue("$needle", query);
+            }
         }
         if (pinned.HasValue)
         {

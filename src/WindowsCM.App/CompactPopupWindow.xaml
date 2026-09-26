@@ -331,6 +331,7 @@
                        BorderThickness="0" Foreground="{DynamicResource SearchForegroundBrush}"
                        FontSize="12" VerticalAlignment="Center"
                        CaretBrush="{DynamicResource SearchCaretBrush}"
+                       MaxLength="1000"
                        TextChanged="OnSearchTextChanged" />
             </Grid>
 

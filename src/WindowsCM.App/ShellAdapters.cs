@@ -46,14 +46,12 @@ public sealed class ShellIncognito(App app) : IIncognitoToggle
     public void SetIncognito(bool on) => app.SetIncognito(on);
 }
 
-public sealed class ShellHistory(
-    IHistoryStore store, PopupViewModel model, PopupWindow window) : IClearHistory
+public sealed class ShellHistory(IHistoryStore store, Action refreshOpenPopups) : IClearHistory
 {
     public int ClearKeepProtected()
     {
         var removed = store.Clear(keepProtected: true);
-        model.Refresh();
-        window.RefreshView();
+        refreshOpenPopups();
         return removed;
     }
 }

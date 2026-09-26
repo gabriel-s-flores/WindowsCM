@@ -19,6 +19,11 @@ public interface IAppStrings
     string TrayMissingItemBalloon(long id);
     string TrayPasteFailedBalloon(string message);
     string TrayCopyFailedBalloon(string message);
+    string TrayActivationFailedBalloon(string message);
+    string TrayActionFailedBalloon(string message);
+    string HistoryDatabaseRecoveredBalloon(string backupFileName);
+    string HistoryDatabaseFallbackBalloon(string path);
+    string HistoryDatabaseMemoryOnlyBalloon { get; }
     string TrayIconTooltip { get; }
     string TrayIconTooltipIncognito { get; }
     string TrayAutoPaste { get; }

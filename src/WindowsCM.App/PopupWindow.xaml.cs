@@ -216,13 +216,40 @@ public partial class PopupWindow : Window
         _lastHideTimestamp = Environment.TickCount64;
         ResetScrollToInitial();
         base.Hide();
-        if (!_app.Settings.Behavior.RememberSearch)
+        // Only when there is a search to forget: SetSearch reloads the whole
+        // history, and a paste hides both popups on its way to the target.
+        if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
         {
             _model.SetSearch("");
+        }
+        if (!_app.Settings.Behavior.RememberSearch && SearchBox.Text.Length > 0)
+        {
             SearchBox.Text = "";
         }
 
         ApplyScrollbarPosition();
+    }
+
+    // Built once for the app's lifetime: Alt+F4 (or any WM_CLOSE) only hides
+    // it. A closed window can never be shown again, so every later hotkey
+    // threw ("Cannot ... after a Window has closed") until the burst limit
+    // ended the app.
+    private bool _closingForExit;
+
+    internal void CloseForExit()
+    {
+        _closingForExit = true;
+        Close();
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_closingForExit)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+        base.OnClosing(e);
     }
 
     public void ResetScrollToInitial()
@@ -555,9 +582,9 @@ public partial class PopupWindow : Window
             return;
         }
         var source = e.OriginalSource as DependencyObject;
-        if (VisualAncestor<System.Windows.Controls.ListBox>(source) is not null
-            || VisualAncestor<System.Windows.Controls.Primitives.ButtonBase>(source) is not null
-            || VisualAncestor<System.Windows.Controls.Primitives.TextBoxBase>(source) is not null)
+        if (VisualTreeWalk.FindAncestor<System.Windows.Controls.ListBox>(source) is not null
+            || VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(source) is not null
+            || VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.TextBoxBase>(source) is not null)
         {
             return;
         }
@@ -641,22 +668,6 @@ public partial class PopupWindow : Window
             Width = ActualWidth,
             Height = ActualHeight,
         });
-    }
-
-    // VisualTreeHelper.GetParent throws for content elements (Run, ...):
-    // stop walking at the first non-visual node.
-    private static T? VisualAncestor<T>(DependencyObject? current)
-        where T : DependencyObject
-    {
-        while (current is Visual or System.Windows.Media.Media3D.Visual3D)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -837,7 +848,7 @@ public partial class PopupWindow : Window
         {
             return;
         }
-        var isInteractive = FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
+        var isInteractive = VisualTreeWalk.FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) is not null;
         var index = RowIndexAt(e.OriginalSource as DependencyObject);
         if (!PopupClickPolicy.ShouldActivate(IsVisible, index, isInteractive))
         {
@@ -847,11 +858,31 @@ public partial class PopupWindow : Window
         var request = _model.ActivateAt(index!.Value, runDefaultAction: false);
         if (request is not null)
         {
-            if (!shiftHeld)
-            {
-                _isActivating = true;
-            }
-            _ = _app.ActivateAsync(request, shiftHeld);
+            StartActivation(request, shiftHeld);
+        }
+    }
+
+    // A pick that fails before the popup hides (item gone, clipboard held
+    // by another app) left _isActivating set, and the popup ignored every
+    // later click until it was reopened.
+    private void StartActivation(ActivationRequest request, bool shiftHeld)
+    {
+        if (!shiftHeld)
+        {
+            _isActivating = true;
+        }
+        _ = ActivateThenSettleAsync(request, shiftHeld);
+    }
+
+    private async Task ActivateThenSettleAsync(ActivationRequest request, bool shiftHeld)
+    {
+        try
+        {
+            await _app.ActivateAsync(request, shiftHeld);
+        }
+        finally
+        {
+            _isActivating = false;
         }
     }
 
@@ -861,27 +892,13 @@ public partial class PopupWindow : Window
     // click policy sees a single "no row" shape.
     private int? RowIndexAt(DependencyObject? source)
     {
-        var item = FindAncestor<ListBoxItem>(source);
+        var item = VisualTreeWalk.FindAncestor<ListBoxItem>(source);
         if (item is null)
         {
             return null;
         }
         var index = ItemsList.ItemContainerGenerator.IndexFromContainer(item);
         return index >= 0 ? index : null;
-    }
-
-    private static T? FindAncestor<T>(DependencyObject? current)
-        where T : DependencyObject
-    {
-        while (current is not null)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
     }
 
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -917,7 +934,10 @@ public partial class PopupWindow : Window
         {
             return null;
         }
-        var key = e.Key switch
+        // With Alt held WPF reports Key.System and the real key in
+        // SystemKey: Alt+P never reached the keymap.
+        var pressed = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = pressed switch
         {
             Key.Enter => (PopupKey?)PopupKey.Enter,
             Key.Space => PopupKey.Space,
@@ -1016,7 +1036,7 @@ public partial class PopupWindow : Window
         var request = _model.ActivateSelected(runDefaultAction);
         if (request is not null)
         {
-            _ = _app.ActivateAsync(request, shiftHeld);
+            StartActivation(request, shiftHeld);
         }
     }
 
@@ -1180,17 +1200,14 @@ public partial class PopupWindow : Window
         var pasteItem = new MenuItem { Header = s.ContextMenuPaste, InputGestureText = "Enter" };
         pasteItem.Click += (_, _) =>
         {
-            var req = new ActivationRequest(item.Id, RunDefaultAction: false);
-            _isActivating = true;
-            _ = _app.ActivateAsync(req, shiftHeld: false);
+            StartActivation(new ActivationRequest(item.Id, RunDefaultAction: false), shiftHeld: false);
         };
         menu.Items.Add(pasteItem);
 
         var copyItem = new MenuItem { Header = s.ContextMenuCopy, InputGestureText = "Shift+Enter" };
         copyItem.Click += (_, _) =>
         {
-            var req = new ActivationRequest(item.Id, RunDefaultAction: false);
-            _ = _app.ActivateAsync(req, shiftHeld: true);
+            StartActivation(new ActivationRequest(item.Id, RunDefaultAction: false), shiftHeld: true);
         };
         menu.Items.Add(copyItem);
 
