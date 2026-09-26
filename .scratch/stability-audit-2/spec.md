@@ -91,5 +91,9 @@ Base: main (após o merge do PR #10)
 - Core: 1345 testes passam no Linux; as falhas são as mesmas da base (caminhos `C:\`, o contrato do instalador e um teste de pipe que só se comporta assim fora do Windows), que passam no CI Windows. Mais de 100 testes novos cobrem as correções.
 - Revisão independente do diff inteiro (Core e WPF) antes do PR; os problemas que ela encontrou foram corrigidos. Os mais sérios: a varredura de imagens contra um histórico substituto, as datas dependentes de cultura e o registro da colagem durante o modo anônimo.
 - Build da solução inteira (inclui o app WPF, `-p:EnableWindowsTargeting=true`) sem warnings.
-- CI Windows no PR: build, testes, smoke do app real e smoke de scroll.
+- CI Windows no PR #11 (runner de 2 vCPUs, sem GPU): build, testes, smoke do app real e smoke de scroll, todos verdes. A primeira rodada pegou três testes novos que só falhavam no Windows; um deles revelou que a escrita no pipe também precisava de prazo (corrigido no código de produção).
+  - Clipboard dos outros apps: 0 falhas em 300 cópias. O histórico fica em 100 itens e nada foi registrado no log de erros.
+  - Memória após 300 cópias: privada 141–147 MB (antes ~190–210), working set ~260 MB (antes ~300), heap gerenciado após GC 24–28 MB (antes ~60), estável.
+  - Popup: p50 101 ms via pipe e 144 ms ocioso. Atalho → popup: 245–661 ms. Colar automaticamente no Notepad: nos 4 cenários.
+  - Scroll em 1920×1080 com 130 itens: ida e volta da thread de UI p95 34 ms (roda), 3 ms (touchpad), 1 ms (rajada); nenhuma parada de 1 s ou mais.
 - `dist/`: a versão portátil (`WindowsCM-portable/` + `.zip`) foi gerada por publish cruzado no Linux. O instalador exige Windows + Inno Setup e é produzido pelo job de release do CI a cada push verde na `main`.
