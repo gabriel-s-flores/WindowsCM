@@ -115,12 +115,20 @@ public partial class PopupWindow : Window
         PlaceAtCursor(incognito);
         ResetScrollToInitial();
         UpdateLayout();
+        // A QR opened last time may have stepped the strip down a band.
+        Topmost = true;
         Show();
         var handle = new WindowInteropHelper(this).EnsureHandle();
         SetForegroundWindow(handle);
         Activate();
         ItemsList.Focus();
     }
+
+    // Modeless windows opened from the strip (QR, mobile transfer) land in
+    // the normal band, while the strip stays up behind them as Topmost and
+    // would cover them. It joins them in the normal band so the new window
+    // shows in front; ShowAtCursor puts it back on top at the next open.
+    public void LeaveTopmostBand() => Topmost = false;
 
     public void ApplyLayoutOrientation(DialogOrientation orientation)
     {
