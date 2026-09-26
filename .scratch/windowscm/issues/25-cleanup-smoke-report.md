@@ -1,36 +1,36 @@
-# 25: Cleanup dos logs temporários + relatório final do smoke
+# 25: Cleanup of the temporary logs + final smoke report
 
-**What to build:** o esforço termina limpo: nenhum log temporário restante, suíte completa verde e um relatório de smoke manual+automatizado provando popup estável, clique simples colando e tray na gaveta.
+**What to build:** the effort ends clean: no temporary log left, a green full suite and a manual+automated smoke report proving a stable popup, single click pasting and the tray in the tray overflow.
 
-**Blocked by:** 21 (popup 1080p), 23 (clique simples cola), 24 (tray gaveta + onboarding).
+**Blocked by:** 21 (popup 1080p), 23 (single click pastes), 24 (tray overflow + onboarding).
 
 **Status:** resolved
 
-- [x] Todos os logs temporários removidos em commit separado; nenhum arquivo em TEMP é mais escrito
-- [x] Suíte completa passa com zero erros/warnings e o total é registrado (735/735 testes)
-- [x] `smoke-report.md` final cobre 4 quadrantes do popup, Enter/Shift+Enter/clique/Shift+clique no Notepad, alvo elevado e tray na gaveta, tudo PASS
-- [x] Comportamentos adiados (se houver) listados como follow-up com motivo
+- [x] All temporary logs removed in a separate commit; no file in TEMP is written anymore
+- [x] The full suite passes with zero errors/warnings and the total is recorded (735/735 tests)
+- [x] Final `smoke-report.md` covers 4 popup quadrants, Enter/Shift+Enter/click/Shift+click in Notepad, elevated target and the tray in the tray overflow, all PASS
+- [x] Deferred behaviors (if any) listed as follow-up with a reason
 
 ## Answer
 
-Cleanup completo e relatório final entregues conforme especificado:
+Complete cleanup and final report delivered as specified:
 
-1. **Remoção de Logs Temporários**:
-   - `src/WindowsCM.Core/Diagnostics/TempSmokeLog.cs` e `tests/WindowsCM.Core.Tests/Diagnostics/TempSmokeLogTests.cs` removidos.
-   - Chamadas de instrumentação eliminadas de `src/WindowsCM.App/App.xaml.cs`, `src/WindowsCM.App/PopupWindow.xaml.cs` e `src/WindowsCM.App/TrayManager.cs`.
-   - Script de transição `smoke-ui.ps1` removido da raiz.
-   - Gravação em disco: o aplicativo em execução não escreve mais nenhum arquivo em `%TEMP%`.
+1. **Removal of Temporary Logs**:
+   - `src/WindowsCM.Core/Diagnostics/TempSmokeLog.cs` and `tests/WindowsCM.Core.Tests/Diagnostics/TempSmokeLogTests.cs` removed.
+   - Instrumentation calls removed from `src/WindowsCM.App/App.xaml.cs`, `src/WindowsCM.App/PopupWindow.xaml.cs` and `src/WindowsCM.App/TrayManager.cs`.
+   - Transitional script `smoke-ui.ps1` removed from the root.
+   - Disk writes: the running application no longer writes any file to `%TEMP%`.
 
-2. **Suíte Completa Verde**:
-   - `dotnet build WindowsCM.sln`: 0 erros, 0 warnings.
-   - `dotnet test WindowsCM.sln`: **735/735 testes aprovados** (100% de sucesso).
+2. **Full Suite Green**:
+   - `dotnet build WindowsCM.sln`: 0 errors, 0 warnings.
+   - `dotnet test WindowsCM.sln`: **735/735 tests passed** (100% success).
 
-3. **Relatório Final (`smoke-report.md`)**:
-   - Documenta de ponta a ponta as provas dos tickets 21 a 24:
-     - Posicionamento determinístico nos 4 quadrantes (Top-Left, Top-Right, Bottom-Left, Bottom-Right, Centro) em 1080p com largura fixa de 380 DIPs e clamp de work area.
-     - Operações no Notepad: Enter (cola), Shift+Enter (só copia), clique simples (cola com idempotência), Shift+clique (só copia), navegação sem disparo indevido, e tratamento não-silencioso de foco perdido e item ausente.
-     - Proteção de alvo elevado via barreira UIPI (`IsTargetElevated` -> `CopiedOnlyElevated`), sem falha silenciosa.
-     - Ícone no system tray operando na gaveta de overflow do Windows 11 com feedback visual (flash 3x65ms + balão) e onboarding no Settings/Diagnóstico.
+3. **Final Report (`smoke-report.md`)**:
+   - Documents the proofs from tickets 21 to 24 end to end:
+     - Deterministic placement in the 4 quadrants (Top-Left, Top-Right, Bottom-Left, Bottom-Right, Center) at 1080p with a fixed width of 380 DIPs and a work area clamp.
+     - Notepad operations: Enter (pastes), Shift+Enter (copies only), single click (pastes with idempotence), Shift+click (copies only), navigation without spurious triggering, and non-silent handling of lost focus and missing item.
+     - Elevated target protection via the UIPI barrier (`IsTargetElevated` -> `CopiedOnlyElevated`), with no silent failure.
+     - System tray icon operating in the Windows 11 tray overflow with visual feedback (flash 3x65ms + balloon) and onboarding in Settings/Diagnostics.
 
-4. **Comportamentos Adiados Documentados**:
-   - Telas completas de configuração (History, Exclusions, Dialog/Item/Header, Shortcuts, Actions UI), syntax highlighting via AvalonEdit, reprodução de áudio/wav via MediaPlayer, caret-UIA global e empacotamento MSIX listados com justificativa clara para follow-up pós-MVP.
+4. **Deferred Behaviors Documented**:
+   - Full Settings screens (History, Exclusions, Dialog/Item/Header, Shortcuts, Actions UI), syntax highlighting via AvalonEdit, audio/wav playback via MediaPlayer, global caret-UIA and MSIX packaging listed with a clear justification for post-MVP follow-up.

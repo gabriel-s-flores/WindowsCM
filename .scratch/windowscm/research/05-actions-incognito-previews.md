@@ -1,18 +1,18 @@
-# 05 — Ações + incognito + colar + previews/sons/toast + IPC (porte Windows)
+# 05 — Actions + incognito + paste + previews/sounds/toast + IPC (Windows port)
 
-Ticket: `.scratch/windowscm/issues/05-research-actions-incognito-previews.md` (não editado).
-Base portada (não re-auditada): `.scratch/windowscm/research/01-parity-inventory.md` §§4 (ações) e 8 (dependências) + `.scratch/windowscm/research/02-clipboard-core.md` (colar/single-instance).
-Método: só fontes primárias — Microsoft Learn + docs oficiais das libs (GitHub/LICENSE + NuGet). Cada claim de API cita o Learn; cada lib traz nome+versão+licença+link oficial.
+Ticket: `.scratch/windowscm/issues/05-research-actions-incognito-previews.md` (not edited).
+Ported baseline (not re-audited): `.scratch/windowscm/research/01-parity-inventory.md` §§4 (actions) and 8 (dependencies) + `.scratch/windowscm/research/02-clipboard-core.md` (paste/single-instance).
+Method: primary sources only — Microsoft Learn + the libs' official docs (GitHub/LICENSE + NuGet). Every API claim cites Learn; every lib comes with name+version+license+official link.
 
-## 1. Modelo `actions.json` portado
+## 1. Ported `actions.json` model
 
 ### 1.1 Path
 - `%AppData%\WindowsCM\actions.json` = `Environment.GetFolderPath(SpecialFolder.ApplicationData)` + `WindowsCM\actions.json`.
-  `ApplicationData` (26) = roaming-user repo; `LocalApplicationData` (28) = non-roaming. Escolher `ApplicationData` preserva a semântica do `getConfigPath` XDG do original.
+  `ApplicationData` (26) = roaming-user repo; `LocalApplicationData` (28) = non-roaming. Choosing `ApplicationData` preserves the semantics of the original's XDG `getConfigPath`.
   [GetFolderPath](https://learn.microsoft.com/en-us/dotnet/api/system.environment.getfolderpath?view=net-10.0) · [SpecialFolder](https://learn.microsoft.com/en-us/dotnet/api/system.environment.specialfolder?view=net-10.0)
-- Criar dir se ausente; escrita atômica (tmp + move) + indentação com tab (paridade com `actions.ts:294`); manter flag `backup` antes de Reset/Restore.
+- Create the dir if missing; atomic write (tmp + move) + tab indentation (parity with `actions.ts:294`); keep the `backup` flag before Reset/Restore.
 
-### 1.2 Schema (porta 1:1 de `01 §4`)
+### 1.2 Schema (1:1 port of `01 §4`)
 ```jsonc
 {
   "actions": [
@@ -22,50 +22,50 @@ Método: só fontes primárias — Microsoft Learn + docs oficiais das libs (Git
       "types": ["Color"], "output": "copy|paste" },
     { "kind": "qrcode", "id": "<uuid>", "name": "...",
       "types": [], "output": "ignore", "shortcut": "Ctrl+Q" },
-    { "name": "Open", "actions": [ /* submenu aninhado, mesmo shape */ ] }
+    { "name": "Open", "actions": [ /* nested submenu, same shape */ ] }
   ],
   "defaults": { "File": "<id>", "Files": "<id>", "Link": "<id>" }
 }
 ```
-- `kinds`: `command` (+`command`), `color` (+`space`, `types:[Color]`, `output:copy|paste`), `qrcode` (`output:ignore` fixo). Submenu = `{name, actions}` recursivo. `types: []`/nulo = todos os 8 `ItemType` (Text, Code, Image, File, Files, Link, Character, Color — `01 §1`).
-- `output`: `ignore|copy|paste` (comando); cor só `copy|paste`; QR só `ignore`.
-- `shortcut`: string WPF (`Ctrl+Q`) em vez de `<Control>q` GTK; parse para `KeyGesture`. Default `qrcode` = `Ctrl+Q`.
-- `defaults`: `Partial<Record<ItemType, id>>`; UI de Default Actions tem 1 linha por tipo (8) com opção None (`01 §4`).
-- Desserializar com `System.Text.Json` (`JsonSerializerOptions{PropertyNameCaseInsensitive=true, ReadCommentHandling=Skip, AllowTrailingCommas=true}`); desconhecidos → ignorar (forward-compat).
+- `kinds`: `command` (+`command`), `color` (+`space`, `types:[Color]`, `output:copy|paste`), `qrcode` (fixed `output:ignore`). Submenu = recursive `{name, actions}`. `types: []`/null = all 8 `ItemType` values (Text, Code, Image, File, Files, Link, Character, Color — `01 §1`).
+- `output`: `ignore|copy|paste` (command); color only `copy|paste`; QR only `ignore`.
+- `shortcut`: WPF string (`Ctrl+Q`) instead of GTK `<Control>q`; parsed into a `KeyGesture`. Default `qrcode` = `Ctrl+Q`.
+- `defaults`: `Partial<Record<ItemType, id>>`; the Default Actions UI has 1 row per type (8) with a None option (`01 §4`).
+- Deserialize with `System.Text.Json` (`JsonSerializerOptions{PropertyNameCaseInsensitive=true, ReadCommentHandling=Skip, AllowTrailingCommas=true}`); unknowns → ignore (forward-compat).
 
-### 1.3 Regex .NET vs JS RegExp — diferenças a documentar no spec
-- Motor: `System.Text.RegularExpressions.Regex.IsMatch(input, pattern)` / `Match()` para grupos. Original usa `new RegExp(pattern)` + `test`/`match` (`01 §4`).
+### 1.3 .NET Regex vs JS RegExp — differences to document in the spec
+- Engine: `System.Text.RegularExpressions.Regex.IsMatch(input, pattern)` / `Match()` for groups. The original uses `new RegExp(pattern)` + `test`/`match` (`01 §4`).
   [Regex.IsMatch](https://learn.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.ismatch?view=net-10.0) · [Regex.Match](https://learn.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.match?view=net-9.0)
-- Diferenças load-bearing:
-  1. **Semântica default ≠ ECMAScript.** .NET default = canônico (Unicode: `\w` ≈ `[\p{Ll}\p{Lu}\p{Lt}\p{Lo}\p{Nd}\p{Pc}\p{Lm}]`); JS = ASCII (`[A-Za-z0-9_]`). `RegexOptions.ECMAScript` aproxima do JS mas só combina com `IgnoreCase|Multiline|Compiled` e muda classe de caracteres/backreference. Não ativar por default — documentar que `^(?!rgb)` etc. continuam válidos, mas `\w/\b/\d` casam mais que no JS. [Regular-Expression-Options / ECMAScript](https://learn.microsoft.com/en-us/dotnet/standard/base-types/regular-expression-options)
-  2. **Timeout obrigatório.** Patterns vêm do usuário (actions.json editável) → sempre construir `new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2))` e tratar `RegexMatchTimeoutException` como *no-match*. Recomendação oficial: timeout ~2 s; patterns não-confiáveis exigem timeout. [Best-Practices](https://learn.microsoft.com/en-us/dotnet/standard/base-types/best-practices-regex) · [MatchTimeout](https://learn.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.matchtimeout?view=net-9.0)
-  3. **Regex inválida = sem match** (paridade): `try/catch (ArgumentException)` no `new Regex` → `testAction=false`, `matchAction=null` (`01 §4`: `:91-93`, `:110-112`).
-  4. **Grupos:** `match.Groups[1..]` (índice 1-based; `Groups[0]` = match inteiro) — equivalente aos `grupos...` passados após `_` no `sh -c` original.
-- Matching portado: filtro `types` primeiro (vazio = todos) → `IsMatch` com timeout → `isDefaultAction`/`findDefaultAction` por `defaults[entry.type]` (`01 §4`).
+- Load-bearing differences:
+  1. **Default semantics ≠ ECMAScript.** .NET default = canonical (Unicode: `\w` ≈ `[\p{Ll}\p{Lu}\p{Lt}\p{Lo}\p{Nd}\p{Pc}\p{Lm}]`); JS = ASCII (`[A-Za-z0-9_]`). `RegexOptions.ECMAScript` approximates JS but only combines with `IgnoreCase|Multiline|Compiled` and changes character classes/backreferences. Do not enable it by default — document that `^(?!rgb)` etc. remain valid, but `\w/\b/\d` match more than in JS. [Regular-Expression-Options / ECMAScript](https://learn.microsoft.com/en-us/dotnet/standard/base-types/regular-expression-options)
+  2. **Mandatory timeout.** Patterns come from the user (editable actions.json) → always construct `new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2))` and treat `RegexMatchTimeoutException` as *no-match*. Official recommendation: timeout ~2 s; untrusted patterns require a timeout. [Best-Practices](https://learn.microsoft.com/en-us/dotnet/standard/base-types/best-practices-regex) · [MatchTimeout](https://learn.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.matchtimeout?view=net-9.0)
+  3. **Invalid regex = no match** (parity): `try/catch (ArgumentException)` around `new Regex` → `testAction=false`, `matchAction=null` (`01 §4`: `:91-93`, `:110-112`).
+  4. **Groups:** `match.Groups[1..]` (1-based index; `Groups[0]` = the whole match) — equivalent to the `groups...` passed after `_` in the original `sh -c`.
+- Ported matching: `types` filter first (empty = all) → `IsMatch` with timeout → `isDefaultAction`/`findDefaultAction` by `defaults[entry.type]` (`01 §4`).
 
 ### 1.4 CRUD + Reset/Restore + reload
-- CRUD na prefs espelha `actionsPage.ts`: Command exige nome+comando; Color exige nome+espaço (10 espaços); QR exige nome; ids novos = `Guid.NewGuid().ToString()` (porte de `uuid_string_random`).
-- Restore = merge built-ins faltantes **por id**, preserva customs + `defaults` do usuário; Reset = volta a `defaultConfig` integral; ambos com backup (`01 §4`: merge `:345`, badge `countDifference` `:329`).
-- Reload ao vivo: `FileSystemWatcher` (NotifyFilters.LastWrite|Size, `InternalBufferSize=4KB`, debounce ~250 ms, retry open 5× pois editor segura lock) substitui `FileMonitor` Gio (`01 §4` `:131-137`). [FileSystemWatcher](https://learn.microsoft.com/en-us/dotnet/api/system.io.filesystemwatcher?view=net-10.0)
+- CRUD in the prefs mirrors `actionsPage.ts`: Command requires name+command; Color requires name+space (10 spaces); QR requires a name; new ids = `Guid.NewGuid().ToString()` (port of `uuid_string_random`).
+- Restore = merge missing built-ins **by id**, preserving customs + the user's `defaults`; Reset = back to the full `defaultConfig`; both with backup (`01 §4`: merge `:345`, badge `countDifference` `:329`).
+- Live reload: `FileSystemWatcher` (NotifyFilters.LastWrite|Size, `InternalBufferSize=4KB`, debounce ~250 ms, retry open 5× because the editor holds a lock) replaces the Gio `FileMonitor` (`01 §4` `:131-137`). [FileSystemWatcher](https://learn.microsoft.com/en-us/dotnet/api/system.io.filesystemwatcher?view=net-10.0)
 
-## 2. Defaults Windows + execução de comando
+## 2. Windows defaults + command execution
 
-### 2.1 Tabela de porte (de `01 §4` defaults + `01 §8` shell defaults)
-| id original | comando GNOME | porte Windows | API |
+### 2.1 Port table (from `01 §4` defaults + `01 §8` shell defaults)
+| original id | GNOME command | Windows port | API |
 |---|---|---|---|
-| `open-with-default` (`xargs xdg-open`, Image+File) | abre app padrão | `Process.Start(new ProcessStartInfo(path){UseShellExecute=true})`; verbo default (`lpVerb=NULL` = comando default do tipo) | [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0) · [Launching-Applications ShellExecute](https://learn.microsoft.com/en-us/windows/win32/shell/launch) · [Process.Start](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.start?view=net-9.0) |
-| `open-with-files` (`nautilus -s $1`, pattern `^(.*)`) | revela no gerenciador | `explorer.exe /select,"<path>"` (v1); ideal `SHOpenFolderAndSelectItems` via P/Invoke (sem processo filho) em v1.1 | [SHOpenFolderAndSelectItems](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems) (requer `CoInitialize/Ex` antes) |
-| `open-with-browser` (`xargs xdg-open`, Link) | abre browser default | `Process.Start(new ProcessStartInfo(url){UseShellExecute=true})` — abre browser default registrado | [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-7.0) ("any registered file type … default open action") |
-| `paste-as-path` (`cut -c8-`, paste, Image+File+Files) | cola path sem `file://` | `path = Uri.UnescapeDataString(s.Replace("file://","").Trim().Trim('/'))`; Files = um por linha; `output:paste` | [Uri.UnescapeDataString](https://learn.microsoft.com/en-us/dotnet/api/system.uri.unescapedatastring?view=net-10.0) (não converte `+`→espaço — correto para paths) |
-| conversões de cor (rgb/hex/hsl/oklch + hwb/linear/xyz/lab/lch/oklab comentados) | `Color.toColor(space)` | reusar **parser portado de 01** (`color.ts:160-174`, `:329-343`); mesma lista ativa/comentada, mesmos `^(?!…)` guards, `output:paste`, `shortcut:[]` | — (lógica portada, sem API nova) |
-| `qrcode` (Text+Code+Link+Character+Color, ignore, `Ctrl+Q`) | diálogo QR | diálogo WPF + lib abaixo; atalho `Ctrl+Q` (`KeyGesture`) | — |
+| `open-with-default` (`xargs xdg-open`, Image+File) | opens the default app | `Process.Start(new ProcessStartInfo(path){UseShellExecute=true})`; default verb (`lpVerb=NULL` = the type's default command) | [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0) · [Launching-Applications ShellExecute](https://learn.microsoft.com/en-us/windows/win32/shell/launch) · [Process.Start](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.start?view=net-9.0) |
+| `open-with-files` (`nautilus -s $1`, pattern `^(.*)`) | reveals it in the file manager | `explorer.exe /select,"<path>"` (v1); ideally `SHOpenFolderAndSelectItems` via P/Invoke (no child process) in v1.1 | [SHOpenFolderAndSelectItems](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems) (requires `CoInitialize/Ex` first) |
+| `open-with-browser` (`xargs xdg-open`, Link) | opens the default browser | `Process.Start(new ProcessStartInfo(url){UseShellExecute=true})` — opens the registered default browser | [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-7.0) ("any registered file type … default open action") |
+| `paste-as-path` (`cut -c8-`, paste, Image+File+Files) | pastes the path without `file://` | `path = Uri.UnescapeDataString(s.Replace("file://","").Trim().Trim('/'))`; Files = one per line; `output:paste` | [Uri.UnescapeDataString](https://learn.microsoft.com/en-us/dotnet/api/system.uri.unescapedatastring?view=net-10.0) (does not convert `+`→space — correct for paths) |
+| color conversions (rgb/hex/hsl/oklch + commented-out hwb/linear/xyz/lab/lch/oklab) | `Color.toColor(space)` | reuse the **parser ported from 01** (`color.ts:160-174`, `:329-343`); same active/commented-out list, same `^(?!…)` guards, `output:paste`, `shortcut:[]` | — (ported logic, no new API) |
+| `qrcode` (Text+Code+Link+Character+Color, ignore, `Ctrl+Q`) | QR dialog | WPF dialog + the lib below; `Ctrl+Q` shortcut (`KeyGesture`) | — |
 
-- Nota `UseShellExecute`: default `true` no .NET Framework, **`false` no .NET Core/5+** — setar explicitamente `true` nos 3 opens. `UseShellExecute=false` é obrigatório para redirect stdin/stdout (§2.2) e proíbe abrir documentos. [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0)
-- Nota `explorer /select,`: switch documentado (`/select,object` abre view com objeto selecionado); path com espaços exige quoting `/select,"C:\…"`; alternativa programática `SHOpenFolderAndSelectItems` evita spawn e trata multi-select via PIDLs.
+- `UseShellExecute` note: default `true` on .NET Framework, **`false` on .NET Core/5+** — explicitly set `true` in the 3 opens. `UseShellExecute=false` is mandatory for redirecting stdin/stdout (§2.2) and rules out opening documents. [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0)
+- `explorer /select,` note: documented switch (`/select,object` opens a view with the object selected); a path with spaces requires quoting `/select,"C:\…"`; the programmatic alternative `SHOpenFolderAndSelectItems` avoids a spawn and handles multi-select via PIDLs.
 
-### 2.2 Execução de `command` (porte de `actionMenu.ts:199-232`)
-- Original: `sh -c <command> _ <grupos...>` com **stdin = conteúdo**, timeout **30 s**, stdout `trim`, vazio = ignora, `copy|paste` emitem sinais (`01 §4`).
-- Porte:
+### 2.2 `command` execution (port of `actionMenu.ts:199-232`)
+- Original: `sh -c <command> _ <groups...>` with **stdin = content**, timeout **30 s**, stdout `trim`, empty = ignored, `copy|paste` emit signals (`01 §4`).
+- Port:
   ```csharp
   var psi = new ProcessStartInfo {
       FileName = "cmd.exe", Arguments = "/c " + action.Command + " " + string.Join(" ", groups),
@@ -74,99 +74,99 @@ Método: só fontes primárias — Microsoft Learn + docs oficiais das libs (Git
       CreateNoWindow = true, StandardInputEncoding = Encoding.UTF8,
       StandardOutputEncoding = Encoding.UTF8 };
   ```
-  escrever `content` no `StandardInput` e fechar; `WaitForExit(30_000)` else `Kill(entireProcessTree:true)`; stdout `Trim()`, vazio = ignora; `copy` = set clipboard, `paste` = set + SendInput (§5).
+  write `content` to `StandardInput` and close it; `WaitForExit(30_000)` else `Kill(entireProcessTree:true)`; stdout `Trim()`, empty = ignored; `copy` = set clipboard, `paste` = set + SendInput (§5).
   [RedirectStandardOutput](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.redirectstandardoutput?view=net-10.0) · [StandardOutput](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.standardoutput?view=net-10.0) · [WaitForExit(Int32)](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.waitforexit?view=net-10.0)
-- Armadilhas documentadas no Learn (trancar no spec):
-  - `Redirect*=true` exige `UseShellExecute=false`, senão exceção.
-  - Deadlock: **ler stdout/stderr antes/de forma assíncrona**, nunca `WaitForExit()` antes de `ReadToEnd()` com filho verboso; usar `BeginOutputReadLine/BeginErrorReadLine` + `WaitForExit(timeout)` + `WaitForExit()` sem arg pós-`true` para drenar handlers.
-  - `$1` (sh) **vira `%1` (cmd)** — comandos built-in que usam `$1` (`nautilus -s $1`) precisam de reescrita no `defaultConfig` Windows; grupos extras = `%2…`. Variáveis de ambiente: via `psi.Environment` (não herdar cegamente) + `WorkingDirectory` explícito.
-- Timeout 30 s preservado como constante (`ActionTimeoutMs = 30_000`).
+- Pitfalls documented on Learn (lock them into the spec):
+  - `Redirect*=true` requires `UseShellExecute=false`, otherwise an exception.
+  - Deadlock: **read stdout/stderr first/asynchronously**, never `WaitForExit()` before `ReadToEnd()` with a verbose child; use `BeginOutputReadLine/BeginErrorReadLine` + `WaitForExit(timeout)` + an argument-less `WaitForExit()` after `true` to drain the handlers.
+  - `$1` (sh) **becomes `%1` (cmd)** — built-in commands that use `$1` (`nautilus -s $1`) need rewriting in the Windows `defaultConfig`; extra groups = `%2…`. Environment variables: via `psi.Environment` (do not inherit blindly) + an explicit `WorkingDirectory`.
+- 30 s timeout preserved as a constant (`ActionTimeoutMs = 30_000`).
 
-### 2.3 QR — UMA lib recomendada
-- **Recomendada: QRCoder — v1.8.0 — MIT — [GitHub](https://github.com/Shane32/QRCoder) ([LICENSE.txt MIT](https://github.com/Shane32/QRCoder/blob/master/LICENSE.txt)) · [NuGet](https://www.nuget.org/packages/QRCoder/)** (puro-QR, sem System.Drawing obrigatório no core, `QRCodeGenerator` → `BitmapByteQRCode`/`PngByteQRCode` encaixa direto em `Image` WPF via `BitmapImage`; mantido, 1.8.0 em 04/2026).
-- **Rejeitada: ZXing.Net — v0.16.11 — Apache-2.0 — [GitHub](https://github.com/micjahn/ZXing.Net/) · [NuGet](https://www.nuget.org/packages/ZXing.Net)** — barcode geral (decodifica+gera N formatos), superfície maior, release train mais lento; só faria sentido se spec pedisse *leitura* de QR de imagens do histórico (não pede — original só *gera*).
-- Render v1: `PngByteQRCode.GetGraphic(pixelsPerModule:20)` → `BitmapImage` (sem escrita em disco); diálogo mostra + botão Copy (PNG no clipboard) — `output:ignore` preservado (ação não injeta texto).
+### 2.3 QR — ONE recommended lib
+- **Recommended: QRCoder — v1.8.0 — MIT — [GitHub](https://github.com/Shane32/QRCoder) ([LICENSE.txt MIT](https://github.com/Shane32/QRCoder/blob/master/LICENSE.txt)) · [NuGet](https://www.nuget.org/packages/QRCoder/)** (pure QR, no mandatory System.Drawing in the core, `QRCodeGenerator` → `BitmapByteQRCode`/`PngByteQRCode` plugs straight into a WPF `Image` via `BitmapImage`; maintained, 1.8.0 in 04/2026).
+- **Rejected: ZXing.Net — v0.16.11 — Apache-2.0 — [GitHub](https://github.com/micjahn/ZXing.Net/) · [NuGet](https://www.nuget.org/packages/ZXing.Net)** — general barcode (decodes+generates N formats), larger surface, slower release train; would only make sense if the spec asked for *reading* QR codes from history images (it does not — the original only *generates*).
+- Render v1: `PngByteQRCode.GetGraphic(pixelsPerModule:20)` → `BitmapImage` (no disk write); the dialog shows it + a Copy button (PNG to the clipboard) — `output:ignore` preserved (the action does not inject text).
 
 ## 3. Incognito
 
-- **Estado em memória, não persistido.** `01` não lista nenhuma chave gschema para incognito (todas as chaves de Behavior/Feedback estão inventariadas e nenhuma é incognito) e `shouldSave` lê flag runtime (`clipboard.ts:236`); portanto o original é transiente por sessão. Porte: `bool _incognito` no serviço de clipboard, default `false`, resetado a cada launch.
-- **Toggle:** hotkey global de 03 (`toggle-incognito-mode-shortcut`, default GNOME `Super+Control+Shift+V` → mapear em 03) + toggle no header/footer do popup + item no menu do tray. Todos chamam o mesmo `ToggleIncognito()`.
-- **Indicador visual (2 superfícies):** (a) popup: chip/badge "Incognito" no header + tint escura nos cards (paridade com classe CSS do original); (b) tray: overlay no ícone (cadeado/ponto) + tooltip "WindowsCM — incognito on". Nenhum toast por toggle (evita vazar que o usuário entrou em modo privado no Action Center).
-- **Regra anti-vazamento (preservar, de `02`/`01 §2`):** `prevClipboard=[type,checksum]` é setado **antes** de `shouldSave`, de modo que cópia feita em incognito atualiza o dedup e não vaza no evento seguinte ao desligar o modo (`clipboard.ts:269-274`). Porte literal: no handler `WM_CLIPBOARDUPDATE`, computar checksum → atualizar `prevClipboard` → só então checar `if (_incognito) return;`.
+- **In-memory state, not persisted.** `01` lists no gschema key for incognito (all Behavior/Feedback keys are inventoried and none is incognito) and `shouldSave` reads a runtime flag (`clipboard.ts:236`); therefore the original is transient per session. Port: `bool _incognito` in the clipboard service, default `false`, reset on every launch.
+- **Toggle:** global hotkey from 03 (`toggle-incognito-mode-shortcut`, GNOME default `Super+Control+Shift+V` → map in 03) + a toggle in the popup header/footer + an item in the tray menu. All call the same `ToggleIncognito()`.
+- **Visual indicator (2 surfaces):** (a) popup: "Incognito" chip/badge in the header + a dark tint on the cards (parity with the original's CSS class); (b) tray: overlay on the icon (padlock/dot) + tooltip "WindowsCM — incognito on". No toast per toggle (avoids leaking in the Action Center that the user entered private mode).
+- **Anti-leak rule (preserve, from `02`/`01 §2`):** `prevClipboard=[type,checksum]` is set **before** `shouldSave`, so a copy made in incognito updates the dedup and does not leak on the next event after the mode is turned off (`clipboard.ts:269-274`). Literal port: in the `WM_CLIPBOARDUPDATE` handler, compute the checksum → update `prevClipboard` → only then check `if (_incognito) return;`.
 
-## 4. `ClearHistory(all)` + auto-limpeza em restart/logout/shutdown
+## 4. `ClearHistory(all)` + auto-clear on restart/logout/shutdown
 
-- **Semântica (de `01 §3`+`§6`):** `ClearHistory(all:boolean)`; `all=true` → `Clear` (tudo); `false`/`-1`(auto) → pref `clipboard-history` (`KeepAll=nada | KeepPinnedAndTagged | Clear`). DBus `ClearHistory(in b all)` (`dbus.ts:7`); auto-limpeza via `ConfirmedLogout/Reboot/Shutdown` (SessionManager) + `PrepareForShutdown` (login1) → `emit('clear-history', -1)` → pref atual (`extension.ts:105`).
-- **Porte Windows:**
-  - `Microsoft.Win32.SystemEvents.SessionEnding` (cancelável, `Cancel=true` só *pede* continuação, sem garantia) para o caso logout/restart/shutdown iniciado pelo usuário; `SystemEvents.SessionEnded` (pós-fato, só registra) como best-effort.
+- **Semantics (from `01 §3`+`§6`):** `ClearHistory(all:boolean)`; `all=true` → `Clear` (everything); `false`/`-1`(auto) → `clipboard-history` pref (`KeepAll=nothing | KeepPinnedAndTagged | Clear`). DBus `ClearHistory(in b all)` (`dbus.ts:7`); auto-clear via `ConfirmedLogout/Reboot/Shutdown` (SessionManager) + `PrepareForShutdown` (login1) → `emit('clear-history', -1)` → current pref (`extension.ts:105`).
+- **Windows port:**
+  - `Microsoft.Win32.SystemEvents.SessionEnding` (cancelable, `Cancel=true` only *requests* continuation, no guarantee) for the user-initiated logout/restart/shutdown case; `SystemEvents.SessionEnded` (after the fact, only records it) as best-effort.
     [SessionEnding](https://learn.microsoft.com/en-us/dotnet/api/microsoft.win32.systemevents.sessionending?view=windowsdesktop-10.0) · [SessionEnded](https://learn.microsoft.com/en-us/dotnet/api/microsoft.win32.systemevents.sessionended?view=windowsdesktop-10.0)
-  - **Limitações a trancar no spec:**
-    1. `SessionEnding/Ended` **só disparam com message pump rodando**; console apps não levantam; em serviço seria preciso hidden-form. App WPF (`Application.Run`) tem pump — OK sem janela oculta, mas o handler deve rodar no thread UI/dispatcher. (Learn SessionEnding remarks.)
-    2. **Tempo curto:** `WM_QUERYENDSESSION` → app deve retornar TRUE/FALSE imediatamente e adiar cleanup para `WM_ENDSESSION`. Janela de graça típica: ~5 s até o diálogo de bloqueio, ~30 s para concluir após TRUE; shutdown crítico (`ENDSESSION_CRITICAL`) não pode ser bloqueado. Não fazer I/O pesado; `ClearHistory` deve ser síncrono e <1 s (delete SQL + apaga thumbs do escopo). [WM_QUERYENDSESSION](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-queryendsession) · [Shutdown-Changes-Vista](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms700677(v=vs.85))
-    3. **Nunca cancelar** (`e.Cancel=true`) para reter histórico — respeitar intenção do usuário (Learn: default `DefWindowProc` retorna TRUE); só limpar e sair.
-    4. `SessionEnding` é **static** — desassinar no dispose (`SystemEvents.SessionEnding -= …`) ou vaza. (Learn remarks.)
-- Mapeamento CLI/IPC: `--clear` (= `false`: mantém pinned+tagged) e `--clear-all` (= `true`: tudo), ver §10.
+  - **Limitations to lock into the spec:**
+    1. `SessionEnding/Ended` **only fire with a running message pump**; console apps do not raise them; a service would need a hidden-form. A WPF app (`Application.Run`) has a pump — OK without a hidden window, but the handler must run on the UI/dispatcher thread. (Learn SessionEnding remarks.)
+    2. **Short time:** `WM_QUERYENDSESSION` → the app must return TRUE/FALSE immediately and defer cleanup to `WM_ENDSESSION`. Typical grace window: ~5 s until the blocking dialog, ~30 s to finish after TRUE; a critical shutdown (`ENDSESSION_CRITICAL`) cannot be blocked. No heavy I/O; `ClearHistory` must be synchronous and <1 s (SQL delete + deletes the in-scope thumbs). [WM_QUERYENDSESSION](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-queryendsession) · [Shutdown-Changes-Vista](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms700677(v=vs.85))
+    3. **Never cancel** (`e.Cancel=true`) to retain history — respect the user's intent (Learn: the default `DefWindowProc` returns TRUE); just clear and exit.
+    4. `SessionEnding` is **static** — unsubscribe on dispose (`SystemEvents.SessionEnding -= …`) or it leaks. (Learn remarks.)
+- CLI/IPC mapping: `--clear` (= `false`: keeps pinned+tagged) and `--clear-all` (= `true`: everything), see §10.
 
-## 5. Colar — decisão trancada (fluxo de `02`, sem re-pesquisa)
+## 5. Paste — locked decision (flow from `02`, no re-research)
 
-Fluxo normativo de `02 §Colar`: capturar alvo `GetForegroundWindow()` no hotkey → esconder UI e devolver foco (sem confiar em `SetForegroundWindow` — sem direito = só pisca taskbar) → assert `GetForegroundWindow()==alvo` → `SendInput` → delay pós-foco tunável.
+Normative flow from `02 §Pasting`: capture the target `GetForegroundWindow()` at hotkey time → hide the UI and hand focus back (without relying on `SetForegroundWindow` — no right = it only flashes the taskbar) → assert `GetForegroundWindow()==target` → `SendInput` → tunable post-focus delay.
 [GetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow) · [SetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow) · [SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)
 
-- **Default: `Ctrl+V`** (`Ctrl↓ V↓ V↑ Ctrl↑` via `SendInput`, checando `GetAsyncKeyState` de Ctrl/Shift antes). Motivo: funciona em 99% dos apps Win32/WPF/WinForms/browser; `Shift+Insert` falha em apps que não mapeiam CUA e cola *PRIMARY-like* em nada no Windows.
-- **`Shift+Insert` = opt-in configurável** (`paste-sequence: ctrlV|shiftInsert`, default `ctrlV`), não auto-detecção.
-- **Heurística de terminal (ConHost `ConsoleWindowClass` / `WindowsTerminal.exe` via `GetWindowThreadProcessId`+nome) ADIADA** como fallback configurável pós-v1 com spike empírico — lacuna `02-§Lacunas-1` explicitamente não re-pesquisada aqui; key bindings de terminal são user-configuráveis então qualquer heurística seria chute.
-- Timing: constante `PasteDelayMs` default **200 ms** (faixa 100–300, tunável), não os 250 ms literais do GNOME (`02 §Duvidosas`: sem prescrição no Windows; `SendInput` é serial sem intercalação). UIPI: contra app elevado, paste falha **silencioso** (sem `GetLastError`) — documentar "rode como admin se alvo for elevado".
+- **Default: `Ctrl+V`** (`Ctrl↓ V↓ V↑ Ctrl↑` via `SendInput`, checking `GetAsyncKeyState` for Ctrl/Shift first). Reason: works in 99% of Win32/WPF/WinForms/browser apps; `Shift+Insert` fails in apps that do not map CUA, and its *PRIMARY-like* paste applies to nothing on Windows.
+- **`Shift+Insert` = configurable opt-in** (`paste-sequence: ctrlV|shiftInsert`, default `ctrlV`), not auto-detection.
+- **Terminal heuristic (ConHost `ConsoleWindowClass` / `WindowsTerminal.exe` via `GetWindowThreadProcessId`+name) DEFERRED** as a post-v1 configurable fallback with an empirical spike — gap `02-§Gaps-1` explicitly not re-researched here; terminal key bindings are user-configurable, so any heuristic would be a guess.
+- Timing: `PasteDelayMs` constant, default **200 ms** (range 100–300, tunable), not GNOME's literal 250 ms (`02 §Dubious`: no prescription on Windows; `SendInput` is serial without interleaving). UIPI: against an elevated app, paste fails **silently** (no `GetLastError`) — document "run as admin if the target is elevated".
 
 ## 6. Link preview
 
-- **Transporte:** `HttpClient` singleton estático reutilizado (guideline: reusar instâncias no ciclo de vida), `Timeout = 5 s` (paridade com `idle_timeout:5` do Soup, `01 §8`; default .NET seria 100 s — longo demais para hover/cards), `DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; WindowsCM/1.0; +https://github.com/<org>/WindowsCM)")` (porte do `CopyousBot/1.0`), `Accept: text/html`, `GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts)` + `CancellationTokenSource` cancelado ao trocar de seleção/scroll-out.
-  [HttpClient](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient?view=net-10.0) · [Timeout](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient.timeout?view=net-10.0) · [Make-HTTP-requests](https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/http/httpclient) (reuso + `DefaultRequestHeaders.UserAgent` + cancelamento/timeout)
-- **Classificação (paridade `01 §8`):** só `Content-Type: text/html` vira metadata; `image/*` direto vira `{image:url}` + cache; resto = sem preview. Títulos: `og:title|twitter:title|<title>`, descrição idem, imagem `og:image*|twitter:image` + resolve relativo (`new Uri(base, rel)` = porte de `parse_relative`).
-- **Parser — UM recomendado:**
-  - **Recomendado: AngleSharp — v1.7.2 estável (1.8.0 em beta 09/2026) — MIT — [GitHub](https://github.com/AngleSharp/AngleSharp) ([LICENSE MIT](https://github.com/AngleSharp/AngleSharp/blob/master/LICENSE)) · [Docs](https://anglesharp.github.io/) · [Releases](https://github.com/AngleSharp/AngleSharp/releases)** — parser HTML5/CSS da spec W3C, DOM + `QuerySelector("meta[property='og:title']")`, tolerante a HTML quebrado; `BrowsingContext` desacoplado de rede (alimentamos string do HttpClient — sem fetch duplo).
-  - Rejeitado: **HtmlAgilityPack — v1.13.0 — MIT — [GitHub](https://github.com/zzzprojects/html-agility-pack) · [NuGet](https://www.nuget.org/packages/HtmlAgilityPack/)** — XPath/leniente e popular, mas DOM fora da spec, sem CSS, manutenção por vendor (ZzzProjects); só venceria se spec exigisse XPath legado.
-- **Cache imagem:** `MD5(url)` em `%LocalAppData%\WindowsCM\Cache\link-images\` (porte de `getCachePath` + `MD5(url)`); hit pula download; limite 50 MB LRU simples; respeitar `show-link-preview(-image)`, bg, orientação e **exclusion regex[]** (mesmo motor `Regex` com timeout do §1.3).
-- **Offline:** qualquer `HttpRequestException`/`TaskCanceledException` → item sem preview, sem retry, sem toast (paridade: preview é best-effort).
+- **Transport:** reused static singleton `HttpClient` (guideline: reuse instances across the lifetime), `Timeout = 5 s` (parity with Soup's `idle_timeout:5`, `01 §8`; the .NET default would be 100 s — too long for hover/cards), `DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; WindowsCM/1.0; +https://github.com/<org>/WindowsCM)")` (port of `CopyousBot/1.0`), `Accept: text/html`, `GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts)` + `CancellationTokenSource` canceled on selection change/scroll-out.
+  [HttpClient](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient?view=net-10.0) · [Timeout](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient.timeout?view=net-10.0) · [Make-HTTP-requests](https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/http/httpclient) (reuse + `DefaultRequestHeaders.UserAgent` + cancellation/timeout)
+- **Classification (parity `01 §8`):** only `Content-Type: text/html` becomes metadata; a direct `image/*` becomes `{image:url}` + cache; the rest = no preview. Titles: `og:title|twitter:title|<title>`, description likewise, image `og:image*|twitter:image` + relative resolution (`new Uri(base, rel)` = port of `parse_relative`).
+- **Parser — ONE recommended:**
+  - **Recommended: AngleSharp — v1.7.2 stable (1.8.0 in beta 09/2026) — MIT — [GitHub](https://github.com/AngleSharp/AngleSharp) ([LICENSE MIT](https://github.com/AngleSharp/AngleSharp/blob/master/LICENSE)) · [Docs](https://anglesharp.github.io/) · [Releases](https://github.com/AngleSharp/AngleSharp/releases)** — HTML5/CSS parser per the W3C spec, DOM + `QuerySelector("meta[property='og:title']")`, tolerant of broken HTML; `BrowsingContext` decoupled from the network (we feed it the HttpClient string — no double fetch).
+  - Rejected: **HtmlAgilityPack — v1.13.0 — MIT — [GitHub](https://github.com/zzzprojects/html-agility-pack) · [NuGet](https://www.nuget.org/packages/HtmlAgilityPack/)** — XPath/lenient and popular, but a non-spec DOM, no CSS, vendor maintenance (ZzzProjects); would only win if the spec required legacy XPath.
+- **Image cache:** `MD5(url)` in `%LocalAppData%\WindowsCM\Cache\link-images\` (port of `getCachePath` + `MD5(url)`); a hit skips the download; simple 50 MB LRU limit; honor `show-link-preview(-image)`, bg, orientation and **exclusion regex[]** (same `Regex` engine with the timeout from §1.3).
+- **Offline:** any `HttpRequestException`/`TaskCanceledException` → item without a preview, no retry, no toast (parity: preview is best-effort).
 
-## 7. Code highlight em WPF — UM caminho v1
+## 7. Code highlight in WPF — ONE v1 path
 
-- **Recomendado v1: AvalonEdit — v6.3.1.120 — MIT — [GitHub](https://github.com/icsharpcode/AvalonEdit) ([LICENSE MIT](https://github.com/icsharpcode/AvalonEdit/blob/master/LICENSE)) · [NuGet](https://www.nuget.org/packages/AvalonEdit) · [Site](http://avalonedit.net/)** — componente WPF nativo (SharpDevelop/ILSpy), `TextEditor{IsReadOnly=true, SyntaxHighlighting=HighlightingManager.GetDefinitionByExtension(lang)}`, dezenas de highlightings `.xshd` embutidos, folding disponível (não usar nos cards), sem runtime extra, sem bridge JS. Mapear `language.id` do classificador (porte `highlightAuto`) para extensão/definição; desconhecido → plain-text.
-- Rejeitados:
-  - **ColorCode-Universal — Core/HTML v2.0.15 — licença `Other` (não MIT limpo) — [GitHub](https://github.com/CommunityToolkit/ColorCode-Universal) · [NuGet](https://www.nuget.org/packages/ColorCode.HTML)** — set pequeno de linguagens, formatter HTML/UWP, exigiria formatter WPF custom; licença ambígua para bundle.
-  - **highlight.js via WebView2** (original usa hljs 11.11.1, `01 §1`) — peso: runtime Evergreen WebView2 (~100 MB+, deploy/boot extra) + bridge assíncrona por card + 192 pacotes de idioma; overkill para lista virtualizada; fora do v1.
-- **Fallback sem highlight (paridade):** texto escapado `TextBlock` monospace, como o original faz sem hljs (`codeLabel.ts:382`, `01 §8`).
+- **Recommended v1: AvalonEdit — v6.3.1.120 — MIT — [GitHub](https://github.com/icsharpcode/AvalonEdit) ([LICENSE MIT](https://github.com/icsharpcode/AvalonEdit/blob/master/LICENSE)) · [NuGet](https://www.nuget.org/packages/AvalonEdit) · [Site](http://avalonedit.net/)** — native WPF component (SharpDevelop/ILSpy), `TextEditor{IsReadOnly=true, SyntaxHighlighting=HighlightingManager.GetDefinitionByExtension(lang)}`, dozens of built-in `.xshd` highlightings, folding available (do not use it in the cards), no extra runtime, no JS bridge. Map the classifier's `language.id` (`highlightAuto` port) to an extension/definition; unknown → plain-text.
+- Rejected:
+  - **ColorCode-Universal — Core/HTML v2.0.15 — `Other` license (not clean MIT) — [GitHub](https://github.com/CommunityToolkit/ColorCode-Universal) · [NuGet](https://www.nuget.org/packages/ColorCode.HTML)** — small set of languages, HTML/UWP formatter, would require a custom WPF formatter; ambiguous license for bundling.
+  - **highlight.js via WebView2** (the original uses hljs 11.11.1, `01 §1`) — weight: Evergreen WebView2 runtime (~100 MB+, extra deploy/boot) + an async bridge per card + 192 language packs; overkill for a virtualized list; out of v1.
+- **Fallback without highlight (parity):** escaped text in a monospace `TextBlock`, as the original does without hljs (`codeLabel.ts:382`, `01 §8`).
 
-## 8. Sons
+## 8. Sounds
 
-Lista original (8, `01 §8`): `click, hum, string, swing, message, message-new-instant, bell, dialog-warning` (.ogg GNOME em `<datadir>/sounds/gnome/default/alerts/`). Pref original: `sound` enum + `volume -20…+20 dB` default 0.
+Original list (8, `01 §8`): `click, hum, string, swing, message, message-new-instant, bell, dialog-warning` (GNOME .ogg files in `<datadir>/sounds/gnome/default/alerts/`). Original pref: `sound` enum + `volume -20…+20 dB` default 0.
 
-- **Fato Learn:** `System.Media.SoundPlayer` **só toca `.wav`** (path/URL/Stream/recurso), com `Play/PlaySync/LoadAsync`; outros tipos (`.mp3/.wma/.ogg`) = não suportado (usar MediaPlayer).
+- **Learn fact:** `System.Media.SoundPlayer` **only plays `.wav`** (path/URL/Stream/resource), with `Play/PlaySync/LoadAsync`; other types (`.mp3/.wma/.ogg`) = not supported (use MediaPlayer).
   [SoundPlayer](https://learn.microsoft.com/en-us/dotnet/api/system.media.soundplayer?view=windowsdesktop-10.0) · [Overview](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/soundplayer-class-overview)
-- **Consequência:** os 8 `.ogg` GNOME **precisam ser convertidos para `.wav` (44.1 kHz/16-bit PCM)** e empacotados como `Resource` (ou `Content` em `%ProgramFiles%`); mapear nomes 1:1.
-- **Volume:** `SoundPlayer` **não tem propriedade de volume** (toca no volume do sistema) → slider `-20…+20 dB` **inviável** com ele. Duas rotas:
-  - (a) **v1 recomendada — sem NAudio:** `System.Windows.Media.MediaPlayer` (`Volume 0…1` linear, `Open(Uri)+Play()`, toca mp3/wma/wav via WMP; manter referência viva senão GC para o áudio). Mapear dB→linear: `gain = 10^(dB/20)` clamp `0…1` (0 dB = 0.5? Não — 0 dB = `Volume 1.0`; -20 dB ≈ 0.1; +20 dB clampa em 1.0 com nota "ganho >0 dB não suportado sem DSP"). [MediaPlayer](https://learn.microsoft.com/en-us/dotnet/api/system.windows.media.mediaplayer?view=windowsdesktop-9.0) · [Control-MediaElement-Volume](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/how-to-control-a-mediaelement-play-pause-stop-volume-and-speed)
-  - (b) **Fiel-a-dB — com NAudio:** **NAudio — v2.3.0 (3.0 em preview) — MIT — [GitHub](https://github.com/naudio/NAudio) · [NuGet](https://www.nuget.org/packages/NAudio/)** (`AudioFileReader.Volume 0…1`, `WaveOutEvent`/WASAPI `WasapiOut`, `VolumeSampleProvider` aceita dB via `10^(dB/20)` sem clamp criativo). Custo: dependência nativa-ish maior + `AudioFileReader` não decodifica `.ogg` Vorbis out-of-box (precisaria NVorbis ou os `.wav` convertidos de qualquer forma).
-- **Decisão:** v1 = `MediaPlayer` + wavs convertidos + slider mapeado para `0…1` com rótulo dB preservado na UI (paridade visual, fidelidade parcial documentada); NAudio só se spike mostrar gap audível ou se pedirem `+dB` real.
+- **Consequence:** the 8 GNOME `.ogg` files **must be converted to `.wav` (44.1 kHz/16-bit PCM)** and packaged as `Resource` (or `Content` in `%ProgramFiles%`); map the names 1:1.
+- **Volume:** `SoundPlayer` **has no volume property** (it plays at the system volume) → a `-20…+20 dB` slider is **infeasible** with it. Two routes:
+  - (a) **recommended for v1 — without NAudio:** `System.Windows.Media.MediaPlayer` (linear `Volume 0…1`, `Open(Uri)+Play()`, plays mp3/wma/wav via WMP; keep a live reference, otherwise the GC stops the audio). Map dB→linear: `gain = 10^(dB/20)` clamped to `0…1` (0 dB = 0.5? No — 0 dB = `Volume 1.0`; -20 dB ≈ 0.1; +20 dB clamps at 1.0 with the note "gain >0 dB not supported without DSP"). [MediaPlayer](https://learn.microsoft.com/en-us/dotnet/api/system.windows.media.mediaplayer?view=windowsdesktop-9.0) · [Control-MediaElement-Volume](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/how-to-control-a-mediaelement-play-pause-stop-volume-and-speed)
+  - (b) **dB-faithful — with NAudio:** **NAudio — v2.3.0 (3.0 in preview) — MIT — [GitHub](https://github.com/naudio/NAudio) · [NuGet](https://www.nuget.org/packages/NAudio/)** (`AudioFileReader.Volume 0…1`, `WaveOutEvent`/WASAPI `WasapiOut`, `VolumeSampleProvider` accepts dB via `10^(dB/20)` without creative clamping). Cost: a larger native-ish dependency + `AudioFileReader` does not decode Vorbis `.ogg` out-of-box (it would need NVorbis or the converted `.wav` files anyway).
+- **Decision:** v1 = `MediaPlayer` + converted wavs + slider mapped to `0…1` with the dB label preserved in the UI (visual parity, documented partial fidelity); NAudio only if a spike shows an audible gap or if real `+dB` is requested.
 
-## 9. Notificações/toast + wiggle
+## 9. Notifications/toast + wiggle
 
-- **Fato Learn (bloqueador do toast fiel):** app **unpackaged** (nosso caso v1, sem MSIX) pode mandar toast mas com passos especiais: declarar **AUMID** (`Company.App`) + **CLSID stub** no atalho Start (`System.AppUserModel.ID`, `System.AppUserModel.ToastActivatorCLSID`), chamar `RegisterAumidAndComServer(AUMID, clsid)` no startup, instalar via installer antes de debugar, e com stub só **protocol activation** funciona; **imagens http não suportadas em unpackaged** (baixar para app-data local). Sem isso, toast silenciosamente não aparece.
+- **Learn fact (blocker for a faithful toast):** an **unpackaged** app (our v1 case, no MSIX) can send toasts, but with special steps: declare an **AUMID** (`Company.App`) + a **CLSID stub** on the Start menu shortcut (`System.AppUserModel.ID`, `System.AppUserModel.ToastActivatorCLSID`), call `RegisterAumidAndComServer(AUMID, clsid)` at startup, install via the installer before debugging, and with the stub only **protocol activation** works; **http images not supported when unpackaged** (download them to local app-data). Without this, the toast silently does not appear.
   [Toast-Desktop-Apps](https://learn.microsoft.com/en-us/windows/apps/develop/notifications/app-notifications/toast-desktop-apps) · [Send-Local-Toast C#](https://learn.microsoft.com/en-us/windows/apps/develop/notifications/app-notifications/send-local-toast) · [Migration-Guide Toolkit vs AppSDK](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/migrate-to-windows-app-sdk/guides/toast-notifications)
 - **Libs:**
-  - **Microsoft.Toolkit.Uwp.Notifications — v7.1.3 — MIT (.NET Foundation, header nos fontes) — [NuGet](https://www.nuget.org/packages/Microsoft.Toolkit.Uwp.Notifications/) · [ToastContentBuilder](https://learn.microsoft.com/en-us/dotnet/api/microsoft.toolkit.uwp.notifications.toastcontentbuilder?view=win-comm-toolkit-dotnet-7.1) · [Fonte](https://github.com/CommunityToolkit/WindowsCommunityToolkit/blob/main/Microsoft.Toolkit.Uwp.Notifications/Toasts/Builder/ToastContentBuilder.cs)** — `ToastContentBuilder().AddText(…).Show()` + `ToastNotificationManagerCompat.OnActivated`; caminho moderno alternativo = `Microsoft.WindowsAppSDK` `AppNotificationManager.Register()/Show()` (exige runtime WinAppSDK).
-- **Decisão v1: balão do tray (`NotifyIcon.ShowBalloonTip`), toast adiado para o marco MSIX.** `NotifyIcon.ShowBalloonTip(timeout, title, text, icon)`: sem AUMID/instalador/COM, uma chamada; timeout hoje **deprecated** (duração pelo SO/acessibilidade, tipicamente 10–30 s impostas pelo OS); um balão por vez.
+  - **Microsoft.Toolkit.Uwp.Notifications — v7.1.3 — MIT (.NET Foundation, header in the sources) — [NuGet](https://www.nuget.org/packages/Microsoft.Toolkit.Uwp.Notifications/) · [ToastContentBuilder](https://learn.microsoft.com/en-us/dotnet/api/microsoft.toolkit.uwp.notifications.toastcontentbuilder?view=win-comm-toolkit-dotnet-7.1) · [Source](https://github.com/CommunityToolkit/WindowsCommunityToolkit/blob/main/Microsoft.Toolkit.Uwp.Notifications/Toasts/Builder/ToastContentBuilder.cs)** — `ToastContentBuilder().AddText(…).Show()` + `ToastNotificationManagerCompat.OnActivated`; alternative modern path = `Microsoft.WindowsAppSDK` `AppNotificationManager.Register()/Show()` (requires the WinAppSDK runtime).
+- **v1 decision: tray balloon (`NotifyIcon.ShowBalloonTip`), toast deferred to the MSIX milestone.** `NotifyIcon.ShowBalloonTip(timeout, title, text, icon)`: no AUMID/installer/COM, one call; timeout now **deprecated** (duration set by the OS/accessibility, typically 10–30 s imposed by the OS); one balloon at a time.
   [ShowBalloonTip](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.notifyicon.showballoontip?view=windowsdesktop-10.0) · [NotifyIcon-Overview](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/notifyicon-component-overview-windows-forms)
-  Mapear pref `send-notification` (default false, `01 §5`) para o balão; toast Toolkit entra quando houver installer com AUMID + ícone local.
-- **Wiggle (indicador GNOME balança 2 px/65 ms×3, `01 §7`):** sem equivalente no tray. Porte = **(a)** animação de escala do popup na abertura (150 ms, paridade com animação do diálogo) **+ (b)** flash do ícone do tray (alternar `Icon` base/overlay 3×65 ms) a cada cópia nova quando `wiggle-indicator=true`. Sem shake de janela, sem som acoplado (som é pref separada).
+  Map the `send-notification` pref (default false, `01 §5`) to the balloon; the Toolkit toast comes in once there is an installer with an AUMID + a local icon.
+- **Wiggle (the GNOME indicator shakes 2 px/65 ms×3, `01 §7`):** no equivalent in the tray. Port = **(a)** popup scale animation on open (150 ms, parity with the dialog animation) **+ (b)** tray icon flash (alternate the `Icon` base/overlay 3×65 ms) on every new copy when `wiggle-indicator=true`. No window shake, no coupled sound (sound is a separate pref).
 
-## 10. IPC equivalente ao DBus (`Toggle/Show/Hide/ClearHistory`)
+## 10. IPC equivalent to DBus (`Toggle/Show/Hide/ClearHistory`)
 
-DBus original: iface `org.gnome.Shell.Extensions.Copyous`, métodos `Toggle, Show, Hide, ClearHistory(in b all)`, `ClearHistory(true)=tudo, false=mantém pinned+tagged` (`01 §6`).
+Original DBus: iface `org.gnome.Shell.Extensions.Copyous`, methods `Toggle, Show, Hide, ClearHistory(in b all)`, `ClearHistory(true)=everything, false=keeps pinned+tagged` (`01 §6`).
 
-- **Transporte: named pipe `System.IO.Pipes`.** Servidor na primeira instância (`NamedPipeServerStream`, `PipeDirection.InOut`, `PipeTransmissionMode.Byte`, `PipeOptions.Asynchronous|CurrentUserOnly`), loop `WaitForConnectionAsync` + `StreamReader/Writer` UTF-8 por linha.
+- **Transport: `System.IO.Pipes` named pipe.** Server in the first instance (`NamedPipeServerStream`, `PipeDirection.InOut`, `PipeTransmissionMode.Byte`, `PipeOptions.Asynchronous|CurrentUserOnly`), `WaitForConnectionAsync` loop + line-based UTF-8 `StreamReader/Writer`.
   [NamedPipeServerStream](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.namedpipeserverstream?view=net-10.0) · [NamedPipeClientStream](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.namedpipeclientstream?view=net-10.0) · [How-to-Named-Pipes](https://learn.microsoft.com/en-us/dotnet/standard/io/how-to-use-named-pipes-for-network-interprocess-communication)
-- **Nome + ACL (porte do handoff de `02`):** `Local\WindowsCM.<UserSid>` (sessão; `Local\` vs `Global\` em [Mutex](https://learn.microsoft.com/en-us/dotnet/api/system.threading.mutex?view=net-9.0)); isolamento por `PipeOptions.CurrentUserOnly` (só mesmo usuário **e** mesmo nível de elevação) em vez de `PipeSecurity` custom — `MutexSecurity`/ACL em mutex nomeado **não existe no .NET Core/5+** (`02 §Duvidosas`). `NamedPipeServerStreamAcl.Create` com `PipeSecurity` só se auditoria exigir ACL explícita.
+- **Name + ACL (port of the handoff from `02`):** `Local\WindowsCM.<UserSid>` (session; `Local\` vs `Global\` in [Mutex](https://learn.microsoft.com/en-us/dotnet/api/system.threading.mutex?view=net-9.0)); isolation via `PipeOptions.CurrentUserOnly` (only the same user **and** the same elevation level) instead of a custom `PipeSecurity` — `MutexSecurity`/ACL on a named mutex **does not exist on .NET Core/5+** (`02 §Dubious`). `NamedPipeServerStreamAcl.Create` with `PipeSecurity` only if an audit requires an explicit ACL.
   [PipeOptions.CurrentUserOnly](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.pipeoptions?view=net-10.0) · [NamedPipeServerStreamAcl.Create](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.namedpipeserverstreamacl.create?view=net-10.0)
-- **Single-instance (de `02`):** `new Mutex(false, @"Local\WindowsCM.<sid>", out createdNew)`; se `!createdNew` → `NamedPipeClientStream(".", pipename)` `Connect(2000)` → escreve comando → sai. Sem `MutexSecurity` no .NET 8.
-- **Protocolo v1 — linha de texto minúscula** (não JSON): `toggle | show | hide | clear | clear-all | ping` + `\n`; resposta `ok\n` / `unknown\n`. Motivo: comandos não têm payload; framing por linha evita half-read de JSON; case-insensitive; desconhecido = `unknown` sem crash. (JSON só se v2 precisar de args como `copy <id>`.)
-- **CLI:** `--toggle | --show | --hide | --clear | --clear-all` (`Environment.GetCommandLineArgs`). `--clear` = `ClearHistory(false)` (mantém pinned+tagged, = DBus `false`); `--clear-all` = `ClearHistory(true)` (tudo). Sem `--clear-pinned` separado (original não tem granularidade pinned-only; `KeepPinnedAndTagged` é atômico). Segunda instância com flag encaminha pela pipe e sai com código 0; sem servidor (stale mutex) → torna-se servidor.
+- **Single-instance (from `02`):** `new Mutex(false, @"Local\WindowsCM.<sid>", out createdNew)`; if `!createdNew` → `NamedPipeClientStream(".", pipename)` `Connect(2000)` → writes the command → exits. No `MutexSecurity` on .NET 8.
+- **v1 protocol — lowercase text line** (not JSON): `toggle | show | hide | clear | clear-all | ping` + `\n`; response `ok\n` / `unknown\n`. Reason: commands have no payload; line framing avoids a JSON half-read; case-insensitive; unknown = `unknown` without a crash. (JSON only if v2 needs args such as `copy <id>`.)
+- **CLI:** `--toggle | --show | --hide | --clear | --clear-all` (`Environment.GetCommandLineArgs`). `--clear` = `ClearHistory(false)` (keeps pinned+tagged, = DBus `false`); `--clear-all` = `ClearHistory(true)` (everything). No separate `--clear-pinned` (the original has no pinned-only granularity; `KeepPinnedAndTagged` is atomic). A second instance with a flag forwards through the pipe and exits with code 0; no server (stale mutex) → becomes the server.

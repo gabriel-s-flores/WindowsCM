@@ -1,18 +1,18 @@
-# Spec: Customização de Categorias de Arquivo, Extensões, Cores e Miniaturas do Windows
+# Spec: Customization of File Categories, Extensions, Colors and Windows Thumbnails
 
 Status: ready-for-agent
 
 ## Problem Statement
 
-No gerenciador de clipboard WindowsCM, todos os arquivos copiados são classificados genericamente sob o mesmo tipo (`File`), com uma única cor e rótulo básico, impedindo que o usuário diferencie visualmente apresentações de PowerPoint, planilhas do Excel, faixas de áudio, vídeos ou imagens vetoriais. Além disso, a funcionalidade de "Tags" herdada do Copyous (acessível pelo clique com o botão direito para atribuir uma de 9 cores avulsas) tornou-se desnecessária e confusa. Por fim, embora o Windows possua um subsistema maduro de miniaturas capazes de gerar pré-visualizações ricas de fotos, vídeos, capas de álbuns e documentos, o WindowsCM exibia apenas um ícone genérico de 40x40px para a maioria dos arquivos.
+In the WindowsCM clipboard manager, all copied files are classified generically under the same type (`File`), with a single color and a basic label, preventing the user from visually telling apart PowerPoint presentations, Excel spreadsheets, audio tracks, videos or vector images. In addition, the "Tags" feature inherited from Copyous (accessible by right-clicking to assign one of 9 standalone colors) has become unnecessary and confusing. Finally, although Windows has a mature thumbnail subsystem capable of generating rich previews of photos, videos, album covers and documents, WindowsCM showed only a generic 40x40px icon for most files.
 
 ## Solution
 
-1. Substituir a funcionalidade manual de Tags por um sistema semântico e personalizável de **Categorias de Arquivo** integrado às configurações de cores ("Cores dos Tipos").
-2. Permitir que o usuário visualize, edite e crie novas categorias de arquivos, customizando suas cores e quais extensões de arquivos pertencem a quais categorias (ex.: Imagens, Vídeos, Áudio, Documentos, Planilhas, Apresentações de PowerPoint, Código, Compactados).
-3. Integrar com o subsistema de associações do Windows (`HKEY_CLASSES_ROOT` e `PerceivedType`) para identificar automaticamente o tipo de extensões desconhecidas e fornecer opção de restauração dos padrões recomendados.
-4. Adicionar extração nativa assíncrona de miniaturas do Windows (`IShellItemImageFactory`) para exibir pré-visualizações visuais de alta qualidade (fotos, vídeos, áudios com capas, apresentações e PDFs) diretamente no corpo dos cards de histórico.
-5. Remover o submenu "Tags" do menu de clique direito dos itens e desativar os atalhos de teclado legados de tags.
+1. Replace the manual Tags feature with a semantic, customizable **File Categories** system integrated into the color settings ("Item Colors").
+2. Let the user view, edit and create new file categories, customizing their colors and which file extensions belong to which categories (e.g. Images, Videos, Audio, Documents, Spreadsheets, PowerPoint Presentations, Code, Archives).
+3. Integrate with the Windows associations subsystem (`HKEY_CLASSES_ROOT` and `PerceivedType`) to automatically identify the type of unknown extensions and provide an option to restore the recommended defaults.
+4. Add native asynchronous extraction of Windows thumbnails (`IShellItemImageFactory`) to show high-quality visual previews (photos, videos, audio with cover art, presentations and PDFs) directly in the body of the history cards.
+5. Remove the "Tags" submenu from the items' right-click menu and disable the legacy tag keyboard shortcuts.
 
 ## User Stories
 
@@ -23,20 +23,20 @@ No gerenciador de clipboard WindowsCM, todos os arquivos copiados são classific
 5. As a user, I want the right-click context menu of clipboard items to be clean and focused, without the obsolete "Tags" submenu.
 6. As a user, I want file thumbnail extraction to run asynchronously without freezing or slowing down the horizontal card scroll in the popup.
 7. As a user, I want unrecognized file extensions to automatically fallback to the Windows registry `PerceivedType`, so that standard Windows files are identified without manual setup.
-8. As a user, I want a "Restaurar Padrões do Windows" button in Settings to revert file category associations back to standard defaults if needed.
+8. As a user, I want a "Restore Windows Defaults" button in Settings to revert file category associations back to standard defaults if needed.
 9. As a user, I want all my custom categories and colors to be persisted reliably across application restarts.
 
 ## Implementation Decisions
 
 1. **File Category Model (`FileCategorySettings`)**:
-   - Built-in categories: Imagens, Vídeos, Áudio, Documentos, Planilhas, Apresentações, Código/Scripts, Compactados.
+   - Built-in categories: Images, Videos, Audio, Documents, Spreadsheets, Presentations, Code/Scripts, Archives.
    - Each category contains: `Id`, `Name`, `ColorHex`, `Extensions` (case-insensitive set), and `IsBuiltIn`.
    - Stored in `AppSettings.FileCategories` and persisted to `settings.json`.
 
 2. **Windows File Association Resolver (`WindowsFileTypeResolver`)**:
    - Queries `FileCategorySettings` first.
    - If extension is not found, inspects Windows Registry `HKEY_CLASSES_ROOT\<ext>\PerceivedType` and standard progids.
-   - Falls back gracefully to generic `Arquivo` if completely unknown.
+   - Falls back gracefully to generic `File` if completely unknown.
 
 3. **Native Thumbnail Extraction (`ThumbnailService`)**:
    - Uses COM interop `IShellItemImageFactory` with `SHCreateItemFromParsingName`.
@@ -51,7 +51,7 @@ No gerenciador de clipboard WindowsCM, todos os arquivos copiados são classific
    - Tag keyboard shortcuts (`Ctrl+Shift+1..9`, `Ctrl+\``) are removed from `PopupKeyboardMap`.
 
 5. **UI Updates in `SettingsWindow`**:
-   - The "Cores dos Tipos" tab is expanded with a dedicated file categories editor:
+   - The "Item Colors" tab is expanded with a dedicated file categories editor:
      - Table/list showing Category Name, Accent Color badge/hex input, and Extensions.
      - Controls to add a new category, edit extensions, remove custom categories, and restore defaults.
 

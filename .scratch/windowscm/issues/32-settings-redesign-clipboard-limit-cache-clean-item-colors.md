@@ -1,4 +1,4 @@
-# 32: Refatoramento Visual de Configurações, Limite de 100 Itens, Limpeza de Cache e Cores Customizadas por Tipo
+# 32: Settings Visual Refactoring, 100-Item Limit, Cache Clearing and Custom Colors per Type
 
 Type: task
 
@@ -7,43 +7,43 @@ Status: resolved
 Blocked by: 31
 
 ## User Report / Requirements:
-1. Refatoramento visual da área de configurações no padrão moderno Windows 11 Fluent Design.
-2. Configuração de limite máximo da área de clipboard: 100 como máximo e recomendado.
-3. Configuração para limpar cache diretamente no aplicativo com feedback em tempo real.
-4. Configuração para personalizar as cores dos tipos de arquivos, links, códigos e demais itens da clipboard.
-5. Execução pelo fluxo de Matt Pocock (seams acordadas, deep modules, TDD em fatias verticais red-green).
+1. Visual refactoring of the Settings area to the modern Windows 11 Fluent Design standard.
+2. A setting for the clipboard's maximum limit: 100 as both the maximum and the recommended value.
+3. A setting to clear the cache directly in the app, with real-time feedback.
+4. A setting to customize the colors of the file, link, code and other clipboard item types.
+5. Execution via Matt Pocock's flow (agreed seams, deep modules, TDD in red-green vertical slices).
 
 ## Answer
-Implementado e validado em 2026-09-12 seguindo com rigor o fluxo de Matt Pocock (`codebase-design`, `domain-modeling` e `tdd`):
+Implemented and validated on 2026-09-12, rigorously following Matt Pocock's flow (`codebase-design`, `domain-modeling` and `tdd`):
 
-1. **Limite Máximo e Recomendado da Área de Clipboard (100 itens)**:
-   - Atualizado `SettingLimits.cs` com `HistoryLengthMax = 100` e `HistoryLengthDefault = 100` (faixa 10..100).
-   - `HistorySettings.cs` e `AppSettings.cs` realizam clamp automático para a nova faixa limite.
-   - Adicionado slider Fluent na janela de configurações com display ao vivo (`100 itens`) e botão "Restaurar recomendado (100)".
-   - Atualização em tempo real aciona `_store.Evict` para truncar itens excedentes imediatamente ao reduzir o limite.
+1. **Maximum and Recommended Clipboard Limit (100 items)**:
+   - Updated `SettingLimits.cs` with `HistoryLengthMax = 100` and `HistoryLengthDefault = 100` (range 10..100).
+   - `HistorySettings.cs` and `AppSettings.cs` automatically clamp to the new limit range.
+   - Added a Fluent slider in the Settings window with a live display (`100 items`) and a "Restore recommended (100)" button.
+   - Real-time updates trigger `_store.Evict` to truncate excess items immediately when the limit is lowered.
 
-2. **Limpeza de Cache Diretamente no Aplicativo**:
-   - Criado módulo profundo `CacheCleaner.cs` em `WindowsCM.Core.Settings`: método estático puro `Clear(string cacheDir) -> CacheCleanResult`.
-   - Exclui com segurança todos os arquivos e subdiretórios de cache (favicons, miniaturas de links, arquivos temporários), preservando a integridade do histórico e diretórios de dados/configurações.
-   - Retorna contagem de arquivos excluídos e bytes liberados com tolerância a arquivos bloqueados por I/O.
-   - Interface com botão de ação rápida "Limpar Cache Agora" e feedback visual imediato em tempo real na janela de configurações.
+2. **Cache Clearing Directly in the App**:
+   - Created the deep module `CacheCleaner.cs` in `WindowsCM.Core.Settings`: pure static method `Clear(string cacheDir) -> CacheCleanResult`.
+   - Safely deletes all cache files and subdirectories (favicons, link thumbnails, temporary files), preserving the integrity of the history and of the data/settings directories.
+   - Returns the count of deleted files and freed bytes, tolerating files locked by I/O.
+   - Interface with a "Clear Cache Now" quick-action button and immediate real-time visual feedback in the Settings window.
 
-3. **Personalização de Cores dos Tipos de Itens**:
-   - Criado modelo `ItemColorSettings.cs` em `WindowsCM.Core.Settings`: propriedades para cada `ItemKind` (`Link`, `Code`, `File`, `Image`, `Character`, `Color`, `Text`), métodos de normalização de Hex (`#RGB`, `#RRGGBB`), validação e redefinição.
-   - Integrado ao `AppSettings.cs` com clamping e persistência em `settings.json`.
-   - Atualizado `ItemTypeTheme.cs` para suportar `ItemColorSettings?` com cálculo automático de fundo translúcido (alpha 12% no tema Claro, 15% no tema Escuro) a partir da cor personalizada.
-   - Atualizado `PopupThemeBrushes.cs` para gerar brushes dinâmicos a partir de `ItemColorSettings`.
-   - Na janela de configurações, lista completa com pré-visualização ao vivo de amostra de badge para cada tipo, caixas de entrada Hex, botões "Escolher cor" via seletor nativo, "Padrão" individual e "Restaurar todas as cores padrão".
-   - Sincronização imediata: ao alterar uma cor, o tema da aplicação e do popup são atualizados instantaneamente em tempo real.
+3. **Item Type Color Customization**:
+   - Created the `ItemColorSettings.cs` model in `WindowsCM.Core.Settings`: properties for each `ItemKind` (`Link`, `Code`, `File`, `Image`, `Character`, `Color`, `Text`), Hex normalization methods (`#RGB`, `#RRGGBB`), validation and reset.
+   - Integrated into `AppSettings.cs` with clamping and persistence in `settings.json`.
+   - Updated `ItemTypeTheme.cs` to support `ItemColorSettings?`, automatically computing the translucent background (alpha 12% in the Light theme, 15% in the Dark theme) from the custom color.
+   - Updated `PopupThemeBrushes.cs` to generate dynamic brushes from `ItemColorSettings`.
+   - In the Settings window, a complete list with a live preview of a sample badge for each type, Hex input boxes, "Choose color" buttons via the native picker, an individual "Default" button and "Restore all default colors".
+   - Immediate synchronization: when a color is changed, the application and popup themes are updated instantly in real time.
 
-4. **Refatoramento Visual Completo da Janela de Configurações (Windows 11 Fluent Design)**:
-   - Redesenhada a interface `SettingsWindow.xaml` e `SettingsWindow.xaml.cs` com layout moderno de duas colunas (Sidebar com ícones Fluent e navegação por abas).
-   - Suporte dinâmico aos temas Claro e Escuro do Windows 11 com brushes do `PopupThemeBrushes`.
-   - Cards arredondados com hierarquia tipográfica (`Segoe UI Variable Text`), bordas sutis e sombras.
-   - 5 seções bem estruturadas: Histórico & Geral, Cores dos Tipos, Cache & Pastas, Atalhos Globais e Sobre & Sistema.
+4. **Complete Visual Refactoring of the Settings Window (Windows 11 Fluent Design)**:
+   - Redesigned the `SettingsWindow.xaml` and `SettingsWindow.xaml.cs` interface with a modern two-column layout (Sidebar with Fluent icons and tab navigation).
+   - Dynamic support for the Windows 11 Light and Dark themes with brushes from `PopupThemeBrushes`.
+   - Rounded cards with a typographic hierarchy (`Segoe UI Variable Text`), subtle borders and shadows.
+   - 5 well-structured sections: History & General, Item Colors, Cache & Storage, Global Shortcuts and About & System.
 
-5. **Testes Unitários & Qualidade**:
-   - Test-Driven Development (TDD) estrito em fatias verticais com ciclos Red → Green.
-   - Criados `CacheCleanerTests.cs` e `ItemColorSettingsTests.cs`.
-   - Atualizados `HistorySettingsTests.cs`, `AppSettingsTests.cs` e `ItemTypeThemeTests.cs`.
-   - Total de 839 testes executados com 100% de sucesso e 0 avisos/erros.
+5. **Unit Tests & Quality**:
+   - Strict Test-Driven Development (TDD) in vertical slices with Red → Green cycles.
+   - Created `CacheCleanerTests.cs` and `ItemColorSettingsTests.cs`.
+   - Updated `HistorySettingsTests.cs`, `AppSettingsTests.cs` and `ItemTypeThemeTests.cs`.
+   - A total of 839 tests run with 100% success and 0 warnings/errors.

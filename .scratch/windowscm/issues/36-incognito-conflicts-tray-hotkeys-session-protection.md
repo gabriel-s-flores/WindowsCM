@@ -1,27 +1,27 @@
-# Issue 36: Resolução de Conflitos do Modo Anônimo (Tray, Atalhos e Proteção de Sessão)
+# Issue 36: Resolving Incognito Mode Conflicts (Tray, Hotkeys and Session Protection)
 
 Status: resolved
 Type: fix
 Blocked by: 35
 
-## Contexto
+## Context
 
-O usuário identificou comportamentos conflitantes e perda de dados acidental no modo anônimo:
-1. Ao clicar na bandeja do sistema (system tray) após ativar o modo anônimo, o modo era desligado silenciosamente e todo o histórico efêmero era perdido.
-2. Ao usar o atalho do modo anônimo (`Ctrl+Shift+Alt+V`) com o popup aberto para fechá-lo (toggle), o app chamava `SetIncognito(false)`, destruindo os clipes.
-3. Ao usar o atalho normal (`Ctrl+Shift+V`), o popup não fechava em toggle, e não havia meio de alternar entre histórico normal e anônimo sem perder a sessão.
+The user identified conflicting behaviors and accidental data loss in incognito mode:
+1. When clicking the tray (system tray) after turning on incognito mode, the mode was silently turned off and the entire ephemeral history was lost.
+2. When using the incognito mode hotkey (`Ctrl+Shift+Alt+V`) with the popup open in order to close it (toggle), the app called `SetIncognito(false)`, destroying the clips.
+3. When using the normal hotkey (`Ctrl+Shift+V`), the popup did not close as a toggle, and there was no way to switch between the normal and incognito history without losing the session.
 
-## Requisitos
+## Requirements
 
-1. **Invariante de Não-Destrutividade por Visibilidade**:
-   - `Show`, `Hide`, `Toggle`, cliques no ícone da bandeja e atalhos de fechar janela NUNCA devem desativar o modo anônimo nem limpar dados.
-   - Apenas ações explícitas (`[Sair do anônimo]`, toggle intencional no menu/cabeçalho ou shutdown) podem destruir a sessão.
-2. **Correção do Tray e Adapters**:
-   - `ShellPopup.Toggle()` e `TrayController.OnMenu(TrayMenuItem.Open)` devem respeitar o modo ativo (`IsIncognito`) em vez de forçar `incognito: false`.
-3. **PopupViewModel Puro**:
-   - `PopupViewModel.Show` não deve sofrer o efeito colateral destrutivo de chamar `SetIncognito`.
-   - Suporte a alternância de visualização entre histórico normal e sessão anônima sem encerrar a sessão efêmera.
-4. **Atalhos Globais Previsíveis**:
-   - `Ctrl+Shift+V` e `Ctrl+Shift+Alt+V` devem fechar o popup se já estiver visível (Toggle limpo).
-5. **Ciclo TDD**:
-   - Testes unitários para `TrayController`, `PopupViewModel`, `IncognitoSessionCoordinator` e `App`.
+1. **Visibility Non-Destructiveness Invariant**:
+   - `Show`, `Hide`, `Toggle`, tray icon clicks and window-closing shortcuts must NEVER turn off incognito mode or clear data.
+   - Only explicit actions (`[Exit incognito]`, an intentional toggle in the menu/header, or shutdown) may destroy the session.
+2. **Tray and Adapters Fix**:
+   - `ShellPopup.Toggle()` and `TrayController.OnMenu(TrayMenuItem.Open)` must respect the active mode (`IsIncognito`) instead of forcing `incognito: false`.
+3. **Pure PopupViewModel**:
+   - `PopupViewModel.Show` must not suffer the destructive side effect of calling `SetIncognito`.
+   - Support for switching the view between the normal history and the incognito session without ending the ephemeral session.
+4. **Predictable Hotkeys**:
+   - `Ctrl+Shift+V` and `Ctrl+Shift+Alt+V` must close the popup if it is already visible (clean Toggle).
+5. **TDD Cycle**:
+   - Unit tests for `TrayController`, `PopupViewModel`, `IncognitoSessionCoordinator` and `App`.

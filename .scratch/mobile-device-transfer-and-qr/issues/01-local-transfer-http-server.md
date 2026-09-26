@@ -2,25 +2,25 @@ Status: resolved
 Type: task
 
 ## Answer
-Implementado em `WindowsCM.Core.Transfer`:
-- `LocalNetworkResolver`: resolução inteligente de IP local com priorização de Wi-Fi/Ethernet físico com default gateway ativo sobre adaptadores virtuais.
-- `MiniTransferHttpServer`: servidor HTTP/1.1 assíncrono sobre `TcpListener`, eliminando a necessidade de privilégios de administrador ou `netsh urlacl`.
-- Coberto por testes em `TransferServerTests.cs`.
+Implemented in `WindowsCM.Core.Transfer`:
+- `LocalNetworkResolver`: smart local IP resolution that prioritizes physical Wi-Fi/Ethernet with an active default gateway over virtual adapters.
+- `MiniTransferHttpServer`: asynchronous HTTP/1.1 server on top of `TcpListener`, removing the need for administrator privileges or `netsh urlacl`.
+- Covered by tests in `TransferServerTests.cs`.
 
-## Descrição
+## Description
 
-Implementar em `WindowsCM.Core.Transfer` o servidor `LocalTransferServer` utilizando `System.Net.Sockets.TcpListener` (para execução sem privilégios de administrador no Windows) e `LocalNetworkResolver` para detecção do IP de rede local (Wi-Fi/Ethernet) prioritário.
+Implement the `LocalTransferServer` server in `WindowsCM.Core.Transfer` using `System.Net.Sockets.TcpListener` (to run without administrator privileges on Windows), and `LocalNetworkResolver` to detect the preferred local network IP (Wi-Fi/Ethernet).
 
-## Requisitos
+## Requirements
 
 - `LocalNetworkResolver`:
-  - Enumera interfaces ativas (`OperationalStatus == Up`, não-loopback, não-link-local).
-  - Prioriza adaptadores físicos com Default Gateway configurado (ex.: Wi-Fi ou Ethernet) sobre adaptadores virtuais (VirtualBox/VMware/VPN).
-  - Fornece lista de todos os IPs locais válidos caso o usuário queira alternar a rede.
+  - Enumerates active interfaces (`OperationalStatus == Up`, non-loopback, non-link-local).
+  - Prioritizes physical adapters with a configured Default Gateway (e.g. Wi-Fi or Ethernet) over virtual adapters (VirtualBox/VMware/VPN).
+  - Provides a list of all valid local IPs in case the user wants to switch networks.
 - `LocalTransferServer`:
-  - Escuta em `IPAddress.Any` na porta padrão (ex: 58921) ou busca porta livre disponível.
-  - Processa requisições HTTP/1.1 de forma totalmente assíncrona.
-  - Suporta rotas REST simples: `GET /`, `GET /download`, `GET /d/{token}`, `POST /api/upload`, `GET /api/ping`.
-  - Suporta streaming seguro de arquivos locais com validação de caminho para impedir directory traversal (`Path.GetFullPath` comparado à raiz permitida).
-  - Determina MIME types corretos para áudio (`audio/mpeg`, `audio/wav`, `audio/ogg`, etc.), imagens (`image/png`, `image/jpeg`, etc.), vídeos e documentos.
-  - Totalmente testável via testes unitários com `HttpClient`.
+  - Listens on `IPAddress.Any` on the default port (e.g. 58921) or looks for an available free port.
+  - Processes HTTP/1.1 requests fully asynchronously.
+  - Supports simple REST routes: `GET /`, `GET /download`, `GET /d/{token}`, `POST /api/upload`, `GET /api/ping`.
+  - Supports secure streaming of local files with path validation to prevent directory traversal (`Path.GetFullPath` compared against the allowed root).
+  - Determines the correct MIME types for audio (`audio/mpeg`, `audio/wav`, `audio/ogg`, etc.), images (`image/png`, `image/jpeg`, etc.), videos and documents.
+  - Fully testable through unit tests with `HttpClient`.

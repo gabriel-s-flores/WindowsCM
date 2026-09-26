@@ -1,15 +1,15 @@
-# 24: Tray validado na gaveta do Windows 11 + onboarding
+# 24: Tray validated in the Windows 11 tray overflow + onboarding
 
-**What to build:** o tray é confirmado como presente na gaveta (overflow) do Windows 11 com menu de cinco items funcional, feedback de cópia visível e orientação clara de como arrastar o ícone para fora da gaveta — sem tentar promoção programática.
+**What to build:** the tray is confirmed as present in the Windows 11 tray overflow with a working five-item menu, visible copy feedback and clear guidance on how to drag the icon out of the tray overflow — without attempting programmatic promotion.
 
-**Blocked by:** 20 (instrumentação temporária + baseline + esqueleto do smoke).
+**Blocked by:** 20 (temporary instrumentation + baseline + smoke skeleton).
 
 **Status:** resolved
 
-- [x] Processo único mantém ícone visível com tooltip, clique esquerdo alterna o popup e clique direito abre Abrir/Incognito/Limpar/Settings/Sair
-- [x] Feedback de cópia (balão + flash do ícone) funciona com o ícone dentro da gaveta
-- [x] Settings/Diagnóstico orienta a arrastar o ícone para fora da gaveta; nenhuma tentativa de promoção automática
-- [x] Smoke valida processo vivo, log de tray visível e captura de tela da gaveta
+- [x] The single process keeps the icon visible with a tooltip, left click toggles the popup and right click opens Open/Incognito/Clear/Settings/Exit
+- [x] Copy feedback (balloon + icon flash) works with the icon inside the tray overflow
+- [x] Settings/Diagnostics guides the user to drag the icon out of the tray overflow; no attempt at automatic promotion
+- [x] Smoke validates the live process, the tray-visible log and a screenshot of the tray overflow
 
 ## Comments
 
@@ -32,7 +32,7 @@ Live smoke `smoke-ui.ps1` **7 PASS / 0 FAIL / 0 SKIP** (all tickets 21–24 auto
 - **Tray Observability & Feedback** (`src/WindowsCM.App/TrayManager.cs`):
   Added `TempSmokeLog` logging for tray gestures, menu item selection, copy-feedback flash
   (`[WCM20:tray] flash times=3 intervalMs=65`), and balloon notifications (`[WCM20:tray] balloon title=...`).
-- **Automated Smoke Step 7 & Overflow Gaveta Capture** (`smoke-ui.ps1`):
+- **Automated Smoke Step 7 & Tray Overflow Capture** (`smoke-ui.ps1`):
   - Added automated Step 7 validating:
     1. Single-instance alive and tray icon visible with tooltip `WindowsCM`.
     2. Copy feedback inside the drawer: fresh clipboard copy triggers icon flash (3x65ms)

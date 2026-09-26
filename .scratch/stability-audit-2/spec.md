@@ -1,99 +1,99 @@
-# Segunda auditoria de estabilidade e desempenho
+# Second stability and performance audit
 
 Status: resolved
 Type: fix
-Base: main (após o merge do PR #10)
+Base: main (after PR #10 was merged)
 
-## Pedido
+## Request
 
-"Faça mais uma verificação e auditoria com foco em performance e estabilidade: teste, valide e encontre bugs e pontas soltas. O objetivo é o app ser o mais estável e performático possível, sem crashes nem lentidão."
+"Do one more check and audit focused on performance and stability: test, validate and find bugs and loose ends. The goal is for the app to be as stable and performant as possible, with no crashes or slowness."
 
-## Como foi feito
+## How it was done
 
-- Quatro auditorias de código em paralelo: ciclo de vida/threads, popup/conversores, captura/colagem/histórico, transferência/previews/ações/configurações. Cada achado foi conferido no código antes de entrar na lista. Parte deles também foi reproduzida com teste ou medida.
-- Microbenchmarks descartáveis (fora do repo) nos caminhos quentes do Core com entradas patológicas: textos de 2 MB, JSON minificado, milhões de linhas, emoji ZWJ, cabeçalhos de DIB forjados, históricos com CF_HTML grande e imagens 4K/8K.
-- Cada correção no Core ganhou um teste que falhava antes. A camada WPF não roda no Linux: ela foi revisada no código e é validada pelo CI Windows (build, testes, smoke do app real e smoke de scroll).
+- Four code audits in parallel: lifecycle/threads, popup/converters, capture/paste/history, transfer/previews/actions/settings. Each finding was checked in the code before it went on the list. Some of them were also reproduced with a test or measured.
+- Throwaway microbenchmarks (outside the repo) on the Core hot paths with pathological inputs: 2 MB texts, minified JSON, millions of lines, ZWJ emoji, forged DIB headers, histories with large CF_HTML and 4K/8K images.
+- Every fix in Core got a test that failed before. The WPF layer does not run on Linux: it was reviewed in the code and is validated by the Windows CI (build, tests, real-app smoke and scroll smoke).
 
-## Achados e correções
+## Findings and fixes
 
-### Crashes e travamentos
+### Crashes and hangs
 
-| # | Onde | Problema | Correção |
+| # | Where | Problem | Fix |
 |---|---|---|---|
-| 1 | Popup | Clicar no texto de um card de código lançava exceção: o clique cai num `Run` e `VisualTreeHelper.GetParent` não aceita `Run`. O 6º clique em 10 s encerrava o app. | `VisualTreeWalk` sobe por elementos de conteúdo via árvore lógica. |
-| 2 | Popup | Alt+F4 fechava o popup de vez; o próximo atalho lançava exceção na janela fechada. | Os popups se escondem no `WM_CLOSE` e só fecham ao sair. |
-| 3 | Popup/SQLite | Colar uma linha acima de 50 KB na busca fazia o `LIKE` falhar ("pattern too complex") a cada refresh; com "lembrar busca", o popup não abria mais. | Busca limitada a 1.000 caracteres; o store usa `instr` para consultas desse tamanho. |
-| 4 | Popup | Uma colagem que falhava antes de esconder o popup deixava `_isActivating` ligado: o compacto ficava no topo, ignorando cliques e a perda de foco. | O flag é limpo quando a ativação termina; as falhas são registradas e explicadas num balão. |
-| 5 | Inicialização | Banco corrompido, local personalizado indisponível (drive não montado) ou arquivo travado: o app morria em toda inicialização, sem ícone nem mensagem. | `HistoryStoreOpener`: guarda o arquivo danificado e recria; usa o local padrão; em último caso roda em memória. Cada caso tem balão localizado. |
-| 6 | Bandeja | Exceções nos handlers do ícone (WinForms) mostravam o diálogo de "exceção não tratada" do WinForms, cujo Sair encerrava sem limpeza nem log. | `Application.ThreadException` registrado e sujeito à mesma política de rajada. |
-| 7 | Configurações | Falha ao salvar no fechamento deixava a janela fechada referenciada; "Configurações" lançava exceção até reiniciar. | A referência é limpa primeiro; salvar e reaplicar são protegidos. |
-| 8 | Instância | Com uma instância elevada rodando, a segunda abertura travava na ACL do mutex. | Passa a contar como "outra instância é a primária". |
-| 9 | IPC | O cliente esperava a resposta para sempre se a UI da primária travasse; um cliente mudo prendia o pipe de instância única. | Prazo na leitura dos dois lados. |
-| 10 | Clipboard | `CF_UNICODETEXT` sem terminador era lido além do bloco (lixo ou access violation). | Decodificação limitada a `GlobalSize`. |
-| 11 | Clipboard | `DragQueryFile(i)` é O(n) por arquivo, chamado duas vezes por arquivo com o clipboard aberto: dezenas de segundos para 50 mil arquivos, com todos os apps sem copiar/colar. | `DROPFILES` lido numa passada; um caminho estranho não descarta mais a cópia inteira. |
-| 12 | Clipboard | Um DIB de 52 bytes declarando 20000×20000 alocava 1,5 GB antes de falhar; alguns cabeçalhos estouravam `int`. | Tamanhos validados em 64 bits antes de alocar; limite de 8192×8192 (também para PNG). |
-| 13 | Colar imagem | Decodificação na thread de UI: 4K = 346 ms/255 MB, 8K = 1,15 s/1 GB. | Fora da UI, com buffers de tamanho exato: 4K = 130 ms/64 MB, 8K = 0,5 s/256 MB. |
-| 14 | Ações | O timeout só começava depois de escrever o item no stdin: um comando que não lê a entrada travava para sempre. Se o comando saía sem ler, o pipe quebrado perdia o resultado. | Entrada alimentada em paralelo à espera com prazo; saída limitada. |
-| 15 | Transferência | Uploads inteiros na memória (vídeo de 1,5 GB ≈ 3,5 GB no processo), sem prazo e sem limite de conexões. | Multipart gravado direto em disco; ociosidade de 30 s; 16 conexões; texto até 16 MB. |
-| 16 | Previews | O link de um ISO ou de uma transmissão ao vivo era baixado inteiro para a memória, a cada abertura do popup. | Lê só HTML/imagem/JSON, até 1 MB/5 MB, com prazo próprio para o corpo; falhas voltam só após 30 min. |
-| 17 | Histórico | As datas eram gravadas com a cultura do Windows. Com separador de hora `.` (fi-FI, da-DK ou ajuste personalizado), toda leitura falhava e o popup nunca abria. Em outro calendário (th-TH, fa-IR), os anos ficavam séculos fora. | Gravação invariante; linhas antigas relidas com a cultura que as escreveu e regravadas ao abrir. |
+| 1 | Popup | Clicking the text of a code card threw an exception: the click lands on a `Run` and `VisualTreeHelper.GetParent` does not accept a `Run`. The 6th click in 10 s ended the app. | `VisualTreeWalk` climbs content elements through the logical tree. |
+| 2 | Popup | Alt+F4 closed the popup for good; the next hotkey threw an exception on the closed window. | The popups hide on `WM_CLOSE` and only close on exit. |
+| 3 | Popup/SQLite | Pasting a line over 50 KB into the search made the `LIKE` fail ("pattern too complex") on every refresh; with "remember search", the popup no longer opened. | Search capped at 1,000 characters; the store uses `instr` for queries of that size. |
+| 4 | Popup | A paste that failed before hiding the popup left `_isActivating` set: the compact menu stayed on top, ignoring clicks and the loss of focus. | The flag is cleared when the activation finishes; the failures are logged and explained in a balloon. |
+| 5 | Startup | Corrupt database, custom location unavailable (drive not mounted) or locked file: the app died on every startup, with no icon or message. | `HistoryStoreOpener`: keeps the damaged file and recreates it; uses the default location; as a last resort runs in memory. Each case has a localized balloon. |
+| 6 | Tray | Exceptions in the icon's handlers (WinForms) showed WinForms' "unhandled exception" dialog, whose Quit exited without cleanup or a log. | `Application.ThreadException` registered and subject to the same burst policy. |
+| 7 | Settings | A failure to save on close left the closed window referenced; "Settings" threw an exception until restart. | The reference is cleared first; saving and re-applying are guarded. |
+| 8 | Instance | With an elevated instance running, the second launch got stuck on the mutex ACL. | It now counts as "another instance is the primary". |
+| 9 | IPC | The client waited for the reply forever if the primary's UI hung; a silent client held the single-instance pipe. | A deadline on the read on both sides. |
+| 10 | Clipboard | `CF_UNICODETEXT` without a terminator was read past the block (garbage or an access violation). | Decoding bounded by `GlobalSize`. |
+| 11 | Clipboard | `DragQueryFile(i)` is O(n) per file, called twice per file with the clipboard open: tens of seconds for 50,000 files, with every app unable to copy/paste. | `DROPFILES` read in one pass; an odd path no longer drops the whole copy. |
+| 12 | Clipboard | A 52-byte DIB declaring 20000×20000 allocated 1.5 GB before failing; some headers overflowed `int`. | Sizes validated in 64 bits before allocating; a limit of 8192×8192 (also for PNG). |
+| 13 | Image paste | Decoding on the UI thread: 4K = 346 ms/255 MB, 8K = 1.15 s/1 GB. | Off the UI thread, with exact-size buffers: 4K = 130 ms/64 MB, 8K = 0.5 s/256 MB. |
+| 14 | Actions | The timeout only started after writing the item to stdin: a command that does not read its input hung forever. If the command exited without reading, the broken pipe lost the result. | Input fed in parallel with the timed wait; output capped. |
+| 15 | Transfer | Whole uploads in memory (a 1.5 GB video ≈ 3.5 GB in the process), with no deadline and no connection limit. | Multipart written straight to disk; 30 s idle timeout; 16 connections; text up to 16 MB. |
+| 16 | Previews | The link to an ISO or a live stream was downloaded whole into memory, on every popup open. | Reads only HTML/image/JSON, up to 1 MB/5 MB, with a deadline of its own for the body; failures are retried only after 30 min. |
+| 17 | History | Dates were written with the Windows culture. With a `.` time separator (fi-FI, da-DK or a custom setting), every read failed and the popup never opened. In another calendar (th-TH, fa-IR), the years were centuries off. | Invariant writes; old rows re-read with the culture that wrote them and rewritten on open. |
 
-### Perda de dados e comportamento errado
+### Data loss and wrong behavior
 
-| # | Problema | Correção |
+| # | Problem | Fix |
 |---|---|---|
-| 17b | Arrastar o slider "limite do histórico" de 100 para 10 e de volta apagava 90 itens (evict a cada passo). | Evict só ao fechar as configurações; atualizações ao vivo agrupadas (200 ms). |
-| 18 | As caixas de cor hex e de extensões eram recriadas a cada tecla, impedindo a digitação. | O painel só é reconstruído quando o esquema de cores muda. |
-| 19 | Um `settings.json` travado por um instante no logon carregava os padrões e o próximo salvamento sobrescrevia tudo. | Leitura com novas tentativas. |
-| 20 | Com ordens diferentes nos dois popups, um refresh global reordenava o modelo compartilhado: clicar no card i do popup grande colava outro item. | Só o popup aberto é atualizado, na ordem dele. |
-| 21 | Com o modo anônimo ativo e a visão do histórico normal aberta, colar/fixar/editar/excluir agiam na sessão anônima pelo id, e o registro da colagem (data, supressão do eco) caía em outro item. | App, view model e registro da colagem agem sobre o histórico exibido. |
-| 22 | Colar uma imagem capturada no modo anônimo dizia "arquivo ausente". | Lê a pasta da sessão anônima. |
-| 23 | Recopiar um item apagava o título e os metadados (preview); a nova busca do preview também sobrescrevia um título dado pelo usuário. | Título preservado; metadados mesclados (enriquecimentos ficam, CF_HTML antigo sai se a nova cópia não trouxer); link que já tem preview não é buscado de novo. |
-| 24 | Uma linha com data ilegível fazia toda leitura falhar; o popup não abria. | A linha é ignorada. |
-| 25 | Uma captura cuja gravação falhava era marcada como vista; a recópia era descartada. | Marcada só após gravar. |
-| 26 | "Limpar cache" quebrava os previews de link até reiniciar. | A pasta é recriada ao gravar. |
-| 27 | Nomes de arquivo recebidos com `:` viravam fluxo NTFS oculto; `? *` falhavam o envio. | Nomes saneados; `CreateNew` evita sobrescrever. |
-| 28 | Duplo clique no ícone da bandeja abria e fechava o popup. | Só o clique alterna. |
-| 29 | Atalhos com Alt (Alt+P etc.) nunca funcionavam (`Key.System`); no compacto, digitar com AltGr (ś, ć) abria Configurações ou pedia para limpar. | `SystemKey`; atalhos só com Alt sozinho; menu mostra o atalho real de fixar (Ctrl+S). |
-| 30b | Um preview terminando depois de alternar o modo anônimo gravava no item de mesmo id da outra sessão. | A gravação é descartada se a sessão mudou. |
+| 17b | Dragging the "history limit" slider from 100 to 10 and back deleted 90 items (evict at every step). | Evict only when Settings closes; live updates batched (200 ms). |
+| 18 | The hex color and extensions boxes were recreated on every keystroke, preventing typing. | The panel is rebuilt only when the color scheme changes. |
+| 19 | A `settings.json` locked for a moment at logon loaded the defaults, and the next save overwrote everything. | Reads with retries. |
+| 20 | With different orders in the two popups, a global refresh reordered the shared model: clicking card i in the large popup pasted another item. | Only the open popup is refreshed, in its own order. |
+| 21 | With incognito mode active and the normal history view open, paste/pin/edit/delete acted on the incognito session by id, and the paste recording (date, echo suppression) landed on another item. | The app, the view model and the paste recording act on the displayed history. |
+| 22 | Pasting an image captured in incognito mode said "file missing". | Reads the incognito session's folder. |
+| 23 | Re-copying an item wiped its title and metadata (preview); the new preview fetch also overwrote a title given by the user. | Title preserved; metadata merged (enrichments stay, old CF_HTML goes if the new copy has none); a link that already has a preview is not fetched again. |
+| 24 | A row with an unreadable date made every read fail; the popup did not open. | The row is skipped. |
+| 25 | A capture whose write failed was marked as seen; the re-copy was dropped. | Marked only after writing. |
+| 26 | "Clear cache" broke link previews until restart. | The folder is recreated on write. |
+| 27 | Received file names with `:` became a hidden NTFS stream; `? *` failed the upload. | Names sanitized; `CreateNew` avoids overwriting. |
+| 28 | A double-click on the tray icon opened and closed the popup. | Only a single click toggles. |
+| 29 | Alt shortcuts (Alt+P etc.) never worked (`Key.System`); in the compact menu, typing with AltGr (ś, ć) opened Settings or asked to clear. | `SystemKey`; shortcuts only with Alt alone; the menu shows the real pin shortcut (Ctrl+S). |
+| 30b | A preview finishing after incognito mode was toggled wrote to the item with the same id in the other session. | The write is discarded if the session changed. |
 
-### Segurança (pontas soltas)
+### Security (loose ends)
 
-| # | Problema | Correção |
+| # | Problem | Fix |
 |---|---|---|
-| 30 | `/api/upload` aceitava texto/arquivos de qualquer aparelho da rede e os colocava direto no clipboard. | Chave de 128 bits por execução, só no QR. Ver revisão do ADR 0003. |
-| 31 | Servidor ouvindo a rede desde a inicialização (alerta de firewall para todos). | Inicia no primeiro uso. |
-| 32 | Compartilhamentos com token de 32 bits e sem expiração. | 128 bits, 24 h. |
+| 30 | `/api/upload` accepted text/files from any device on the network and put them straight on the clipboard. | A 128-bit key per run, only in the QR. See the revision of ADR 0003. |
+| 31 | Server listening on the network from startup (firewall alert for everyone). | Starts on first use. |
+| 32 | Shares with a 32-bit token and no expiry. | 128 bits, 24 h. |
 
-### Desempenho
+### Performance
 
-- Validação JSON de cada linha a cada leitura (abrir o popup com 30 cópias de navegador/VS Code): 79 → 23 ms via `json_valid`. O CF_HTML passa a ser gravado sem escapes de 6 caracteres (cerca de metade do tamanho).
-- Card de link: 21 parses do JSON por realização → 1. Conversores de link/caractere retornam na hora para outros tipos.
-- Miniaturas de imagem e de preview de link decodificadas fora da UI (antes: 50–200 ms por card 4K ao rolar).
-- Card de "Arquivos" com milhares de caminhos: contados, não divididos; só os 10 primeiros detalhados.
-- Busca com debounce de 120 ms, aplicada antes de qualquer tecla que age sobre a lista.
-- Tema reconstruído só quando o esquema muda (antes, a cada notificação de preferência do Windows).
-- Watchdog sem vazar um handle de kernel por segundo; feedback de cópia sem bloquear a thread de captura.
-- Emoji: objetos Direct2D/DirectWrite liberados na hora, cache limitado, até 24 emojis por tile. Favicons: cache limitado e novas tentativas só após 15 min.
-- Imagens de itens removidos apagadas durante a execução (no máximo a cada 15 min), gravação atômica, pastas anônimas órfãs removidas na inicialização. O cache de imagens de link é varrido na inicialização. As varreduras só rodam contra o histórico real aberto normalmente (a pasta de imagens é compartilhada: com o local padrão substituindo um drive ausente, a varredura apagaria as imagens do histórico real) e leem as linhas de imagem direto do banco.
+- JSON validation of every row on every read (opening the popup with 30 browser/VS Code copies): 79 → 23 ms via `json_valid`. CF_HTML is now stored without 6-character escapes (about half the size).
+- Link card: 21 JSON parses per realization → 1. Link/character converters return at once for other types.
+- Image and link preview thumbnails decoded off the UI thread (before: 50–200 ms per 4K card while scrolling).
+- "Files" card with thousands of paths: counted, not split; only the first 10 detailed.
+- Search with a 120 ms debounce, applied before any key that acts on the list.
+- Theme rebuilt only when the scheme changes (before, on every Windows preference notification).
+- Watchdog without leaking a kernel handle per second; copy feedback without blocking the capture thread.
+- Emoji: Direct2D/DirectWrite objects released at once, bounded cache, up to 24 emoji per tile. Favicons: bounded cache and retries only after 15 min.
+- Images of removed items deleted while running (at most every 15 min), atomic writes, orphaned incognito folders removed at startup. The link image cache is swept at startup. The sweeps only run against the real history opened normally (the images folder is shared: with the default location standing in for a missing drive, the sweep would delete the real history's images) and read the image rows straight from the database.
 
-## Fora do escopo (registrado para depois)
+## Out of scope (recorded for later)
 
-- **Injeção de comando em ações personalizadas**: grupos da regex (texto do clipboard) entram crus na linha do `cmd.exe`. Só afeta ações de comando criadas pelo usuário com grupos de captura; as embutidas não são afetadas. A correção pede um escape seguro para `cmd.exe`, validado no Windows.
-- **Desligamento cancelado**: o WPF encerra o app no `WM_QUERYENDSESSION`, e a limpeza de fim de sessão também roda aí. Um desligamento cancelado (ou o Restart Manager do instalador) apaga o histórico não fixado.
-- **Corrida anônimo × captura pendente**: sair do modo anônimo até 0,5 s depois de uma cópia pode gravá-la no histórico normal.
-- **Segunda abertura durante a inicialização** pode mostrar "não está rodando" se a primeira levar mais de 2 s para abrir o pipe (limite documentado em pesquisa).
-- **`VirtualizationMode=Recycling`** continua não aplicado: muda o ciclo de vida dos cards e precisa ser medido no Windows.
-- Todo link copiado é buscado automaticamente, inclusive de intranet (links de uso único podem ser "gastos"); as exclusões de link são o controle atual.
+- **Command injection in custom actions**: regex groups (clipboard text) go raw into the `cmd.exe` command line. It only affects command actions created by the user with capture groups; the built-in ones are not affected. The fix needs safe escaping for `cmd.exe`, validated on Windows.
+- **Canceled shutdown**: WPF ends the app on `WM_QUERYENDSESSION`, and the end-of-session cleanup also runs there. A canceled shutdown (or the installer's Restart Manager) deletes the unpinned history.
+- **Incognito × pending capture race**: leaving incognito mode up to 0.5 s after a copy can write it to the normal history.
+- **A second launch during startup** can show "not running" if the first one takes more than 2 s to open the pipe (a limit documented in research).
+- **`VirtualizationMode=Recycling`** is still not applied: it changes the cards' lifecycle and needs to be measured on Windows.
+- Every copied link is fetched automatically, including intranet ones (single-use links can be "used up"); link exclusions are the current control.
 
-## Verificação
+## Verification
 
-- Core: 1345 testes passam no Linux; as falhas são as mesmas da base (caminhos `C:\`, o contrato do instalador e um teste de pipe que só se comporta assim fora do Windows), que passam no CI Windows. Mais de 100 testes novos cobrem as correções.
-- Revisão independente do diff inteiro (Core e WPF) antes do PR; os problemas que ela encontrou foram corrigidos. Os mais sérios: a varredura de imagens contra um histórico substituto, as datas dependentes de cultura e o registro da colagem durante o modo anônimo.
-- Build da solução inteira (inclui o app WPF, `-p:EnableWindowsTargeting=true`) sem warnings.
-- CI Windows no PR #11 (runner de 2 vCPUs, sem GPU): build, testes, smoke do app real e smoke de scroll, todos verdes. A primeira rodada pegou três testes novos que só falhavam no Windows; um deles revelou que a escrita no pipe também precisava de prazo (corrigido no código de produção).
-  - Clipboard dos outros apps: 0 falhas em 300 cópias. O histórico fica em 100 itens e nada foi registrado no log de erros.
-  - Memória após 300 cópias: privada 141–147 MB (antes ~190–210), working set ~260 MB (antes ~300), heap gerenciado após GC 24–28 MB (antes ~60), estável.
-  - Popup: p50 101 ms via pipe e 144 ms ocioso. Atalho → popup: 245–661 ms. Colar automaticamente no Notepad: nos 4 cenários.
-  - Scroll em 1920×1080 com 130 itens: ida e volta da thread de UI p95 34 ms (roda), 3 ms (touchpad), 1 ms (rajada); nenhuma parada de 1 s ou mais.
-- `dist/`: a versão portátil (`WindowsCM-portable/` + `.zip`) foi gerada por publish cruzado no Linux. O instalador exige Windows + Inno Setup e é produzido pelo job de release do CI a cada push verde na `main`.
+- Core: 1345 tests pass on Linux; the failures are the same as on the base (`C:\` paths, the installer contract and a pipe test that only behaves this way outside Windows), which pass on the Windows CI. More than 100 new tests cover the fixes.
+- Independent review of the whole diff (Core and WPF) before the PR; the problems it found were fixed. The most serious: the image sweep against a stand-in history, the culture-dependent dates and the paste recording during incognito mode.
+- Build of the whole solution (includes the WPF app, `-p:EnableWindowsTargeting=true`) with no warnings.
+- Windows CI on PR #11 (2-vCPU runner, no GPU): build, tests, real-app smoke and scroll smoke, all green. The first run caught three new tests that only failed on Windows; one of them revealed that the pipe write also needed a deadline (fixed in the production code).
+  - Other apps' clipboard: 0 failures in 300 copies. The history stays at 100 items and nothing was written to the error log.
+  - Memory after 300 copies: private 141–147 MB (before ~190–210), working set ~260 MB (before ~300), managed heap after GC 24–28 MB (before ~60), stable.
+  - Popup: p50 101 ms via pipe and 144 ms idle. Hotkey → popup: 245–661 ms. Auto-paste into Notepad: in all 4 scenarios.
+  - Scrolling at 1920×1080 with 130 items: UI thread round trip p95 34 ms (wheel), 3 ms (touchpad), 1 ms (burst); no stall of 1 s or more.
+- `dist/`: the portable version (`WindowsCM-portable/` + `.zip`) was generated by a cross-publish on Linux. The installer requires Windows + Inno Setup and is produced by the CI release job on every green push to `main`.

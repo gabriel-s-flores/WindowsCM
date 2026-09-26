@@ -1,16 +1,16 @@
-# 22: Colagem com diagnóstico nunca silencioso
+# 22: Paste with never-silent diagnostics
 
-**What to build:** escolher um item sempre termina num desfecho visível: ou cola no app anterior, ou copia e explica por que não colou (foco perdido, alvo elevado, falha de escrita/injeção) — nunca falha em silêncio.
+**What to build:** picking an item always ends in a visible outcome: either it pastes into the previous app, or it copies and explains why it did not paste (focus lost, elevated target, write/injection failure) — it never fails silently.
 
-**Blocked by:** 20 (instrumentação temporária + baseline + esqueleto do smoke).
+**Blocked by:** 20 (temporary instrumentation + baseline + smoke skeleton).
 
 **Status:** resolved
 
-- [x] Enter cola em app comum não elevado; Shift+Enter só copia sem esconder o popup nem injetar tecla
-- [x] Alvo elevado sem app elevado resulta em só-copiar com aviso sobre elevação
-- [x] Foco perdido antes da injeção resulta em só-copiar com aviso de foco, nunca diagnosticado como elevação
-- [x] Item ausente, imagem com arquivo faltando, clipboard ocupado e injeção recusada falham com diagnóstico legível
-- [x] Smoke cobre Notepad comum, app elevado e troca de foco no meio do fluxo
+- [x] Enter pastes into a regular non-elevated app; Shift+Enter only copies, without hiding the popup or injecting a key
+- [x] An elevated target without an elevated app results in copy-only with a warning about elevation
+- [x] Focus lost before injection results in copy-only with a focus warning, never diagnosed as elevation
+- [x] Missing item, image with a missing file, busy clipboard and refused injection fail with readable diagnostics
+- [x] Smoke covers regular Notepad, an elevated app and a focus change mid-flow
 
 ## Comments
 

@@ -1,15 +1,15 @@
-# 20: Instrumentação temporária + baseline de testes + esqueleto do smoke
+# 20: Temporary instrumentation + test baseline + smoke skeleton
 
-**What to build:** a base observável para o fix: logs temporários que provam onde o popup abre, qual alvo de colagem foi capturado e qual foi o desfecho da ativação, mais baseline verde e esqueleto do smoke automatizado prontos para os tickets seguintes usarem.
+**What to build:** an observable base for the fix: temporary logs that prove where the popup opens, which paste target was captured and what the activation outcome was, plus a green baseline and an automated smoke skeleton ready for the following tickets to use.
 
 **Blocked by:** None (can start immediately).
 
 **Status:** resolved
 
-- [x] Log temporário com prefixo único cobre: abertura do popup (cursor, área de trabalho, tamanho medido, posição final, nº de items visíveis), ativação (item escolhido, modificador, alvo capturado vs atual pós-hide, desfecho + diagnóstico) e tray (visível, resultado do single-instance)
-- [x] Baseline `dotnet test` filtrando popup/paste/tray passa e o nº de testes é registrado no ticket
-- [x] Esqueleto `smoke-ui.ps1` builda, roda os testes, inicia o app, coleta o log temporário e emite `smoke-report.md` com PASS/FAIL por passo
-- [x] Nenhum log temporário vaza para o comportamento do usuário além de arquivo em TEMP
+- [x] A temporary log with a unique prefix covers: popup opening (cursor, work area, measured size, final position, number of visible items), activation (chosen item, modifier, captured vs current post-hide target, outcome + diagnostics) and tray (visible, single-instance result)
+- [x] Baseline `dotnet test` filtering popup/paste/tray passes and the number of tests is recorded in the ticket
+- [x] `smoke-ui.ps1` skeleton builds, runs the tests, starts the app, collects the temporary log and emits `smoke-report.md` with PASS/FAIL per step
+- [x] No temporary log leaks into user-facing behavior beyond a file in TEMP
 
 ## Comments
 

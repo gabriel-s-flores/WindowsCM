@@ -1,4 +1,4 @@
-# Distribuição + licença + readiness to-spec
+# Distribution + license + to-spec readiness
 
 Type: grilling
 Status: resolved
@@ -6,21 +6,21 @@ Blocked by: 02, 03
 
 ## Question
 
-Fechar com o humano os últimos itens para `to-spec` poder rodar:instalador Inno Setup (portable single-file, upgrade, uninstall limpa?), MSIX adiado documentado em Out of scope, autostart `Run` + `--hidden`, `Mutex` single-instance, alvo Win10 20H2+/Win11, GPL-3.0-or-later (headers, NOTICE, atribuição ao Copyous/Pano), e checklist de readiness (todos 01–07 resolved? fog zerado?).
+Settle with the human the last items so `to-spec` can run: Inno Setup installer (portable single-file, upgrade, clean uninstall?), MSIX deferred and documented in Out of scope, autostart `Run` + `--hidden`, single-instance `Mutex`, target Win10 20H2+/Win11, GPL-3.0-or-later (headers, NOTICE, attribution to Copyous/Pano), and readiness checklist (all 01–07 resolved? fog cleared?).
 
-Só começar quando `02` e `03` estiverem `resolved`. Chamar Skill `grilling` + `domain-modeling`.
+Only start when `02` and `03` are `resolved`. Call Skill `grilling` + `domain-modeling`.
 
 ## Answer
 
-Decisões HITL (aceitas como recomendado) + readiness confirmado. Sem ADRs.
+HITL decisions (accepted as recommended) + readiness confirmed. No ADRs.
 
-- Q16 installer: Inno **per-user** (sem admin), `%LocalAppData%\Programs\WindowsCM`,
-  atalho Start Menu (sem Desktop default), autostart **opt-in** (`Run` +
-  `--hidden`, checkbox installer + toggle settings), portable = single-file
-  zipado, upgrade preserva dados, **uninstall mantém DB/settings** (checkbox
-  de remoção, desmarcado).
-- Q17 GPL-3.0: `LICENSE` raiz + cópia no installer, headers SPDX nos fontes
-  (fase `implement`), Sobre com créditos (Copyous/Pano + 4 libs MIT), repo
-  público dia 1.
-- Q18 readiness: 01–07 resolved, fog zero, `CONTEXT.md`, sem ADRs pendentes —
-  **mapa done, handoff para `to-spec` autorizado**.
+- Q16 installer: Inno **per-user** (no admin), `%LocalAppData%\Programs\WindowsCM`,
+  Start Menu shortcut (no Desktop by default), autostart **opt-in** (`Run` +
+  `--hidden`, installer checkbox + Settings toggle), portable = zipped
+  single-file, upgrade preserves data, **uninstall keeps DB/settings** (removal
+  checkbox, unchecked).
+- Q17 GPL-3.0: root `LICENSE` + a copy in the installer, SPDX headers in the
+  sources (`implement` phase), About with credits (Copyous/Pano + 4 MIT libs),
+  public repo from day 1.
+- Q18 readiness: 01–07 resolved, zero fog, `CONTEXT.md`, no pending ADRs —
+  **map done, handoff to `to-spec` authorized**.

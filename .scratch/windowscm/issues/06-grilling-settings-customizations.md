@@ -1,4 +1,4 @@
-# Grilling configs + customizações
+# Grilling settings + customizations
 
 Type: grilling
 Status: resolved
@@ -6,21 +6,21 @@ Blocked by: 01
 
 ## Question
 
-Com o inventário `01` em mãos, decidir com o humano (HITL) a paridade de cada opção das 4 páginas prefs: o que entra na spec 1.0, defaults Windows, o que cai (ex.: `Sync Primary`, `Yaru`, `nautilus`), e o vocabulário do `CONTEXT.md`.
+With the `01` inventory in hand, decide with the human (HITL) the parity of each option on the 4 prefs pages: what goes into the 1.0 spec, Windows defaults, what gets dropped (e.g. `Sync Primary`, `Yaru`, `nautilus`), and the `CONTEXT.md` vocabulary.
 
-Inclui General (History/Feedback/Behavior/Exclusions/Locations), Customization (Dialog/Item/Header/Items-por-tipo/Theme), Shortcuts (7 grupos), Actions (CRUD + Default Actions).
+Includes General (History/Feedback/Behavior/Exclusions/Locations), Customization (Dialog/Item/Header/Items-per-type/Theme), Shortcuts (7 groups), Actions (CRUD + Default Actions).
 
-Só começar quando `01` estiver `resolved`. Chamar Skill `grilling` + `domain-modeling`, atualizar `CONTEXT.md` inline, propor ADRs só se hard-to-reverse + surpreendente + trade-off real.
+Only start when `01` is `resolved`. Call Skill `grilling` + `domain-modeling`, update `CONTEXT.md` inline, propose ADRs only if hard-to-reverse + surprising + a real trade-off.
 
 ## Answer
 
-Decisões HITL (2 rodadas, tudo aceito como recomendado) + `CONTEXT.md` criado na raiz (7 termos: item, item type, pin, tag, action, incognito mode, history). Sem ADRs (nada hard-to-reverse + surpreendente + trade-off real nesta leva).
+HITL decisions (2 rounds, everything accepted as recommended) + `CONTEXT.md` created at the root (7 terms: item, item type, pin, tag, action, incognito mode, history). No ADRs (nothing hard-to-reverse + surprising + a real trade-off in this batch).
 
-- Q8 cortes GNOME-only: Yaru fora; WM_CLASS → processo/exe + seletor de apps; `indicator-display` fora (tray cobre); Dependencies → página "Sobre/Diagnóstico" (versões das libs + abrir pastas no Explorer); Locations mantém.
-- Q9 profiles: Default + Compact mantidos (literais do `profiles.ts:164`).
-- Q10 History UI: combo só SQLite (Memory debug-only), file-chooser `.db`, length 10–500 d.50, time 0–1440 d.0, 3 opções clipboard-history (keep-pinned-and-tagged default); Behavior igual ao original.
-- Q11 idioma + vocabulário: **UI inglês v1** (PT-BR/i18n fora da spec); **item** = domínio/UI, **entry** = só código/DB (em `CONTEXT.md`).
-- Q12 sons: as 9 opções + slider dB (conversão ogg→wav é spike de implementação).
-- Q13 per-tipo: as 6 telas inteiras com defaults mapeados (thumbnail de arquivo via Shell providers).
-- Q14 primeira execução: perfil Default, `show-at-pointer` off, regra show-at-cursor mantida.
-- Q15: middle-click pin, open-behavior toggle, swap-copy, swap-scroll — mantidos.
+- Q8 GNOME-only cuts: Yaru out; WM_CLASS → process/exe + app picker; `indicator-display` out (the tray covers it); Dependencies → "About/Diagnostics" page (lib versions + open folders in Explorer); Locations stays.
+- Q9 profiles: Default + Compact kept (literals from `profiles.ts:164`).
+- Q10 History UI: SQLite-only combo (Memory debug-only), `.db` file-chooser, length 10–500 d.50, time 0–1440 d.0, 3 clipboard-history options (keep-pinned-and-tagged default); Behavior same as the original.
+- Q11 language + vocabulary: **English UI v1** (PT-BR/i18n out of the spec); **item** = domain/UI, **entry** = code/DB only (in `CONTEXT.md`).
+- Q12 sounds: the 9 options + dB slider (ogg→wav conversion is an implementation spike).
+- Q13 per-type: all 6 screens in full with mapped defaults (file thumbnail via Shell providers).
+- Q14 first run: Default profile, `show-at-pointer` off, show-at-cursor rule kept.
+- Q15: middle-click pin, open-behavior toggle, swap-copy, swap-scroll — kept.

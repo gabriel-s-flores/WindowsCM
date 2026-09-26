@@ -1,15 +1,15 @@
-# 21: Popup abre sempre no cursor com tamanho estável em 1080p
+# 21: Popup always opens at the cursor with a stable size at 1080p
 
-**What to build:** o popup passa a abrir de forma determinística em tela 1920x1080 a 100%: mesma posição relativa ao cursor e mesma largura a cada abertura com o mesmo histórico, sem saltos nem redimensionamentos visíveis ao digitar a busca.
+**What to build:** the popup now opens deterministically on a 1920x1080 screen at 100%: same position relative to the cursor and same width on every open with the same history, with no jumps or visible resizes while typing in the search.
 
-**Blocked by:** 20 (instrumentação temporária + baseline + esqueleto do smoke).
+**Blocked by:** 20 (temporary instrumentation + baseline + smoke skeleton).
 
 **Status:** resolved
 
-- [x] Abertura no centro e nas bordas direita/inferior ancora no cursor com deslocamento fixo e clamp dentro da área de trabalho
-- [x] Largura fixa e altura estável para o mesmo conteúdo; filtrar a busca não causa flicker de tamanho
-- [x] Primeira abertura após iniciar o app posiciona igual às seguintes
-- [x] Teste de posicionamento cobre os cantos 1080p e o smoke valida Left/Top pelo log + screenshot
+- [x] Opening at the center and at the right/bottom edges anchors to the cursor with a fixed offset and a clamp inside the work area
+- [x] Fixed width and stable height for the same content; filtering the search causes no size flicker
+- [x] The first open after starting the app is placed the same as the following ones
+- [x] The placement test covers the 1080p corners and the smoke validates Left/Top via the log + screenshot
 
 ## Comments
 
