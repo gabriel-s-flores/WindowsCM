@@ -74,4 +74,19 @@ public sealed class LinkImageCacheTests : IDisposable
         Assert.NotNull(cache.TryGet(keep));
         Assert.Null(cache.TryGet(drop));
     }
+
+    // "Clear cache" in Settings deletes the folder; the cache only created
+    // it once, so every later preview image failed (and its whole preview
+    // with it) until restart.
+    [Fact]
+    public void SaveIfAbsent_AfterTheFolderWasCleared_RecreatesIt()
+    {
+        var cache = new LinkImageCache(_dir);
+        Directory.Delete(_dir, recursive: true);
+
+        var path = cache.SaveIfAbsent("https://example.com/b.png", [4, 5]);
+
+        Assert.Equal([4, 5], File.ReadAllBytes(path));
+        Assert.Single(Directory.GetFiles(_dir));
+    }
 }

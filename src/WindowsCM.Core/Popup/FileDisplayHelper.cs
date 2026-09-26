@@ -199,8 +199,13 @@ public static class FileDisplayHelper
             return null;
         }
 
+        // Only the first few paths are ever shown: a 50,000-file copy built
+        // one record per path, in four converters per card realization.
+        var total = CountPaths(item.Content);
         var lines = (item.Content ?? "")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Take(MaxListedFiles)
             .Select(NormalizePath)
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .ToList();
@@ -223,7 +228,7 @@ public static class FileDisplayHelper
         // multi-thousand-file copy (two syscalls per path, from several
         // converters per card, on the UI thread) froze the popup — worst on
         // network paths.
-        var probeSizes = lines.Count == 1;
+        var probeSizes = total == 1;
         var detailsList = lines.Select(path =>
         {
             var name = Path.GetFileName(path);
@@ -237,7 +242,7 @@ public static class FileDisplayHelper
                 FormattedSize: FormatFileSize(size, pt));
         }).ToList();
 
-        if (lines.Count == 1)
+        if (total <= 1)
         {
             var single = detailsList[0];
             var dir = Path.GetDirectoryName(single.FullPath) ?? "";
@@ -253,14 +258,43 @@ public static class FileDisplayHelper
         }
 
         return new FileDisplayDetails(
-            FileName: pt ? $"{lines.Count} arquivos" : $"{lines.Count} files",
+            FileName: pt ? $"{total} arquivos" : $"{total} files",
             Extension: "",
-            TypeLabel: pt ? $"{lines.Count} arquivos selecionados" : $"{lines.Count} selected files",
+            TypeLabel: pt ? $"{total} arquivos selecionados" : $"{total} selected files",
             FormattedSize: "",
             DirectoryPath: Path.GetDirectoryName(detailsList[0].FullPath) ?? "",
             IsMultiple: true,
-            FileCount: lines.Count,
+            FileCount: total,
             Items: detailsList);
+    }
+
+    // Upper bound of FileDisplayDetails.Items for a multi-file item.
+    public const int MaxListedFiles = 10;
+
+    // Paths in a File/Files content (its non-blank lines), counted without
+    // splitting it into strings.
+    public static int CountPaths(string? content)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return 0;
+        }
+        var count = 0;
+        var rest = content.AsSpan();
+        while (true)
+        {
+            var end = rest.IndexOf('\n');
+            var line = end < 0 ? rest : rest[..end];
+            if (!line.IsWhiteSpace())
+            {
+                count++;
+            }
+            if (end < 0)
+            {
+                return count;
+            }
+            rest = rest[(end + 1)..];
+        }
     }
 
     private static long? TryGetDiskFileSize(string path)

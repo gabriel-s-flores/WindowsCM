@@ -42,7 +42,9 @@ public sealed class LinkImageCache : ILinkImageCache
         var path = Path.Combine(Directory, FileNameFor(url));
         if (!File.Exists(path))
         {
-            File.WriteAllBytes(path, bytes);
+            // "Clear cache" deletes the folder while the app runs.
+            System.IO.Directory.CreateDirectory(Directory);
+            WindowsCM.Core.Capture.ImageFiles.WriteAtomically(path, bytes);
         }
         return path;
     }
@@ -52,6 +54,10 @@ public sealed class LinkImageCache : ILinkImageCache
         var keep = new HashSet<string>(
             referencedUrls.Select(FileNameFor),
             StringComparer.OrdinalIgnoreCase);
+        if (!System.IO.Directory.Exists(Directory))
+        {
+            return;
+        }
         foreach (var file in System.IO.Directory.EnumerateFiles(Directory))
         {
             if (!keep.Contains(Path.GetFileName(file)))

@@ -46,22 +46,19 @@ public static class ItemDisplayFormatter
 
             case ItemKind.Files:
             {
-                var paths = (item.Content ?? "")
-                    .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(NormalizePath)
-                    .Where(p => !string.IsNullOrWhiteSpace(p))
-                    .ToList();
-
-                if (paths.Count == 0)
+                // Counted, not split: only the first name is shown.
+                var count = FileDisplayHelper.CountPaths(item.Content);
+                var firstPath = NormalizePath(TextPreview.FirstNonBlankLine(item.Content));
+                if (count == 0 || string.IsNullOrWhiteSpace(firstPath))
                 {
                     return isPt ? "Arquivos" : "Files";
                 }
-                if (paths.Count == 1)
+                var first = Path.GetFileName(firstPath);
+                if (count == 1)
                 {
-                    return Path.GetFileName(paths[0]);
+                    return first;
                 }
-                var first = Path.GetFileName(paths[0]);
-                return isPt ? $"{paths.Count} arquivos ({first})" : $"{paths.Count} files ({first})";
+                return isPt ? $"{count} arquivos ({first})" : $"{count} files ({first})";
             }
 
             case ItemKind.Code:
@@ -141,7 +138,7 @@ public static class ItemDisplayFormatter
 
             case ItemKind.Files:
             {
-                var count = (item.Content ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+                var count = FileDisplayHelper.CountPaths(item.Content);
                 if (isPt)
                 {
                     return count > 1 ? $"{count} arquivos" : "Múltiplos arquivos";

@@ -250,7 +250,7 @@ public sealed class CaptureService
         {
             return text.MetadataJson;
         }
-        return System.Text.Json.JsonSerializer.Serialize(new { html });
+        return System.Text.Json.JsonSerializer.Serialize(new { html }, Previews.ItemMetadataJson.StorageOptions);
     }
 
     private static (ItemKind Kind, string Hash) IdentityOf(ClassifiedContent classified) =>        classified switch

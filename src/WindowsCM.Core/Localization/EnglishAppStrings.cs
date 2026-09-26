@@ -25,6 +25,7 @@ public sealed class EnglishAppStrings : IAppStrings
     public string HistoryDatabaseRecoveredBalloon(string backupFileName) => $"The history database was damaged and has been recreated. The old file was kept as {backupFileName}.";
     public string HistoryDatabaseFallbackBalloon(string path) => $"Could not open the history at {path}. The default location is being used for this session.";
     public string HistoryDatabaseMemoryOnlyBalloon => "The history could not be opened. For this session it stays in memory only and will not be saved; see the error log.";
+    public string LinkPreviewYouTubeFallbackTitle => "YouTube video";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Incognito mode";
     public string TrayAutoPaste => "Paste automatically";
