@@ -158,8 +158,8 @@ public static class Smoke
 
     public static int HitTest(IntPtr hwnd, int x, int y)
     {
-        long packed = ((long)(y & 0xFFFF) << 16) | (long)(x & 0xFFFF);
-        return SendMessage(hwnd, 0x0084, IntPtr.Zero, new IntPtr(packed)).ToInt32(); // WM_NCHITTEST
+        uint packed = ((uint)(y & 0xFFFF) << 16) | (uint)(x & 0xFFFF);           // MAKELPARAM(x, y)
+        return SendMessage(hwnd, 0x0084, IntPtr.Zero, new IntPtr((long)packed)).ToInt32(); // WM_NCHITTEST
     }
 
     public static void ExitSizeMove(IntPtr hwnd)
