@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace WindowsCM.Core.Transfer;
@@ -12,7 +13,25 @@ namespace WindowsCM.Core.Transfer;
 // and receives uploaded files and text from mobile devices directly into the PC clipboard.
 public sealed class MiniTransferHttpServer : IDisposable
 {
+    // Shared items stay downloadable this long; they used to stay forever
+    // (text shares in memory too), behind 32-bit tokens.
+    public static readonly TimeSpan ShareLifetime = TimeSpan.FromHours(24);
+
+    // A connection that sends or accepts nothing for this long is dropped: a
+    // phone that left the network mid-upload used to hold its connection
+    // (and, before streaming, its buffered body) until the app exited.
+    public static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromSeconds(30);
+
+    // Text sent from the phone; files are streamed to disk instead.
+    public const int MaxTextBodyBytes = 16 * 1024 * 1024;
+
+    private const int MaxHeaderBytes = 16 * 1024;
+    private const int MaxConnections = 16;
+
     private readonly ConcurrentDictionary<string, SharedItemSession> _sharedSessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _connections = new(MaxConnections);
+    private readonly Func<DateTime> _utcNow;
+    private readonly TimeSpan _idleTimeout;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
@@ -22,37 +41,55 @@ public sealed class MiniTransferHttpServer : IDisposable
     public bool IsRunning => _listener != null;
     public string IncomingFolder { get; set; }
 
+    // Required to send anything to this PC: it travels in the QR code shown
+    // by "Receive from phone". /api/upload used to accept text and files
+    // from anyone on the network (a café Wi-Fi) and put them straight on
+    // the clipboard.
+    public string UploadKey { get; } = NewToken();
+
+    public string UploadPagePath => "/u/" + UploadKey;
+
     public event Action<IncomingTransferPayload>? PayloadReceived;
 
-    public MiniTransferHttpServer(int preferredPort = 58921, string? incomingFolder = null)
+    public MiniTransferHttpServer(
+        int preferredPort = 58921,
+        string? incomingFolder = null,
+        Func<DateTime>? utcNow = null,
+        TimeSpan? idleTimeout = null)
     {
         _port = preferredPort;
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        _idleTimeout = idleTimeout ?? DefaultIdleTimeout;
         IncomingFolder = incomingFolder ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Downloads",
             "WindowsCM Transfers");
     }
 
+    // Throws when no port can be bound (SocketException): the caller shows
+    // why, and IsRunning stays false.
     public void Start()
     {
         if (IsRunning) return;
 
-        _cts = new CancellationTokenSource();
-
+        TcpListener listener;
         // Try preferred port first; if busy, let OS assign an ephemeral free port (0)
         try
         {
-            _listener = new TcpListener(IPAddress.Any, _port);
-            _listener.Start();
+            listener = new TcpListener(IPAddress.Any, _port);
+            listener.Start();
         }
         catch (SocketException)
         {
-            _listener = new TcpListener(IPAddress.Any, 0);
-            _listener.Start();
+            listener = new TcpListener(IPAddress.Any, 0);
+            listener.Start();
         }
 
-        _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-        _listenTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
+        _cts = new CancellationTokenSource();
+        _listener = listener;
+        _port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var token = _cts.Token;
+        _listenTask = Task.Run(() => AcceptLoopAsync(listener, token));
     }
 
     public void Stop()
@@ -83,7 +120,8 @@ public sealed class MiniTransferHttpServer : IDisposable
         byte[]? rawBytes = null,
         long? itemId = null)
     {
-        var token = Guid.NewGuid().ToString("N")[..8];
+        PruneExpiredShares();
+        var token = NewToken();
         var fileName = !string.IsNullOrEmpty(filePath)
             ? Path.GetFileName(filePath)
             : (filePaths != null && filePaths.Count > 0 ? Path.GetFileName(filePaths[0]) : "item.txt");
@@ -116,7 +154,7 @@ public sealed class MiniTransferHttpServer : IDisposable
             FileName: fileName,
             ContentType: contentType,
             FileSize: fileSize,
-            CreatedAt: DateTime.UtcNow);
+            CreatedAt: _utcNow());
 
         _sharedSessions[token] = session;
         return session;
@@ -129,7 +167,15 @@ public sealed class MiniTransferHttpServer : IDisposable
 
     public SharedItemSession? GetShare(string token)
     {
-        _sharedSessions.TryGetValue(token, out var session);
+        if (!_sharedSessions.TryGetValue(token, out var session))
+        {
+            return null;
+        }
+        if (_utcNow() - session.CreatedAt > ShareLifetime)
+        {
+            _sharedSessions.TryRemove(token, out _);
+            return null;
+        }
         return session;
     }
 
@@ -139,14 +185,36 @@ public sealed class MiniTransferHttpServer : IDisposable
         return $"http://{localIp}:{_port}{cleanPath}";
     }
 
-    private async Task AcceptLoopAsync(CancellationToken ct)
+    public string BuildUploadUrl(IPAddress localIp) => BuildUrl(localIp, UploadPagePath);
+
+    private void PruneExpiredShares()
     {
-        while (!ct.IsCancellationRequested && _listener != null)
+        var now = _utcNow();
+        foreach (var (token, session) in _sharedSessions)
         {
+            if (now - session.CreatedAt > ShareLifetime)
+            {
+                _sharedSessions.TryRemove(token, out _);
+            }
+        }
+    }
+
+    // 128 random bits.
+    private static string NewToken() =>
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+
+    private bool IsUploadKey(string candidate) =>
+        CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(candidate), Encoding.ASCII.GetBytes(UploadKey));
+
+    private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            TcpClient client;
             try
             {
-                var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
-                _ = Task.Run(() => HandleClientAsync(client, ct), ct);
+                client = await listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -155,29 +223,54 @@ public sealed class MiniTransferHttpServer : IDisposable
             catch (Exception)
             {
                 if (ct.IsCancellationRequested) break;
+                continue;
             }
+            // Bounded: a flood of connections cannot pile up handlers.
+            if (!_connections.Wait(0))
+            {
+                client.Dispose();
+                continue;
+            }
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await HandleClientAsync(client, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _connections.Release();
+                }
+            });
         }
     }
 
-    private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
+    private async Task HandleClientAsync(TcpClient client, CancellationToken serverCt)
     {
         using (client)
-        using (var stream = client.GetStream())
+        using (var idle = CancellationTokenSource.CreateLinkedTokenSource(serverCt))
         {
+            // Re-armed on every read and write: only a silent peer times out,
+            // never a long transfer.
+            void Touch() => idle.CancelAfter(_idleTimeout);
+            Touch();
+            var ct = idle.Token;
+            var stream = client.GetStream();
             try
             {
-                // Read HTTP Request Headers
-                var headerBuffer = new byte[8192];
-                var headerBytesRead = await stream.ReadAsync(headerBuffer.AsMemory(0, headerBuffer.Length), ct).ConfigureAwait(false);
-                if (headerBytesRead <= 0) return;
+                var (head, initialBody) = await ReadHeadAsync(stream, Touch, ct).ConfigureAwait(false);
+                if (head is null)
+                {
+                    return;
+                }
 
-                var rawHeaders = Encoding.UTF8.GetString(headerBuffer, 0, headerBytesRead);
-                var headerEndIdx = rawHeaders.IndexOf("\r\n\r\n", StringComparison.Ordinal);
-                if (headerEndIdx < 0) return;
-
-                var requestLines = rawHeaders[..headerEndIdx].Split("\r\n");
+                var requestLines = head.Split("\r\n");
                 var requestLineParts = requestLines[0].Split(' ');
-                if (requestLineParts.Length < 2) return;
+                if (requestLineParts.Length < 2)
+                {
+                    await SendTextAsync(stream, 400, "Bad Request", "Bad Request", ct).ConfigureAwait(false);
+                    return;
+                }
 
                 var method = requestLineParts[0].ToUpperInvariant();
                 var rawUrl = requestLineParts[1];
@@ -200,31 +293,33 @@ public sealed class MiniTransferHttpServer : IDisposable
                 // Route Dispatcher
                 if (method == "GET")
                 {
-                    await HandleGetAsync(stream, path, rawUrl, host, ct).ConfigureAwait(false);
+                    await HandleGetAsync(stream, path, rawUrl, host, Touch, ct).ConfigureAwait(false);
                 }
-                else if (method == "POST" && path.Equals("/api/upload", StringComparison.OrdinalIgnoreCase))
+                else if (method == "POST" && path.StartsWith("/api/upload", StringComparison.OrdinalIgnoreCase))
                 {
-                    var bodyStart = headerEndIdx + 4;
-                    var bodyBytesInHeader = headerBytesRead - bodyStart;
-                    var initialBody = new byte[bodyBytesInHeader];
-                    if (bodyBytesInHeader > 0)
+                    var key = path["/api/upload".Length..].Trim('/');
+                    if (!IsUploadKey(key))
                     {
-                        Array.Copy(headerBuffer, bodyStart, initialBody, 0, bodyBytesInHeader);
+                        await SendTextAsync(stream, 403, "Forbidden", "Scan the QR code shown by WindowsCM again.", ct).ConfigureAwait(false);
+                        return;
                     }
-
-                    await HandlePostUploadAsync(stream, headers, initialBody, ct).ConfigureAwait(false);
+                    await HandlePostUploadAsync(stream, headers, initialBody, Touch, ct).ConfigureAwait(false);
                 }
                 else
                 {
-                    await SendResponseAsync(stream, 405, "Method Not Allowed", "text/plain", Encoding.UTF8.GetBytes("Method Not Allowed")).ConfigureAwait(false);
+                    await SendTextAsync(stream, 405, "Method Not Allowed", "Method Not Allowed", ct).ConfigureAwait(false);
                 }
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
+            {
+                // The peer went away or went silent: nothing to answer.
             }
             catch (Exception ex)
             {
                 try
                 {
-                    var err = Encoding.UTF8.GetBytes("Error: " + ex.Message);
-                    await SendResponseAsync(stream, 500, "Internal Server Error", "text/plain", err).ConfigureAwait(false);
+                    using var answer = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await SendTextAsync(stream, 500, "Internal Server Error", "Error: " + ex.Message, answer.Token).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -233,19 +328,61 @@ public sealed class MiniTransferHttpServer : IDisposable
         }
     }
 
-    private async Task HandleGetAsync(NetworkStream stream, string path, string rawUrl, string host, CancellationToken ct)
+    // Reads up to the end of the headers, however the request arrives in
+    // TCP segments (a single read used to drop a request whose headers came
+    // in two). Returns the bytes of the body read along with them.
+    private static async Task<(string? Head, byte[] InitialBody)> ReadHeadAsync(
+        NetworkStream stream, Action touch, CancellationToken ct)
     {
-        if (path == "/" || path.Equals("/upload", StringComparison.OrdinalIgnoreCase))
+        var buffer = new byte[MaxHeaderBytes];
+        var filled = 0;
+        while (filled < buffer.Length)
         {
-            var html = MobileWebTemplate.RenderUploadPage(host);
-            await SendResponseAsync(stream, 200, "OK", "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html)).ConfigureAwait(false);
+            var read = await stream.ReadAsync(buffer.AsMemory(filled), ct).ConfigureAwait(false);
+            touch();
+            if (read <= 0)
+            {
+                return (null, []);
+            }
+            var searchFrom = Math.Max(0, filled - 3);
+            filled += read;
+            var end = IndexOfHeadEnd(buffer, searchFrom, filled);
+            if (end >= 0)
+            {
+                return (Encoding.UTF8.GetString(buffer, 0, end), buffer[(end + 4)..filled]);
+            }
+        }
+        return (null, []);
+    }
+
+    private static int IndexOfHeadEnd(byte[] buffer, int from, int to)
+    {
+        var at = buffer.AsSpan(from, to - from).IndexOf("\r\n\r\n"u8);
+        return at < 0 ? -1 : from + at;
+    }
+
+    private async Task HandleGetAsync(NetworkStream stream, string path, string rawUrl, string host, Action touch, CancellationToken ct)
+    {
+        if (path.StartsWith("/u/", StringComparison.OrdinalIgnoreCase) && IsUploadKey(path[3..].Trim('/')))
+        {
+            var html = MobileWebTemplate.RenderUploadPage(host, uploadEndpoint: "/api/upload/" + UploadKey);
+            await SendResponseAsync(stream, 200, "OK", "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html), ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (path == "/" || path.Equals("/upload", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/u/", StringComparison.OrdinalIgnoreCase))
+        {
+            // No (or an old) key: send the user back to the QR code.
+            var html = MobileWebTemplate.RenderUploadLinkInvalidPage();
+            await SendResponseAsync(stream, 403, "Forbidden", "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html), ct).ConfigureAwait(false);
             return;
         }
 
         if (path.Equals("/api/ping", StringComparison.OrdinalIgnoreCase))
         {
             var json = "{\"status\":\"online\"}";
-            await SendResponseAsync(stream, 200, "OK", "application/json", Encoding.UTF8.GetBytes(json)).ConfigureAwait(false);
+            await SendResponseAsync(stream, 200, "OK", "application/json", Encoding.UTF8.GetBytes(json), ct).ConfigureAwait(false);
             return;
         }
 
@@ -253,10 +390,10 @@ public sealed class MiniTransferHttpServer : IDisposable
         if (path.StartsWith("/d/", StringComparison.OrdinalIgnoreCase))
         {
             var token = path[3..].Trim('/');
-            if (_sharedSessions.TryGetValue(token, out var session))
+            if (GetShare(token) is { } session)
             {
                 var html = MobileWebTemplate.RenderDownloadPage(session, host);
-                await SendResponseAsync(stream, 200, "OK", "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html)).ConfigureAwait(false);
+                await SendResponseAsync(stream, 200, "OK", "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html), ct).ConfigureAwait(false);
                 return;
             }
 
@@ -264,7 +401,7 @@ public sealed class MiniTransferHttpServer : IDisposable
                 ? "<h1>Item não encontrado ou expirado.</h1>"
                 : "<h1>Item not found or expired.</h1>";
             await SendResponseAsync(stream, 404, "Not Found", "text/html; charset=utf-8",
-                Encoding.UTF8.GetBytes(notFoundMsg)).ConfigureAwait(false);
+                Encoding.UTF8.GetBytes(notFoundMsg), ct).ConfigureAwait(false);
             return;
         }
 
@@ -272,39 +409,43 @@ public sealed class MiniTransferHttpServer : IDisposable
         if (path.StartsWith("/file/", StringComparison.OrdinalIgnoreCase))
         {
             var token = path[6..].Trim('/');
-            if (_sharedSessions.TryGetValue(token, out var session))
+            if (GetShare(token) is { } session)
             {
                 var isDownload = rawUrl.Contains("download=1", StringComparison.OrdinalIgnoreCase);
-                await ServeSessionFileAsync(stream, session, isDownload, ct).ConfigureAwait(false);
+                await ServeSessionFileAsync(stream, session, isDownload, touch, ct).ConfigureAwait(false);
                 return;
             }
 
-            await SendResponseAsync(stream, 404, "Not Found", "text/plain", Encoding.UTF8.GetBytes("File Not Found")).ConfigureAwait(false);
+            await SendTextAsync(stream, 404, "Not Found", "File Not Found", ct).ConfigureAwait(false);
             return;
         }
 
-        await SendResponseAsync(stream, 404, "Not Found", "text/plain", Encoding.UTF8.GetBytes("Not Found")).ConfigureAwait(false);
+        await SendTextAsync(stream, 404, "Not Found", "Not Found", ct).ConfigureAwait(false);
     }
 
-    private async Task ServeSessionFileAsync(NetworkStream stream, SharedItemSession session, bool isDownload, CancellationToken ct)
+    private static async Task ServeSessionFileAsync(
+        NetworkStream stream, SharedItemSession session, bool isDownload, Action touch, CancellationToken ct)
     {
         var disposition = isDownload ? "attachment" : "inline";
         var safeFileName = Uri.EscapeDataString(session.FileName);
 
         if (!string.IsNullOrEmpty(session.FilePath) && File.Exists(session.FilePath))
         {
-            var fileInfo = new FileInfo(session.FilePath);
+            using var fs = new FileStream(session.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 65536, true);
             var header = $"HTTP/1.1 200 OK\r\n" +
                          $"Content-Type: {session.ContentType}\r\n" +
-                         $"Content-Length: {fileInfo.Length}\r\n" +
+                         $"Content-Length: {fs.Length}\r\n" +
                          $"Content-Disposition: {disposition}; filename=\"{safeFileName}\"\r\n" +
                          $"Connection: close\r\n\r\n";
 
-            var headerBytes = Encoding.UTF8.GetBytes(header);
-            await stream.WriteAsync(headerBytes, ct).ConfigureAwait(false);
-
-            using var fs = new FileStream(session.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
-            await fs.CopyToAsync(stream, ct).ConfigureAwait(false);
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(header), ct).ConfigureAwait(false);
+            var chunk = new byte[65536];
+            int read;
+            while ((read = await fs.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+            {
+                await stream.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
+                touch();
+            }
             return;
         }
 
@@ -324,54 +465,61 @@ public sealed class MiniTransferHttpServer : IDisposable
         if (session.TextContent != null)
         {
             var textBytes = Encoding.UTF8.GetBytes(session.TextContent);
-            await SendResponseAsync(stream, 200, "OK", "text/plain; charset=utf-8", textBytes).ConfigureAwait(false);
+            await SendResponseAsync(stream, 200, "OK", "text/plain; charset=utf-8", textBytes, ct).ConfigureAwait(false);
             return;
         }
 
-        await SendResponseAsync(stream, 404, "Not Found", "text/plain", Encoding.UTF8.GetBytes("File content missing")).ConfigureAwait(false);
+        await SendTextAsync(stream, 404, "Not Found", "File content missing", ct).ConfigureAwait(false);
     }
 
-    private async Task HandlePostUploadAsync(NetworkStream stream, Dictionary<string, string> headers, byte[] initialBody, CancellationToken ct)
+    private async Task HandlePostUploadAsync(
+        NetworkStream stream, Dictionary<string, string> headers, byte[] initialBody, Action touch, CancellationToken ct)
     {
         headers.TryGetValue("Content-Type", out var contentType);
-        headers.TryGetValue("Content-Length", out var contentLengthStr);
-        long.TryParse(contentLengthStr, out var contentLength);
+        if (!headers.TryGetValue("Content-Length", out var contentLengthStr)
+            || !long.TryParse(contentLengthStr, out var contentLength) || contentLength < 0)
+        {
+            await SendTextAsync(stream, 411, "Length Required", "Length Required", ct).ConfigureAwait(false);
+            return;
+        }
 
         if (string.IsNullOrEmpty(contentType))
         {
-            await SendResponseAsync(stream, 400, "Bad Request", "text/plain", Encoding.UTF8.GetBytes("Missing Content-Type")).ConfigureAwait(false);
+            await SendTextAsync(stream, 400, "Bad Request", "Missing Content-Type", ct).ConfigureAwait(false);
             return;
         }
+
+        var body = new RequestBodyStream(initialBody, stream, contentLength);
 
         // 1. JSON Text Upload
         if (contentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
         {
-            using var ms = new MemoryStream();
-            ms.Write(initialBody, 0, initialBody.Length);
-            var remaining = contentLength - initialBody.Length;
-            if (remaining > 0)
+            if (contentLength > MaxTextBodyBytes)
             {
-                var buf = new byte[8192];
-                while (remaining > 0)
-                {
-                    var read = await stream.ReadAsync(buf.AsMemory(0, (int)Math.Min(buf.Length, remaining)), ct).ConfigureAwait(false);
-                    if (read <= 0) break;
-                    ms.Write(buf, 0, read);
-                    remaining -= read;
-                }
+                await SendTextAsync(stream, 413, "Payload Too Large", "Text too large", ct).ConfigureAwait(false);
+                return;
+            }
+            using var ms = new MemoryStream((int)contentLength);
+            var buf = new byte[8192];
+            int read;
+            while ((read = await body.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
+            {
+                ms.Write(buf, 0, read);
+                touch();
             }
 
-            var jsonStr = Encoding.UTF8.GetString(ms.ToArray());
             string? text = null;
             try
             {
-                using var doc = JsonDocument.Parse(jsonStr);
-                if (doc.RootElement.TryGetProperty("text", out var textProp))
+                using var doc = JsonDocument.Parse(ms.ToArray());
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("text", out var textProp)
+                    && textProp.ValueKind == JsonValueKind.String)
                 {
                     text = textProp.GetString();
                 }
             }
-            catch
+            catch (JsonException)
             {
             }
 
@@ -379,250 +527,110 @@ public sealed class MiniTransferHttpServer : IDisposable
             {
                 var payload = new IncomingTransferPayload(text, Array.Empty<IncomingFile>(), DateTime.UtcNow);
                 PayloadReceived?.Invoke(payload);
-                await SendResponseAsync(stream, 200, "OK", "application/json", Encoding.UTF8.GetBytes("{\"status\":\"ok\"}")).ConfigureAwait(false);
+                await SendResponseAsync(stream, 200, "OK", "application/json", Encoding.UTF8.GetBytes("{\"status\":\"ok\"}"), ct).ConfigureAwait(false);
                 return;
             }
 
-            await SendResponseAsync(stream, 400, "Bad Request", "text/plain", Encoding.UTF8.GetBytes("No text provided")).ConfigureAwait(false);
+            await SendTextAsync(stream, 400, "Bad Request", "No text provided", ct).ConfigureAwait(false);
             return;
         }
 
-        // 2. Multipart File Upload
+        // 2. Multipart File Upload, streamed to disk
         if (contentType.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
         {
             var boundaryIdx = contentType.IndexOf("boundary=", StringComparison.OrdinalIgnoreCase);
             if (boundaryIdx < 0)
             {
-                await SendResponseAsync(stream, 400, "Bad Request", "text/plain", Encoding.UTF8.GetBytes("Missing boundary")).ConfigureAwait(false);
+                await SendTextAsync(stream, 400, "Bad Request", "Missing boundary", ct).ConfigureAwait(false);
                 return;
             }
 
             var boundary = contentType[(boundaryIdx + 9)..].Split(';')[0].Trim('"', ' ');
             Directory.CreateDirectory(IncomingFolder);
 
-            var savedFiles = await ParseAndSaveMultipartFilesAsync(stream, boundary, contentLength, initialBody, ct).ConfigureAwait(false);
+            IReadOnlyList<IncomingFile> savedFiles;
+            try
+            {
+                savedFiles = await new MultipartFileReceiver(IncomingFolder)
+                    .ReceiveAsync(body, boundary, touch, ct).ConfigureAwait(false);
+            }
+            catch (InvalidDataException)
+            {
+                await SendTextAsync(stream, 400, "Bad Request", "Malformed upload", ct).ConfigureAwait(false);
+                return;
+            }
 
             if (savedFiles.Count > 0)
             {
                 var payload = new IncomingTransferPayload(null, savedFiles, DateTime.UtcNow);
                 PayloadReceived?.Invoke(payload);
-                await SendResponseAsync(stream, 200, "OK", "application/json", Encoding.UTF8.GetBytes("{\"status\":\"ok\"}")).ConfigureAwait(false);
+                await SendResponseAsync(stream, 200, "OK", "application/json", Encoding.UTF8.GetBytes("{\"status\":\"ok\"}"), ct).ConfigureAwait(false);
                 return;
             }
 
-            await SendResponseAsync(stream, 400, "Bad Request", "text/plain", Encoding.UTF8.GetBytes("No valid files uploaded")).ConfigureAwait(false);
+            await SendTextAsync(stream, 400, "Bad Request", "No valid files uploaded", ct).ConfigureAwait(false);
             return;
         }
 
-        await SendResponseAsync(stream, 415, "Unsupported Media Type", "text/plain", Encoding.UTF8.GetBytes("Unsupported Content-Type")).ConfigureAwait(false);
+        await SendTextAsync(stream, 415, "Unsupported Media Type", "Unsupported Content-Type", ct).ConfigureAwait(false);
     }
 
-    private async Task<List<IncomingFile>> ParseAndSaveMultipartFilesAsync(
-        NetworkStream stream,
-        string boundary,
-        long contentLength,
-        byte[] initialBody,
-        CancellationToken ct)
-    {
-        var result = new List<IncomingFile>();
-        using var bodyStream = new MemoryStream();
-        bodyStream.Write(initialBody, 0, initialBody.Length);
-        var remaining = contentLength - initialBody.Length;
-        var readBuf = new byte[65536];
+    private static Task SendTextAsync(NetworkStream stream, int statusCode, string statusReason, string text, CancellationToken ct) =>
+        SendResponseAsync(stream, statusCode, statusReason, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(text), ct);
 
-        while (remaining > 0)
-        {
-            var toRead = (int)Math.Min(readBuf.Length, remaining);
-            var read = await stream.ReadAsync(readBuf.AsMemory(0, toRead), ct).ConfigureAwait(false);
-            if (read <= 0) break;
-            bodyStream.Write(readBuf, 0, read);
-            remaining -= read;
-        }
-
-        var fullBytes = bodyStream.ToArray();
-        var boundaryBytes = Encoding.UTF8.GetBytes("--" + boundary);
-        var endBoundaryBytes = Encoding.UTF8.GetBytes("--" + boundary + "--");
-
-        int pos = 0;
-        while (pos < fullBytes.Length)
-        {
-            var partStart = IndexOf(fullBytes, boundaryBytes, pos);
-            if (partStart < 0) break;
-
-            pos = partStart + boundaryBytes.Length;
-            if (pos >= fullBytes.Length) break;
-
-            // Check if final boundary
-            if (pos + 2 <= fullBytes.Length && fullBytes[pos] == '-' && fullBytes[pos + 1] == '-')
-            {
-                break;
-            }
-
-            // Skip CRLF after boundary
-            if (pos + 2 <= fullBytes.Length && fullBytes[pos] == '\r' && fullBytes[pos + 1] == '\n')
-            {
-                pos += 2;
-            }
-
-            // Next boundary is where this part ends
-            var nextPart = IndexOf(fullBytes, boundaryBytes, pos);
-            var partEnd = nextPart >= 0 ? nextPart : fullBytes.Length;
-
-            // Part headers end with \r\n\r\n
-            var headerDelim = Encoding.UTF8.GetBytes("\r\n\r\n");
-            var headerEnd = IndexOf(fullBytes, headerDelim, pos, partEnd - pos);
-            if (headerEnd < 0)
-            {
-                pos = partEnd;
-                continue;
-            }
-
-            var partHeaders = Encoding.UTF8.GetString(fullBytes, pos, headerEnd - pos);
-            var dataStart = headerEnd + 4;
-            var dataEnd = partEnd;
-
-            // Strip trailing \r\n before next boundary
-            if (dataEnd >= dataStart + 2 && fullBytes[dataEnd - 2] == '\r' && fullBytes[dataEnd - 1] == '\n')
-            {
-                dataEnd -= 2;
-            }
-
-            var dataLen = dataEnd - dataStart;
-            if (dataLen > 0)
-            {
-                var (fileName, partContentType) = ParsePartHeaders(partHeaders);
-                if (!string.IsNullOrEmpty(fileName))
-                {
-                    // Clean and sanitize filename to prevent directory traversal
-                    var safeName = Path.GetFileName(fileName).Trim();
-                    if (string.IsNullOrWhiteSpace(safeName))
-                    {
-                        safeName = "unnamed_file_" + DateTime.UtcNow.Ticks;
-                    }
-
-                    var destPath = GetUniqueFilePath(IncomingFolder, safeName);
-                    using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        fs.Write(fullBytes, dataStart, dataLen);
-                    }
-
-                    result.Add(new IncomingFile(safeName, partContentType, destPath, dataLen));
-                }
-            }
-
-            pos = partEnd;
-        }
-
-        return result;
-    }
-
-    private static (string? FileName, string ContentType) ParsePartHeaders(string headersText)
-    {
-        string? fileName = null;
-        string contentType = "application/octet-stream";
-
-        var lines = headersText.Split("\r\n");
-        foreach (var line in lines)
-        {
-            if (line.StartsWith("Content-Disposition:", StringComparison.OrdinalIgnoreCase))
-            {
-                fileName = ExtractFileNameFromDisposition(line);
-            }
-            else if (line.StartsWith("Content-Type:", StringComparison.OrdinalIgnoreCase))
-            {
-                contentType = line[13..].Trim();
-            }
-        }
-
-        return (fileName, contentType);
-    }
-
-    private static string? ExtractFileNameFromDisposition(string dispositionLine)
-    {
-        // Check filename*=utf-8''... (RFC 5987)
-        var fnStar = dispositionLine.IndexOf("filename*=", StringComparison.OrdinalIgnoreCase);
-        if (fnStar >= 0)
-        {
-            var val = dispositionLine[(fnStar + 10)..].Split(';')[0].Trim();
-            var tick = val.LastIndexOf('\'');
-            if (tick >= 0 && tick < val.Length - 1)
-            {
-                try
-                {
-                    return Uri.UnescapeDataString(val[(tick + 1)..]);
-                }
-                catch
-                {
-                }
-            }
-        }
-
-        // Check filename="xyz" or filename=xyz
-        var fnIdx = dispositionLine.IndexOf("filename=", StringComparison.OrdinalIgnoreCase);
-        if (fnIdx >= 0)
-        {
-            var raw = dispositionLine[(fnIdx + 9)..].Split(';')[0].Trim();
-            if (raw.StartsWith('"') && raw.Length > 1)
-            {
-                var end = raw.IndexOf('"', 1);
-                if (end > 0) return raw[1..end];
-            }
-            return raw.Trim('"', ' ');
-        }
-
-        return null;
-    }
-
-    private static string GetUniqueFilePath(string folder, string fileName)
-    {
-        var basePath = Path.Combine(folder, fileName);
-        if (!File.Exists(basePath)) return basePath;
-
-        var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
-        var ext = Path.GetExtension(fileName);
-
-        for (int i = 1; i < 1000; i++)
-        {
-            var candidate = Path.Combine(folder, $"{nameWithoutExt} ({i}){ext}");
-            if (!File.Exists(candidate)) return candidate;
-        }
-
-        return Path.Combine(folder, $"{nameWithoutExt}_{Guid.NewGuid():N}{ext}");
-    }
-
-    private static int IndexOf(byte[] source, byte[] pattern, int startIndex = 0, int count = -1)
-    {
-        if (count < 0) count = source.Length - startIndex;
-        var end = Math.Min(source.Length, startIndex + count) - pattern.Length;
-
-        for (int i = startIndex; i <= end; i++)
-        {
-            bool match = true;
-            for (int j = 0; j < pattern.Length; j++)
-            {
-                if (source[i + j] != pattern[j])
-                {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) return i;
-        }
-        return -1;
-    }
-
-    private static async Task SendResponseAsync(NetworkStream stream, int statusCode, string statusReason, string contentType, byte[] body)
+    private static async Task SendResponseAsync(NetworkStream stream, int statusCode, string statusReason, string contentType, byte[] body, CancellationToken ct)
     {
         var header = $"HTTP/1.1 {statusCode} {statusReason}\r\n" +
                      $"Content-Type: {contentType}\r\n" +
                      $"Content-Length: {body.Length}\r\n" +
                      $"Connection: close\r\n\r\n";
 
-        var headerBytes = Encoding.UTF8.GetBytes(header);
-        await stream.WriteAsync(headerBytes).ConfigureAwait(false);
+        await stream.WriteAsync(Encoding.UTF8.GetBytes(header), ct).ConfigureAwait(false);
         if (body.Length > 0)
         {
-            await stream.WriteAsync(body).ConfigureAwait(false);
+            await stream.WriteAsync(body, ct).ConfigureAwait(false);
+        }
+    }
+
+    // The request body: bytes that arrived with the headers, then the rest
+    // of the socket, never past Content-Length.
+    private sealed class RequestBodyStream(byte[] initial, Stream network, long length) : Stream
+    {
+        private long _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            var remaining = length - _position;
+            if (remaining <= 0 || buffer.Length == 0)
+            {
+                return 0;
+            }
+            var wanted = (int)Math.Min(buffer.Length, remaining);
+            int read;
+            if (_position < initial.Length)
+            {
+                read = (int)Math.Min(wanted, initial.Length - _position);
+                initial.AsMemory((int)_position, read).CopyTo(buffer);
+            }
+            else
+            {
+                read = await network.ReadAsync(buffer[..wanted], ct).ConfigureAwait(false);
+            }
+            _position += read;
+            return read;
         }
     }
 

@@ -20,7 +20,8 @@ public partial class MobileTransferWindow : Window
     {
         InitializeComponent();
         _server = server;
-        _transferUrl = _server.BuildUrl(localIp, "/");
+        // Carries the upload key: without it the server refuses uploads.
+        _transferUrl = _server.BuildUploadUrl(localIp);
 
         UrlText.Text = _transferUrl;
         QrImage.Source = RenderQrCode(_transferUrl);
@@ -31,7 +32,8 @@ public partial class MobileTransferWindow : Window
 
     private void OnPayloadReceived(IncomingTransferPayload payload)
     {
-        Dispatcher.Invoke(() =>
+        // Queued, not waited for: raised on the server's connection thread.
+        Dispatcher.BeginInvoke(() =>
         {
             var strings = LocalizationManager.Strings;
             StatusDot.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));

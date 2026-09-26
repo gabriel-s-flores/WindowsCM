@@ -26,6 +26,9 @@ public sealed class EnglishAppStrings : IAppStrings
     public string HistoryDatabaseFallbackBalloon(string path) => $"Could not open the history at {path}. The default location is being used for this session.";
     public string HistoryDatabaseMemoryOnlyBalloon => "The history could not be opened. For this session it stays in memory only and will not be saved; see the error log.";
     public string LinkPreviewYouTubeFallbackTitle => "YouTube video";
+    public string MobileUploadLinkInvalidTitle => "Invalid upload link";
+    public string MobileUploadLinkInvalidBody => "This link cannot send to the computer. In WindowsCM, click \"Send from mobile to PC\" (the phone icon) and scan the QR code it shows.";
+    public string TransferServerUnavailableBalloon => "Could not start the local network transfer (the port may be blocked). See the error log.";
     public string TrayIconTooltip => "WindowsCM";
     public string TrayIconTooltipIncognito => "WindowsCM — Incognito mode";
     public string TrayAutoPaste => "Paste automatically";
