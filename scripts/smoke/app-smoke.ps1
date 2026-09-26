@@ -162,6 +162,19 @@ public static class Smoke
         return SendMessage(hwnd, 0x0084, IntPtr.Zero, new IntPtr((long)packed)).ToInt32(); // WM_NCHITTEST
     }
 
+    [DllImport("user32.dll")] static extern IntPtr GetOpenClipboardWindow();
+
+    // Who holds the clipboard open right now (for failed writes).
+    public static string ClipboardHolder()
+    {
+        IntPtr h = GetOpenClipboardWindow();
+        if (h == IntPtr.Zero) return "no window (OpenClipboard(NULL) or already closed)";
+        int pid = ProcessOf(h);
+        string name = "?";
+        try { name = System.Diagnostics.Process.GetProcessById(pid).ProcessName; } catch { }
+        return name + " (pid " + pid + ", window class " + ClassOf(h) + ")";
+    }
+
     public static void ExitSizeMove(IntPtr hwnd)
     {
         SendMessage(hwnd, 0x0232, IntPtr.Zero, IntPtr.Zero);                         // WM_EXITSIZEMOVE
@@ -267,35 +280,7 @@ function Sample-Process([string]$label) {
     return $sample
 }
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw 'python is required to read the history database' }
-
-# ------------------------------------------------------------ fresh state
-
-Stop-App
-Remove-Item -Recurse -Force $dataDir, $configDir -ErrorAction SilentlyContinue
-Note "# WindowsCM app smoke"
-Note ""
-Note "Screen: $($work.Width)x$($work.Height) working area, DPI scale $scale, $([System.Windows.Forms.Screen]::AllScreens.Count) monitor(s)."
-
-# ---------------------------------------------------------------- 1. stress
-
-Note ""
-Note "## 1. Stress: $Copies copies + popup cycles"
-Write-Settings
-Start-App
-$startup = Sample-Process 'startup'
-$samples = New-Object System.Collections.Generic.List[object]
-$samples.Add($startup)
-$openTimes = New-Object System.Collections.Generic.List[double]
-
-$tempFiles = @()
-for ($f = 0; $f -lt 5; $f++) { $path = Join-Path $env:TEMP "wcm-smoke-$f.txt"; Set-Content $path "file $f"; $tempFiles += $path }
-$bigText = ('lorem ipsum dolor sit amet, consectetur adipiscing elit ' * 40000)   # ~2.2 MB
-$random = New-Object System.Random 7
-$clipboardFailures = New-Object System.Collections.Generic.List[string]
-$copyWatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-for ($i = 1; $i -le $Copies; $i++) {
+function New-Payload([int]$i) {
     $data = New-Object System.Windows.Forms.DataObject
     switch ($i % 9) {
         0 { $data.SetText("public static int Compute$i(int x) { return x * $i; } // code") }
@@ -320,9 +305,58 @@ for ($i = 1; $i -le $Copies; $i++) {
         6 { $data.SetText([char]::ConvertFromUtf32(0x1F600 + ($i % 50))) }
         default { $data.SetText("multi`nline`ntext $i`n" + ('line ' * ($i % 40))) }
     }
+    return ,$data
+}
+
+function Copy-Burst([int]$from, [int]$to, $failuresList) {
+    for ($i = $from; $i -le $to; $i++) {
+        $data = New-Payload $i
+        try { Set-Clip $data } catch { $failuresList.Add("copy $i ($($data.GetFormats() -join ', ')) held by $([Smoke]::ClipboardHolder())") }
+        if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds 40 }
+    }
+}
+
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw 'python is required to read the history database' }
+
+# ------------------------------------------------------------ fresh state
+
+Stop-App
+Remove-Item -Recurse -Force $dataDir, $configDir -ErrorAction SilentlyContinue
+Note "# WindowsCM app smoke"
+Note ""
+Note "Screen: $($work.Width)x$($work.Height) working area, DPI scale $scale, $([System.Windows.Forms.Screen]::AllScreens.Count) monitor(s)."
+
+# ---------------------------------------------------------------- 1. stress
+
+Note ""
+Note "## 0. Baseline: the same copies with WindowsCM NOT running"
+$tempFiles = @()
+for ($f = 0; $f -lt 5; $f++) { $path = Join-Path $env:TEMP "wcm-smoke-$f.txt"; Set-Content $path "file $f"; $tempFiles += $path }
+$bigText = ('lorem ipsum dolor sit amet, consectetur adipiscing elit ' * 40000)   # ~2.2 MB
+$random = New-Object System.Random 7
+$baselineFailures = New-Object System.Collections.Generic.List[string]
+Copy-Burst 1 60 $baselineFailures
+foreach ($failure in ($baselineFailures | Select-Object -First 10)) { Note "    clipboard busy at $failure" }
+Note "  environment alone: $($baselineFailures.Count) of 60 clipboard writes failed"
+$metrics.baselineClipboardWriteFailures = $baselineFailures.Count
+
+Note ""
+Note "## 1. Stress: $Copies copies + popup cycles"
+Write-Settings
+Start-App
+$startup = Sample-Process 'startup'
+$samples = New-Object System.Collections.Generic.List[object]
+$samples.Add($startup)
+$openTimes = New-Object System.Collections.Generic.List[double]
+
+$clipboardFailures = New-Object System.Collections.Generic.List[string]
+$copyWatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+for ($i = 1; $i -le $Copies; $i++) {
+    $data = New-Payload $i
     # Another app copying while WindowsCM reads the previous copy: it must
     # never find the clipboard held for longer than its ~1 s of retries.
-    try { Set-Clip $data } catch { $clipboardFailures.Add("copy $i ($($data.GetFormats() -join ', '))") }
+    try { Set-Clip $data } catch { $clipboardFailures.Add("copy $i ($($data.GetFormats() -join ', ')) held by $([Smoke]::ClipboardHolder())") }
     # Bursts: every 20th copy is followed by a quick succession.
     if ($i % 20 -lt 3) { Start-Sleep -Milliseconds 5 } else { Start-Sleep -Milliseconds 40 }
 
@@ -342,7 +376,7 @@ $copyWatch.Stop()
 Start-Sleep -Seconds 2
 
 Check (Alive) "app still running after $Copies copies and $($openTimes.Count) popup cycles"
-foreach ($failure in $clipboardFailures) { Note "    clipboard busy at $failure" }
+foreach ($failure in ($clipboardFailures | Select-Object -First 25)) { Note "    clipboard busy at $failure" }
 Check ($clipboardFailures.Count -eq 0) "other apps can always copy: $($clipboardFailures.Count) of $Copies clipboard writes failed"
 $metrics.clipboardWriteFailures = $clipboardFailures.Count
 if (Alive) {
