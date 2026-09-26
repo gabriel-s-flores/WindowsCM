@@ -12,6 +12,7 @@ internal static class NativeClipboard
 {
     public const int WM_CLIPBOARDUPDATE = 0x031D;
     public const int WM_CLOSE = 0x0010;
+    public const int WM_TIMER = 0x0113;
     public const uint CF_UNICODETEXT = 13;
     public const uint CF_HDROP = 15;
     public const uint CF_DIB = 8;
@@ -99,6 +100,12 @@ internal static class NativeClipboard
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool PostMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr nIDEvent, uint uElapse, IntPtr lpTimerFunc);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool KillTimer(IntPtr hWnd, UIntPtr uIDEvent);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr GetModuleHandle(string? lpModuleName);

@@ -38,6 +38,10 @@ _Avoid_: pause (it captures in-memory for the duration), permanent storage, auto
 The time-ordered collection of items, bounded by length and age limits, minus pinned/tagged protection rules.
 _Avoid_: log, feed
 
+**Auto-paste**:
+Picking an item pastes it into the field the user had clicked before opening WindowsCM (the paste target), not just onto the clipboard. On by default, toggled from the tray menu or Settings. The paste target is the app that held the focus — or, when WindowsCM is opened from the tray, the last app before the taskbar; when that last place was the desktop there is no target and the pick is only copied.
+_Avoid_: paste-on-copy (a dropped Copyous flag), auto-type
+
 **Mobile transfer**:
 Bidirectional local Wi-Fi transfer of files (audio, image, documents, video) and text/clipboard between the computer and a mobile device via QR code and an embedded local server.
 _Avoid_: cloud sync, pairing, bluetooth
@@ -53,6 +57,10 @@ _Avoid_: window mode, layout style
 **Screen dock position**:
 The screen edge to which the large clipboard window anchors: Top or Bottom (when horizontal) and Left or Right (when vertical).
 _Avoid_: alignment, gravity
+
+**Large window placement**:
+How the large clipboard window is placed: `FollowMouse` (docked to a screen dock position on the monitor under the mouse — the default), `FixedMonitor` (docked on a monitor the user picked, remembered by its device name; the primary stands in while it is disconnected) or `Free` (wherever the user dragged it, at the size they left it, remembered per clipboard orientation and pulled back on-screen if its monitor is gone).
+_Avoid_: window mode, floating mode, multi-monitor mode (it does not span monitors)
 
 **Item flow direction**:
 The spatial progression of clipboard records based on chronological recency: `RecentOnLeft` vs `RecentOnRight` for horizontal arrangements, and `RecentOnTop` vs `RecentOnBottom` for vertical arrangements.

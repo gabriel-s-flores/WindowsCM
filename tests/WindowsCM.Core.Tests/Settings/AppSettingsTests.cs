@@ -209,4 +209,31 @@ public sealed class AppSettingsTests
         Assert.Equal(VerticalScrollbarPosition.Left, loaded.Dialog.VerticalScrollbarPosition);
         Assert.Equal(HorizontalScrollbarPosition.Top, loaded.Dialog.HorizontalScrollbarPosition);
     }
+
+    [Fact]
+    public void AutoPaste_IsOnByDefault_AndReachesPasteOptions()
+    {
+        var settings = AppSettings.Default();
+
+        Assert.True(settings.Behavior.AutoPaste);
+        Assert.True(settings.ToPasteOptions().AutoPaste);
+
+        settings.Behavior.AutoPaste = false;
+
+        Assert.False(settings.ToPasteOptions().AutoPaste);
+    }
+
+    [Fact]
+    public void AutoPaste_OlderSettingsFilesLoadItOn_AndOffRoundTrips()
+    {
+        // settings.json written before the flag existed.
+        var legacy = SettingsStore.Deserialize("""{"behavior":{"rememberSearch":true}}""");
+        Assert.True(legacy.Behavior.AutoPaste);
+
+        var settings = AppSettings.Default();
+        settings.Behavior.AutoPaste = false;
+        var restored = SettingsStore.Deserialize(SettingsStore.Serialize(settings));
+
+        Assert.False(restored.Behavior.AutoPaste);
+    }
 }

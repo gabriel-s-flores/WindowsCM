@@ -114,6 +114,7 @@ public partial class SettingsWindow : Window
         HistoryLimitValueText.Text = LocalizationManager.Strings.SettingsHistoryLimitBadge(_settings.History.MaxItems);
 
         AutostartCheck.IsChecked = AutostartManager.IsEnabled(new RegistryRunKeyStore());
+        AutoPasteCheck.IsChecked = _settings.Behavior.AutoPaste;
 
         EndOfSessionCombo.SelectedIndex = (int)_settings.History.EndOfSession;
 
@@ -124,6 +125,8 @@ public partial class SettingsWindow : Window
 
         // Layout & Placement
         LargeOrientationCombo.SelectedIndex = _settings.Dialog.Orientation == DialogOrientation.Vertical ? 1 : 0;
+        LargePlacementCombo.SelectedIndex = (int)_settings.Dialog.LargePlacement;
+        PopulateMonitorCombo();
         LargeHorizontalPosCombo.SelectedIndex = _settings.Dialog.LargeHorizontalPosition == LargeHorizontalPosition.Top ? 1 : 0;
         LargeVerticalPosCombo.SelectedIndex = _settings.Dialog.LargeVerticalPosition == LargeVerticalPosition.Right ? 1 : 0;
         LargeHorizontalOrderCombo.SelectedIndex = _settings.Dialog.LargeHorizontalOrder == HorizontalItemOrder.RecentOnRight ? 1 : 0;
@@ -183,6 +186,7 @@ public partial class SettingsWindow : Window
             _ => strings.SettingsThemeStatusFluent,
         };
         HistoryLimitValueText.Text = strings.SettingsHistoryLimitBadge(_settings.History.MaxItems);
+        PopulateMonitorCombo();
         StopRecording();
         ShowHotkeyInfo();
         UpdateDiagnosticsTexts();
@@ -363,6 +367,12 @@ public partial class SettingsWindow : Window
 
     private void UpdateLayoutControlsVisibility()
     {
+        var placement = _settings.Dialog.LargePlacement;
+        LargeMonitorRow.Visibility = placement == LargePlacementMode.FixedMonitor ? Visibility.Visible : Visibility.Collapsed;
+        LargeFreeRow.Visibility = placement == LargePlacementMode.Free ? Visibility.Visible : Visibility.Collapsed;
+        // Edges only apply to the docked modes.
+        LargePositionRow.Visibility = placement == LargePlacementMode.Free ? Visibility.Collapsed : Visibility.Visible;
+
         var isLargeVertical = _settings.Dialog.Orientation == DialogOrientation.Vertical;
         LargeHorizontalPosCombo.Visibility = isLargeVertical ? Visibility.Collapsed : Visibility.Visible;
         LargeVerticalPosCombo.Visibility = isLargeVertical ? Visibility.Visible : Visibility.Collapsed;
@@ -415,6 +425,83 @@ public partial class SettingsWindow : Window
         UpdateLayoutControlsVisibility();
         SaveLayoutSettings();
         UpdateMockPreview();
+    }
+
+    private void OnLargePlacementChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.Dialog.LargePlacement = LargePlacementCombo.SelectedIndex switch
+        {
+            1 => LargePlacementMode.FixedMonitor,
+            2 => LargePlacementMode.Free,
+            _ => LargePlacementMode.FollowMouse,
+        };
+        if (_settings.Dialog.LargePlacement == LargePlacementMode.FixedMonitor)
+        {
+            PopulateMonitorCombo();
+        }
+        UpdateLayoutControlsVisibility();
+        SaveLayoutSettings();
+        UpdateMockPreview();
+    }
+
+    // Lists the connected monitors in desk order. A saved monitor that is
+    // disconnected shows the primary selected but stays in the settings,
+    // so it is used again when it comes back.
+    private void PopulateMonitorCombo()
+    {
+        var wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            var strings = LocalizationManager.Strings;
+            var displays = DisplayMonitors.Numbered();
+            LargeMonitorCombo.Items.Clear();
+            ComboBoxItem? selected = null;
+            ComboBoxItem? primary = null;
+            foreach (var display in displays)
+            {
+                var item = new ComboBoxItem
+                {
+                    Content = strings.SettingsLayoutMonitorItem(display.Number, display.PixelWidth, display.PixelHeight, display.IsPrimary),
+                    Tag = display.DeviceName,
+                };
+                LargeMonitorCombo.Items.Add(item);
+                if (display.IsPrimary)
+                {
+                    primary = item;
+                }
+                if (string.Equals(display.DeviceName, _settings.Dialog.LargeMonitor, StringComparison.OrdinalIgnoreCase))
+                {
+                    selected = item;
+                }
+            }
+            LargeMonitorCombo.SelectedItem = selected ?? primary;
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
+    }
+
+    // Monitors can be plugged in while Settings is open.
+    private void OnLargeMonitorDropDownOpened(object? sender, EventArgs e) => PopulateMonitorCombo();
+
+    private void OnLargeMonitorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || LargeMonitorCombo.SelectedItem is not ComboBoxItem { Tag: string deviceName }) return;
+        _settings.Dialog.LargeMonitor = deviceName;
+        SaveLayoutSettings();
+    }
+
+    private void OnIdentifyMonitorsClicked(object sender, RoutedEventArgs e) =>
+        MonitorIdentifyOverlay.ShowAll(this);
+
+    private void OnResetFreePositionClicked(object sender, RoutedEventArgs e)
+    {
+        _settings.Dialog.LargeFreeBoundsHorizontal = null;
+        _settings.Dialog.LargeFreeBoundsVertical = null;
+        SaveLayoutSettings();
     }
 
     private void OnLargeHorizontalPosChanged(object sender, SelectionChangedEventArgs e)
@@ -568,6 +655,14 @@ public partial class SettingsWindow : Window
                 MockPopupWindow.Width = double.NaN;
                 MockPopupWindow.Height = 98;
                 MockPopupWindow.Margin = new Thickness(10, 6, 10, 6);
+                if (_settings.Dialog.LargePlacement == LargePlacementMode.Free)
+                {
+                    // Free: a floating strip, detached from the edges.
+                    MockPopupWindow.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                    MockPopupWindow.VerticalAlignment = VerticalAlignment.Center;
+                    MockPopupWindow.Width = 230;
+                    MockPopupWindow.Margin = new Thickness(0);
+                }
 
                 MockItemsPanel.Orientation = Orientation.Horizontal;
                 foreach (var c in cards)
@@ -607,6 +702,14 @@ public partial class SettingsWindow : Window
                 MockPopupWindow.Width = 120;
                 MockPopupWindow.Height = double.NaN;
                 MockPopupWindow.Margin = new Thickness(8, 4, 8, 4);
+                if (_settings.Dialog.LargePlacement == LargePlacementMode.Free)
+                {
+                    // Free: a floating column, detached from the edges.
+                    MockPopupWindow.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                    MockPopupWindow.VerticalAlignment = VerticalAlignment.Center;
+                    MockPopupWindow.Height = 130;
+                    MockPopupWindow.Margin = new Thickness(0);
+                }
 
                 MockItemsPanel.Orientation = Orientation.Vertical;
                 foreach (var c in cards)
@@ -779,6 +882,28 @@ public partial class SettingsWindow : Window
         else
         {
             AutostartManager.Disable(store);
+        }
+    }
+
+    private void OnAutoPasteChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.Behavior.AutoPaste = AutoPasteCheck.IsChecked == true;
+        _onSettingsLiveUpdated?.Invoke();
+    }
+
+    // The tray menu toggles the same setting while this window may be open.
+    internal void SyncAutoPaste(bool on)
+    {
+        var wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            AutoPasteCheck.IsChecked = on;
+        }
+        finally
+        {
+            _loading = wasLoading;
         }
     }
 

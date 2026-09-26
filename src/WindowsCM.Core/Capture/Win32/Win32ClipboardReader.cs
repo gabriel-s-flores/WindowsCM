@@ -35,60 +35,104 @@ public sealed class Win32ClipboardReader : IClipboardReader
         {
             return null;
         }
+        List<string> formats;
+        (byte[] Bytes, bool IsPng)? rawImage;
+        FileSnapshot? files = null;
+        string? text = null;
+        string? html = null;
         try
         {
-            var formats = GetFormatNames();
-            var image = TryReadImage();
-            var files = TryReadFiles();
-            var text = TryReadText();
-            var html = TryReadHtml();
-            if (image is null && files is null && string.IsNullOrWhiteSpace(text) && html is null)
+            // Only copy bytes out while the clipboard is open: until
+            // CloseClipboard every other app's copy and paste fails, so the
+            // PNG encoding of a screenshot happens after it (below).
+            // Formats are read in Classifier.Probe order and only as far as
+            // the winner: each GetClipboardData on a delayed-render format
+            // makes the source app render it (Excel renders the whole range
+            // as HTML), and an image or file list never uses the text/HTML.
+            formats = GetFormatNames();
+            rawImage = TryReadRawImage();
+            if (rawImage is null)
             {
-                return string.IsNullOrWhiteSpace(text) ? null
-                    : new ClipboardPayload(null, null, text, formats, html);
+                files = TryReadFiles();
+                if (files is null)
+                {
+                    text = TryReadText();
+                    html = TryReadHtml();
+                }
             }
-            return new ClipboardPayload(image, files, text, formats, html);
         }
         finally
         {
             NativeClipboard.CloseClipboard();
         }
+        var image = rawImage is { } raw ? DibToPng.ToSnapshot(raw.Bytes, raw.IsPng) : null;
+        if (image is null && files is null && string.IsNullOrWhiteSpace(text) && html is null)
+        {
+            return string.IsNullOrWhiteSpace(text) ? null
+                : new ClipboardPayload(null, null, text, formats, html);
+        }
+        return new ClipboardPayload(image, files, text, formats, html);
     }
 
-    private ImageSnapshot? TryReadImage()
+    private (byte[] Bytes, bool IsPng)? TryReadRawImage()
     {
-        // PNG first (exact bytes, no conversion), then DIBV5/DIB via encoder.
-        // CF_BITMAP skipped deliberately: device-dependent per research 02.
+        // PNG first (exact bytes, no conversion), then the first DIBV5/DIB
+        // whose header the encoder accepts (checked on the header alone, so
+        // only one full bitmap is copied). CF_BITMAP skipped deliberately:
+        // device-dependent per research 02.
         if (_pngFormat != 0 && NativeClipboard.IsClipboardFormatAvailable(_pngFormat))
         {
             var bytes = ReadBytes(_pngFormat);
             if (bytes is { Length: > 0 })
             {
-                return new ImageSnapshot("image/png", bytes);
+                return (bytes, true);
             }
         }
         foreach (var format in new[] { NativeClipboard.CF_DIBV5, NativeClipboard.CF_DIB })
         {
-            if (!NativeClipboard.IsClipboardFormatAvailable(format))
+            if (!NativeClipboard.IsClipboardFormatAvailable(format)
+                || !DibToPng.CanConvert(PeekBytes(format, DibToPng.HeaderLength)))
             {
                 continue;
             }
             var dib = ReadBytes(format);
-            if (dib is null || dib.Length <= 40)
+            if (dib is { Length: > 40 })
             {
-                continue;
-            }
-            try
-            {
-                return new ImageSnapshot("image/png", DibToPng.FromDib(dib));
-            }
-            catch (Exception ex) when (ex is NotSupportedException or ArgumentException)
-            {
-                // Unsupported DIB flavor: try the next bitmap format.
-                continue;
+                return (dib, false);
             }
         }
         return null;
+    }
+
+    // The first bytes of a clipboard format (a bitmap header) without
+    // copying the whole block.
+    private static byte[] PeekBytes(uint format, int count)
+    {
+        var handle = NativeClipboard.GetClipboardData(format);
+        if (handle == IntPtr.Zero)
+        {
+            return [];
+        }
+        var ptr = NativeClipboard.GlobalLock(handle);
+        if (ptr == IntPtr.Zero)
+        {
+            return [];
+        }
+        try
+        {
+            var size = (int)Math.Min(count, (long)NativeClipboard.GlobalSize(handle));
+            if (size <= 0)
+            {
+                return [];
+            }
+            var bytes = new byte[size];
+            Marshal.Copy(ptr, bytes, 0, size);
+            return bytes;
+        }
+        finally
+        {
+            NativeClipboard.GlobalUnlock(handle);
+        }
     }
 
     private FileSnapshot? TryReadFiles()

@@ -455,4 +455,61 @@ public class LocalizationTests
         Assert.NotEqual(ptText, enText);
         Assert.NotEqual(en.TrayPasteFailedBalloon("x"), en.TrayCopyFailedBalloon("x"));
     }
+
+    [Fact]
+    public void AutoPasteStrings_HaveParityInBothLanguages()
+    {
+        IAppStrings pt = new PortugueseAppStrings();
+        IAppStrings en = new EnglishAppStrings();
+
+        foreach (var pick in new Func<IAppStrings, string>[]
+        {
+            s => s.TrayAutoPaste,
+            s => s.SettingsAutoPasteTitle,
+            s => s.SettingsAutoPasteSubtitle,
+        })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(pick(pt)));
+            Assert.False(string.IsNullOrWhiteSpace(pick(en)));
+            Assert.NotEqual(pick(pt), pick(en));
+        }
+    }
+
+    [Fact]
+    public void LargePlacementStrings_HaveParityInBothLanguages()
+    {
+        IAppStrings pt = new PortugueseAppStrings();
+        IAppStrings en = new EnglishAppStrings();
+
+        foreach (var pick in new Func<IAppStrings, string>[]
+        {
+            s => s.SettingsLayoutPlacement,
+            s => s.SettingsLayoutPlacementFollowMouse,
+            s => s.SettingsLayoutPlacementFixedMonitor,
+            s => s.SettingsLayoutPlacementFree,
+            s => s.SettingsLayoutMonitorIdentify,
+            s => s.SettingsLayoutFreeHint,
+            s => s.SettingsLayoutFreeReset,
+            s => s.PopupDragHandleTooltip,
+        })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(pick(pt)));
+            Assert.False(string.IsNullOrWhiteSpace(pick(en)));
+            Assert.NotEqual(pick(pt), pick(en));
+        }
+        // Same word in both languages, still localized per catalog.
+        Assert.False(string.IsNullOrWhiteSpace(pt.SettingsLayoutMonitor));
+        Assert.False(string.IsNullOrWhiteSpace(en.SettingsLayoutMonitor));
+    }
+
+    [Fact]
+    public void SettingsLayoutMonitorItem_ShowsNumberResolutionAndPrimary()
+    {
+        IAppStrings pt = new PortugueseAppStrings();
+        IAppStrings en = new EnglishAppStrings();
+
+        Assert.Equal("Monitor 2 — 2560 × 1440", pt.SettingsLayoutMonitorItem(2, 2560, 1440, isPrimary: false));
+        Assert.Equal("Monitor 1 — 1920 × 1080 (principal)", pt.SettingsLayoutMonitorItem(1, 1920, 1080, isPrimary: true));
+        Assert.Equal("Monitor 1 — 1920 × 1080 (primary)", en.SettingsLayoutMonitorItem(1, 1920, 1080, isPrimary: true));
+    }
 }

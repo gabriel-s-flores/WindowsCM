@@ -27,12 +27,16 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
 
     private readonly Dictionary<TrayMenuItem, ToolStripMenuItem> _menuItems = new();
     private ToolStripMenuItem? _compactMenuItem;
+    private ToolStripMenuItem? _autoPasteItem;
+    private readonly Func<bool>? _isAutoPaste;
 
-    public TrayManager(TrayController controller, IIncognitoToggle incognito, Dispatcher dispatcher, Action? onOpenCompact = null)
+    public TrayManager(TrayController controller, IIncognitoToggle incognito, Dispatcher dispatcher,
+        Action? onOpenCompact = null, Func<bool>? isAutoPaste = null, Action<bool>? setAutoPaste = null)
     {
         _controller = controller;
         _incognito = incognito;
         _dispatcher = dispatcher;
+        _isAutoPaste = isAutoPaste;
 
         _icon = new NotifyIcon
         {
@@ -55,6 +59,19 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             if (item == TrayMenuItem.Incognito)
             {
                 _incognitoItem = entry;
+
+                // Checkable next to the other mode toggle: picks paste into
+                // the previously focused field (default) or only copy.
+                if (isAutoPaste is not null && setAutoPaste is not null)
+                {
+                    _autoPasteItem = new ToolStripMenuItem(WindowsCM.Core.Localization.LocalizationManager.Strings.TrayAutoPaste)
+                    {
+                        CheckOnClick = false,
+                        Checked = isAutoPaste(),
+                    };
+                    _autoPasteItem.Click += (_, _) => _dispatcher.Invoke(() => setAutoPaste(!isAutoPaste()));
+                    menu.Items.Add(_autoPasteItem);
+                }
             }
 
             if (item == TrayMenuItem.Open && onOpenCompact is not null)
@@ -66,6 +83,10 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         }
         menu.Opening += (_, _) =>
         {
+            if (_autoPasteItem is not null && _isAutoPaste is not null)
+            {
+                _autoPasteItem.Checked = _isAutoPaste();
+            }
             if (_incognitoItem is not null)
             {
                 _incognitoItem.Checked = _incognito.IsIncognito;
@@ -159,6 +180,10 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             if (_compactMenuItem is not null)
             {
                 _compactMenuItem.Text = WindowsCM.Core.Localization.LocalizationManager.Strings.TrayCompactMenu;
+            }
+            if (_autoPasteItem is not null)
+            {
+                _autoPasteItem.Text = WindowsCM.Core.Localization.LocalizationManager.Strings.TrayAutoPaste;
             }
             if (_incognitoItem is not null)
             {

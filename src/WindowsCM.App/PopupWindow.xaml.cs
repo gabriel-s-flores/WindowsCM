@@ -37,6 +37,8 @@ public partial class PopupWindow : Window
     private bool _isRenderingHooked;
     private long _lastRenderTicks;
     private readonly System.Windows.Threading.DispatcherTimer _faviconRefreshTimer;
+    // Free placement (ADR 0006): drag by the top, resize from the edges.
+    private bool _isFreePlacement;
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
     private ColorScheme _currentScheme = ColorScheme.Dark;
@@ -50,6 +52,8 @@ public partial class PopupWindow : Window
         _app = app;
         InitializeComponent();
         ApplyTheme(ColorScheme.Dark);
+        SourceInitialized += (_, _) =>
+            HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
         ItemsList.SelectionChanged += OnListSelectionChanged;
         // Favicons land one domain at a time; refreshing the whole list per
         // download regenerated every card N times on open. One refresh per
@@ -490,21 +494,158 @@ public partial class PopupWindow : Window
             ?? Matrix.Identity;
         GetCursorPos(out var cursor);
         var screen = WinForms.Screen.FromPoint(new System.Drawing.Point(cursor.X, cursor.Y));
-        var area = screen.WorkingArea;
-        var topLeft = transform.Transform(new System.Windows.Point(area.Left, area.Top));
-        var bottomRight = transform.Transform(new System.Windows.Point(area.Right, area.Bottom));
-        var workArea = new WorkArea(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y);
+        var mouseArea = DisplayMonitors.ToDips(screen.WorkingArea, transform);
 
-        var orientation = _app.Settings.Dialog.Orientation;
-        var hPos = _app.Settings.Dialog.LargeHorizontalPosition;
-        var vPos = _app.Settings.Dialog.LargeVerticalPosition;
-
-        var (left, top, width, height) = PopupPlacement.PlaceLargePopup(
-            orientation, hPos, vPos, workArea);
+        var dialog = _app.Settings.Dialog;
+        var orientation = dialog.Orientation;
+        double left, top, width, height;
+        if (dialog.LargePlacement == LargePlacementMode.Free)
+        {
+            var workAreas = DisplayMonitors.InDips(transform).Select(m => m.WorkingArea).ToList();
+            (left, top, width, height) = PopupPlacement.PlaceFree(
+                dialog.FreeBoundsFor(orientation), workAreas, mouseArea, orientation);
+        }
+        else
+        {
+            // Docked: the monitor under the mouse, or the one picked in
+            // Settings (falls back to the primary while it is disconnected).
+            var area = mouseArea;
+            if (dialog.LargePlacement == LargePlacementMode.FixedMonitor
+                && MonitorLayout.Resolve(dialog.LargeMonitor, DisplayMonitors.InDips(transform)) is { } monitor)
+            {
+                area = monitor.WorkingArea;
+            }
+            (left, top, width, height) = PopupPlacement.PlaceLargePopup(
+                orientation, dialog.LargeHorizontalPosition, dialog.LargeVerticalPosition, area);
+        }
+        ApplyFreePlacement(dialog.LargePlacement == LargePlacementMode.Free, orientation);
         Left = left;
         Top = top;
         Width = width;
         Height = height;
+    }
+
+    private void ApplyFreePlacement(bool free, DialogOrientation orientation)
+    {
+        _isFreePlacement = free;
+        var (minWidth, minHeight) = free ? PopupPlacement.FreeMinimumSize(orientation) : (0d, 0d);
+        MinWidth = minWidth;
+        MinHeight = minHeight;
+        FreeDragHandle.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Free placement: drag from anywhere that is not a control (the handle,
+    // the header gaps, the frame). Cards, buttons and the search box keep
+    // their own mouse behavior.
+    private void OnRootMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isFreePlacement || e.ButtonState != MouseButtonState.Pressed)
+        {
+            return;
+        }
+        var source = e.OriginalSource as DependencyObject;
+        if (VisualAncestor<System.Windows.Controls.ListBox>(source) is not null
+            || VisualAncestor<System.Windows.Controls.Primitives.ButtonBase>(source) is not null
+            || VisualAncestor<System.Windows.Controls.Primitives.TextBoxBase>(source) is not null)
+        {
+            return;
+        }
+        e.Handled = true;
+        try
+        {
+            // Modal move loop; WM_EXITSIZEMOVE saves the new position.
+            DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+            // The button was already released.
+        }
+    }
+
+    private const int WM_NCHITTEST = 0x0084;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+    private const double ResizeBorderDips = 8;
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (!_isFreePlacement)
+        {
+            return IntPtr.Zero;
+        }
+        if (msg == WM_NCHITTEST)
+        {
+            var hit = ResizeHitCode(hwnd, lParam);
+            if (hit != 0)
+            {
+                // Windows runs its native resize loop for these codes.
+                handled = true;
+                return new IntPtr(hit);
+            }
+        }
+        else if (msg == WM_EXITSIZEMOVE)
+        {
+            SaveFreeBounds();
+        }
+        return IntPtr.Zero;
+    }
+
+    private int ResizeHitCode(IntPtr hwnd, IntPtr lParam)
+    {
+        if (!GetWindowRect(hwnd, out var rect))
+        {
+            return 0;
+        }
+        // Screen coordinates in device pixels, signed (monitors left of or
+        // above the primary have negative coordinates).
+        var packed = lParam.ToInt64();
+        var x = (short)(packed & 0xFFFF);
+        var y = (short)((packed >> 16) & 0xFFFF);
+        var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        var edge = ResizeHitTest.EdgeAt(x, y,
+            new WorkArea(rect.Left, rect.Top, rect.Right, rect.Bottom), ResizeBorderDips * scale);
+        return edge switch
+        {
+            ResizeEdge.Left => 10,         // HTLEFT
+            ResizeEdge.Right => 11,        // HTRIGHT
+            ResizeEdge.Top => 12,          // HTTOP
+            ResizeEdge.TopLeft => 13,      // HTTOPLEFT
+            ResizeEdge.TopRight => 14,     // HTTOPRIGHT
+            ResizeEdge.Bottom => 15,       // HTBOTTOM
+            ResizeEdge.BottomLeft => 16,   // HTBOTTOMLEFT
+            ResizeEdge.BottomRight => 17,  // HTBOTTOMRIGHT
+            _ => 0,
+        };
+    }
+
+    private void SaveFreeBounds()
+    {
+        if (!IsVisible || ActualWidth <= 0 || ActualHeight <= 0)
+        {
+            return;
+        }
+        _app.SaveLargeFreeBounds(_app.Settings.Dialog.Orientation, new WindowBounds
+        {
+            Left = Left,
+            Top = Top,
+            Width = ActualWidth,
+            Height = ActualHeight,
+        });
+    }
+
+    // VisualTreeHelper.GetParent throws for content elements (Run, ...):
+    // stop walking at the first non-visual node.
+    private static T? VisualAncestor<T>(DependencyObject? current)
+        where T : DependencyObject
+    {
+        while (current is Visual or System.Windows.Media.Media3D.Visual3D)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -1226,6 +1367,19 @@ public partial class PopupWindow : Window
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out System.Drawing.Point point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
