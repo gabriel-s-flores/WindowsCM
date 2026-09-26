@@ -31,6 +31,18 @@ public sealed class ErrorLogTests : IDisposable
     }
 
     [Fact]
+    public void Note_AppendsAnEventWithItsDetail()
+    {
+        var path = Path.Combine(_dir, "windowscm.log");
+        var log = new ErrorLog(path, utcNow: () => new DateTime(2026, 9, 25, 12, 30, 0, DateTimeKind.Utc));
+
+        log.Note("ui-hang", "the UI thread has not answered for 5 s");
+
+        Assert.Equal("2026-09-25 12:30:00.000Z [ui-hang] the UI thread has not answered for 5 s" + Environment.NewLine,
+            File.ReadAllText(path));
+    }
+
+    [Fact]
     public void Write_RotatesPastMaxBytes()
     {
         var path = Path.Combine(_dir, "windowscm.log");

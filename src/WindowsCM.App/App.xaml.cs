@@ -305,6 +305,25 @@ public partial class App : System.Windows.Application
         UpdateTheme(_themeDetector.DetectSystemScheme());
 
         WatchActionsFile();
+
+        // A frozen UI leaves a trace in the log (start, duration, resources)
+        // even when the user ends up killing the app.
+        var watchdog = new UiHangWatchdog(
+            work => dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, work),
+            detail => _errorLog.Note("ui-hang", detail),
+            threshold: TimeSpan.FromSeconds(5),
+            describeProcess: DescribeProcessResources);
+        _disposables.Add(watchdog);
+        watchdog.Start();
+    }
+
+    // Memory and handle counts: tells a hang from resource exhaustion
+    // (the process dies at 10,000 GDI or USER objects).
+    private static string DescribeProcessResources()
+    {
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        return $"private {process.PrivateMemorySize64 / (1024 * 1024)} MB, {process.HandleCount} handles, "
+            + $"{process.Threads.Count} threads, GDI {GetGuiResources(process.Handle, 0)}, USER {GetGuiResources(process.Handle, 1)}";
     }
 
     private void UpdateTheme(ColorScheme systemScheme)
@@ -1018,4 +1037,7 @@ public partial class App : System.Windows.Application
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetGuiResources(IntPtr hProcess, int uiFlags);
 }
