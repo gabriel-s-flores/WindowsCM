@@ -49,6 +49,14 @@ public sealed class MutexSingleInstanceLock : ISingleInstanceLock
             _mutex = ex.Mutex as Mutex;
             return _mutex is not null;
         }
+        catch (UnauthorizedAccessException)
+        {
+            // Another instance holds it with a stricter ACL (it runs
+            // elevated): that instance is primary. This used to crash the
+            // second launch instead of forwarding to it.
+            _mutex = null;
+            return false;
+        }
     }
 
     public void Release()

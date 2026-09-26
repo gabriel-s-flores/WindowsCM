@@ -18,6 +18,11 @@ public sealed class UiHangWatchdog : IDisposable
     private readonly Action<string> _report;
     private readonly Func<string>? _describeProcess;
     private readonly ManualResetEventSlim _stop = new();
+    // One event reused for every ping. A fresh one per ping (every second)
+    // left a kernel handle for the finalizer each time: thousands per hour
+    // on an idle tray app, where collections are rare. Never disposed, so a
+    // ping still queued at shutdown can still Set() it.
+    private readonly ManualResetEventSlim _answered = new();
     private Thread? _thread;
 
     public UiHangWatchdog(
@@ -50,8 +55,10 @@ public sealed class UiHangWatchdog : IDisposable
     {
         while (!_stop.IsSet)
         {
-            // Not disposed: a ping still queued at shutdown runs Set() later.
-            var answered = new ManualResetEventSlim();
+            // The previous ping has always run by now: a late one is waited
+            // for (below) before the next is sent.
+            var answered = _answered;
+            answered.Reset();
             var sentAt = Stopwatch.GetTimestamp();
             try
             {

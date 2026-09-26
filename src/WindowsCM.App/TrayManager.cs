@@ -10,10 +10,10 @@ namespace WindowsCM.App;
 // H.NotifyIcon.WPF, but 2.4.1 ships no net8.0 target — net10 + net462
 // only — so the in-box icon covers the same contract): left toggles the
 // popup, right opens the five-item menu, balloon + icon flash for copy
-// feedback. Double-click aliases single: WinForms raises Click before
-// DoubleClick, so the single toggle is deferred by one double-click
-// interval and cancelled when the double lands — exactly one toggle
-// either way.
+// feedback. Double-click aliases single: WinForms raises MouseClick on the
+// first release and DoubleClick (not a second MouseClick) on the second
+// press, so only MouseClick toggles — exactly one toggle either way. Also
+// toggling on DoubleClick opened the popup and closed it again at once.
 internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
 {
     private readonly TrayController _controller;
@@ -45,7 +45,6 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
             Visible = true,
         };
         _icon.MouseClick += OnMouseClick;
-        _icon.DoubleClick += (_, _) => _dispatcher.Invoke(_controller.OnDoubleClick);
 
         var menu = new ContextMenuStrip();
         foreach (var item in TrayMenu.All)
@@ -112,8 +111,10 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         }
     }
 
+    // Copy feedback arrives on the clipboard listener thread: queued, never
+    // waited for, so a busy UI thread does not hold up the next capture.
     public void ShowBalloon(string title, string text) =>
-        _dispatcher.Invoke(() =>
+        _dispatcher.BeginInvoke(() =>
         {
             if (!_disposed)
             {
@@ -122,7 +123,7 @@ internal sealed class TrayManager : IDisposable, ICopyNotifier, IIconFlasher
         });
 
     public void Flash(int times, int intervalMs) =>
-        _dispatcher.Invoke(() =>
+        _dispatcher.BeginInvoke(() =>
         {
             if (_disposed)
             {
