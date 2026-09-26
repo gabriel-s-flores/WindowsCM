@@ -63,6 +63,7 @@ public partial class App : System.Windows.Application
     private readonly ErrorLog _errorLog = new(ErrorLog.DefaultPath());
     private readonly UnhandledErrorPolicy _errorPolicy = new();
     private System.Windows.Threading.DispatcherTimer? _viewRefreshTimer;
+    private System.Windows.Threading.DispatcherTimer? _liveSettingsTimer;
     private Win32ForegroundTracker? _foregroundTracker;
     private ColorScheme _lastSystemScheme = ColorScheme.Dark;
     private bool _servicesReady;
@@ -1018,23 +1019,46 @@ public partial class App : System.Windows.Application
             _hotkeys,
             _hotkeyWindow?.Handle ?? IntPtr.Zero,
             effectiveScheme,
-            onSettingsLiveUpdated: () =>
-            {
-                UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
-                ApplyHistoryLimitsToCapture();
-                ApplyAutoPaste();
-                _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
-                    DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-                _popupModel?.Refresh();
-                _popup?.RefreshView();
-                _compactPopup?.RefreshView();
-            },
+            onSettingsLiveUpdated: RequestLiveSettingsApply,
             onClosed: () => _settingsWindow = null,
             onShowWelcome: ShowWelcome);
 
         _settingsWindow.Closed += (_, _) => OnSettingsClosed();
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    // Settings apply while the window is open, but a slider drag or typing
+    // raises this per tick or keystroke. Each call used to re-theme every
+    // window, reload the history — and evict it: dragging the history limit
+    // down and back up deleted everything past the lowest value for good.
+    // One apply once the input settles; eviction waits for the window to
+    // close (and captures meanwhile honor the settled limit).
+    private void RequestLiveSettingsApply()
+    {
+        if (_liveSettingsTimer is null)
+        {
+            _liveSettingsTimer = new System.Windows.Threading.DispatcherTimer(
+                System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(200),
+            };
+            _liveSettingsTimer.Tick += (_, _) =>
+            {
+                _liveSettingsTimer.Stop();
+                ApplyLiveSettings();
+            };
+        }
+        _liveSettingsTimer.Stop();
+        _liveSettingsTimer.Start();
+    }
+
+    private void ApplyLiveSettings()
+    {
+        UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
+        ApplyHistoryLimitsToCapture();
+        ApplyAutoPaste();
+        RefreshOpenPopups();
     }
 
     // History limits are enforced on every capture, so slider changes must
@@ -1054,7 +1078,24 @@ public partial class App : System.Windows.Application
 
     private void OnSettingsClosed()
     {
-        SettingsStore.Save(_settingsPath, _settings);
+        // First: when anything below threw (a locked settings file, a busy
+        // database), the field kept the closed window and every later
+        // OpenSettings threw on Show() until restart.
+        _settingsWindow = null;
+        _liveSettingsTimer?.Stop();
+        SaveSettingsQuietly();
+        try
+        {
+            ApplyClosedSettings();
+        }
+        catch (Exception ex)
+        {
+            LogError("settings-apply", ex);
+        }
+    }
+
+    private void ApplyClosedSettings()
+    {
         // Reapply live:Ctor-held option shapes are mutated in place because
         // the services keep the same references (no restart needed).
         if (_captureOptions is not null)
@@ -1075,11 +1116,8 @@ public partial class App : System.Windows.Application
         }
         _store?.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
             DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-        _popupModel?.Refresh();
-        _popup?.RefreshView();
-        _compactPopup?.RefreshView();
+        RefreshOpenPopups();
         UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
-        _settingsWindow = null;
     }
 
     private void WatchActionsFile()

@@ -196,6 +196,10 @@ public partial class SettingsWindow : Window
 
     public void ApplyTheme(ColorScheme scheme)
     {
+        // The color editors depend on the scheme only (badge alpha). Every
+        // live update re-applies the theme, and rebuilding them each time
+        // destroyed the hex or extensions box the user was typing in.
+        var schemeChanged = scheme != _currentScheme;
         _currentScheme = scheme;
         var themeDict = PopupThemeBrushes.CreateThemeDictionary(scheme, _settings.ItemColors);
         Resources.MergedDictionaries.Clear();
@@ -209,7 +213,7 @@ public partial class SettingsWindow : Window
             _ => LocalizationManager.Strings.SettingsThemeStatusFluent,
         };
 
-        if (!_loading)
+        if (!_loading && schemeChanged)
         {
             PopulateUnifiedColorControls();
         }
