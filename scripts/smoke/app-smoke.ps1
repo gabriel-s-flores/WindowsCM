@@ -567,12 +567,25 @@ function Paste-Scenario([string]$name, [scriptblock]$focus, [bool]$expectPasted)
     $focused = & $focus
     if (-not $focused) { $failures.Add("${name}: could not set up the foreground window"); Note "  FAIL  ${name}: foreground setup"; return }
     [Smoke]::Chord(0x11, 0x10, 0x56)     # Ctrl+Shift+V: the real hotkey
-    Start-Sleep -Milliseconds 900
-    $popup = [Smoke]::GetForegroundWindow()
-    $popupIsOurs = [Smoke]::ProcessOf($popup) -eq $script:app.Id
+    # Wait for the popup instead of a fixed pause (shared runners jitter),
+    # and record what the user feels: hotkey to popup in front.
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    $popupIsOurs = $false
+    while ($watch.ElapsedMilliseconds -lt 8000) {
+        if ([Smoke]::ProcessOf([Smoke]::GetForegroundWindow()) -eq $script:app.Id) { $popupIsOurs = $true; break }
+        Start-Sleep -Milliseconds 20
+    }
+    $watch.Stop()
+    if ($popupIsOurs) { $hotkeyTimes.Add(@{ scenario = $name; ms = $watch.Elapsed.TotalMilliseconds }) }
+    Start-Sleep -Milliseconds 250        # the popup selects its first item
     [Smoke]::Chord(0x0D)                 # Enter: pick the newest item
-    Start-Sleep -Milliseconds 1500
-    $text = [Smoke]::GetText($edit)
+    $text = ''
+    $deadline = (Get-Date).AddSeconds(5)
+    do {
+        Start-Sleep -Milliseconds 200
+        $text = [Smoke]::GetText($edit)
+    } while ($expectPasted -and -not $text.Contains($token) -and (Get-Date) -lt $deadline)
+    if (-not $expectPasted) { Start-Sleep -Milliseconds 1200; $text = [Smoke]::GetText($edit) }
     $clip = [System.Windows.Forms.Clipboard]::GetText()
     if (-not $popupIsOurs) { Note "    (the hotkey did not bring the popup to the foreground)" }
     if ($expectPasted) {
@@ -584,6 +597,7 @@ function Paste-Scenario([string]$name, [scriptblock]$focus, [bool]$expectPasted)
     Start-Sleep -Milliseconds 300
 }
 
+$hotkeyTimes = New-Object System.Collections.Generic.List[object]
 Write-Settings -autoPaste $true
 Start-App
 Paste-Scenario 'focused-field' { [Smoke]::Focus($np) } $true
@@ -605,6 +619,12 @@ Write-Settings -autoPaste $false
 Start-App
 Paste-Scenario 'auto-paste-off' { [Smoke]::Focus($np) } $false
 Stop-App
+foreach ($t in $hotkeyTimes) { Note ("  hotkey -> popup in front: {0:N0} ms ({1})" -f $t.ms, $t.scenario) }
+if ($hotkeyTimes.Count -gt 0) {
+    $warm = @($hotkeyTimes | Where-Object { $_.scenario -ne 'focused-field' -and $_.scenario -ne 'auto-paste-off' } | ForEach-Object { $_.ms })
+    if ($warm.Count -gt 0) { Check (($warm | Measure-Object -Maximum).Maximum -lt 1500) "hotkey opens the popup in under 1.5 s once warm" }
+    $metrics.hotkeyToPopupMs = $hotkeyTimes
+}
 Stop-Process -Id $notepad.Id -Force -ErrorAction SilentlyContinue
 
 # ------------------------------------------------------------ error log
