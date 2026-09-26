@@ -263,6 +263,7 @@ public partial class App : System.Windows.Application
             _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
                 clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
             _capture.SweepOrphanImages();
+            EphemeralImageAssetStore.SweepStaleSessions(TimeSpan.FromDays(1));
             // Only the first screenful: a full prewarm would hold every
             // thumbnail in memory even if the popup is never opened.
             PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));

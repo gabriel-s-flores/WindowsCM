@@ -154,4 +154,87 @@ public sealed class DibToPngTests
         Assert.Null(DibToPng.ToSnapshot(truncated, isPng: false));
         Assert.Null(DibToPng.ToSnapshot([], isPng: true));
     }
+
+    // A 40-byte header claiming width x height, 32bpp BI_RGB, and nothing
+    // behind it (a buggy or hostile source app).
+    private static byte[] HeaderOnly(int width, int height, int colorsUsed = 0)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(40); w.Write(width); w.Write(height);
+        w.Write((short)1); w.Write((short)32); w.Write(0); w.Write(0);
+        w.Write(0); w.Write(0); w.Write(colorsUsed); w.Write(0);
+        w.Write(new byte[12]);
+        return ms.ToArray();
+    }
+
+    // It used to allocate the full pixel buffer (1.5 GB for 20000 x 20000)
+    // before noticing the data was not there.
+    [Fact]
+    public void ToSnapshot_HugeClaimOnATinyBuffer_IsRejectedWithoutAllocating()
+    {
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        Assert.Null(DibToPng.ToSnapshot(HeaderOnly(20_000, 20_000), isPng: false));
+
+        Assert.True(GC.GetAllocatedBytesForCurrentThread() - before < 1_000_000);
+    }
+
+    [Theory]
+    [InlineData(30_000, 30_000, 0)]          // width*height*4 overflows int
+    [InlineData(1, int.MinValue, 0)]         // Math.Abs(int.MinValue) throws
+    [InlineData(1, 1, int.MaxValue)]         // color table offset overflows
+    [InlineData(int.MaxValue, 1, 0)]
+    public void ToSnapshot_OverflowingHeaders_ReturnNull(int width, int height, int colorsUsed)
+    {
+        Assert.Null(DibToPng.ToSnapshot(HeaderOnly(width, height, colorsUsed), isPng: false));
+    }
+
+    // Over the pixel cap the reader skips the bitmap before copying it out
+    // of the clipboard (a 12k x 12k canvas peaked near 2.5 GB).
+    [Fact]
+    public void CanConvert_RejectsImagesOverThePixelCap()
+    {
+        Assert.True(DibToPng.CanConvert(HeaderOnly(7680, 4320)));
+        Assert.False(DibToPng.CanConvert(HeaderOnly(12_000, 12_000)));
+        Assert.False(DibToPng.CanConvert(HeaderOnly(1, int.MinValue)));
+    }
+
+    [Fact]
+    public void ToSnapshot_PngOverThePixelCap_IsSkipped()
+    {
+        var png = new byte[33];
+        new byte[] { 137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R' }.CopyTo(png, 0);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(png.AsSpan(16), 20_000);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(png.AsSpan(20), 20_000);
+        png[24] = 8; png[25] = 6;
+
+        Assert.Null(DibToPng.ToSnapshot(png, isPng: true));
+    }
+
+    [Fact]
+    public void FromDib_TopDownAndBottomUp_EncodeTheSamePixels()
+    {
+        // 2x2, rows given top row first.
+        byte[][] rows = [[1, 2, 3, 0, 4, 5, 6, 0], [7, 8, 9, 0, 10, 11, 12, 0]];
+        byte[] Build(bool topDown)
+        {
+            using var ms = new MemoryStream();
+            using var w = new BinaryWriter(ms);
+            w.Write(40); w.Write(2); w.Write(topDown ? -2 : 2);
+            w.Write((short)1); w.Write((short)32); w.Write(0); w.Write(16);
+            w.Write(0); w.Write(0); w.Write(0); w.Write(0);
+            foreach (var row in topDown ? rows : rows.Reverse())
+            {
+                w.Write(row);
+            }
+            return ms.ToArray();
+        }
+
+        var (_, fromTopDown) = Decode(DibToPng.FromDib(Build(topDown: true)));
+        var (_, fromBottomUp) = Decode(DibToPng.FromDib(Build(topDown: false)));
+
+        Assert.Equal(fromTopDown, fromBottomUp);
+        Assert.Equal(new byte[] { 3, 2, 1, 255 }, fromTopDown[..4]); // top-left, BGR -> RGBA
+    }
 }

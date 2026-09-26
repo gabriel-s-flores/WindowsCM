@@ -31,6 +31,8 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
 
     public IHistoryStore PersistentStore => _persistentStore;
 
+    public IImageAssetStore PersistentImages => _persistentImages;
+
     public IHistoryStore? EphemeralStore
     {
         get

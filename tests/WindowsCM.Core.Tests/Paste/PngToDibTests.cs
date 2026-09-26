@@ -116,6 +116,47 @@ public sealed class PngToDibTests
         Assert.Throws<NotSupportedException>(() => PngToDib.FromPng(png));
     }
 
+    // Pasting back an image over the pixel cap falls back to the PNG
+    // format instead of building a multi-GB bitmap on the UI thread.
+    [Fact]
+    public void FromPng_OverThePixelCap_ThrowsNotSupported()
+    {
+        var png = BuildPng(20_000, 20_000, colorType: 6, [0]);
+
+        Assert.Throws<NotSupportedException>(() => PngToDib.FromPng(png));
+    }
+
+    [Fact]
+    public void FromPng_PixelDataShorterOrLongerThanDeclared_Throws()
+    {
+        var shortData = BuildPng(2, 2, colorType: 2, FilteredRow(0, [1, 2, 3, 4, 5, 6]));
+        var longData = BuildPng(1, 1, colorType: 2, [0, 1, 2, 3, 0, 4, 5, 6]);
+
+        Assert.Throws<ArgumentException>(() => PngToDib.FromPng(shortData));
+        Assert.Throws<ArgumentException>(() => PngToDib.FromPng(longData));
+    }
+
+    // A 4K screenshot used to allocate ~255 MB (growing MemoryStreams and a
+    // byte-at-a-time writer) on the UI thread; now about the two buffers.
+    [Fact]
+    public void FromPng_4K_AllocatesAboutTheInflatedDataAndTheBitmap()
+    {
+        const int width = 3840, height = 2160;
+        var rows = new byte[height * (1 + width * 4)];
+        for (var i = 0; i < rows.Length; i++)
+        {
+            rows[i] = (byte)(i % (1 + width * 4) == 0 ? 0 : i * 7);
+        }
+        var png = BuildPng(width, height, colorType: 6, rows);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var dib = PngToDib.FromPng(png);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(40 + width * height * 4, dib.Length);
+        Assert.True(allocated < 3L * dib.Length, $"allocated {allocated / 1048576} MB");
+    }
+
     // --- Minimal test-local PNG builder (filtered rows in, bytes out) ---
 
     private static byte[] FilteredRow(byte filter, byte[] row)

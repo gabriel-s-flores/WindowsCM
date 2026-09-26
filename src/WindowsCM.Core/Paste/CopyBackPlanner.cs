@@ -48,9 +48,11 @@ public static class CopyBackPlanner
         {
             dib = PngToDib.FromPng(png);
         }
-        catch (Exception ex) when (ex is NotSupportedException or ArgumentException)
+        catch (Exception ex) when (ex is NotSupportedException or ArgumentException
+            or InvalidDataException or OverflowException or OutOfMemoryException)
         {
-            // Exotic PNG flavor: the writer falls back to the PNG format.
+            // Exotic, damaged or oversized PNG: the writer falls back to the
+            // PNG format rather than failing the whole paste.
         }
         return new ClipboardContents(ImagePng: png, ImageDib: dib);
     }

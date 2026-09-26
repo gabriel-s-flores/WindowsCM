@@ -29,7 +29,7 @@ public sealed class EphemeralImageAssetStore : IImageAssetStore, IDisposable
         var path = Path.Combine(Directory, safe);
         if (!File.Exists(path))
         {
-            File.WriteAllBytes(path, bytes);
+            ImageFiles.WriteAtomically(path, bytes);
         }
         return FileUris.FromPath(path);
     }
@@ -53,6 +53,36 @@ public sealed class EphemeralImageAssetStore : IImageAssetStore, IDisposable
                 }
                 catch { }
             }
+        }
+    }
+
+    // Folders left by a session that never ended (crash, killed process,
+    // power loss) kept incognito screenshots in %TEMP% until uninstall.
+    // Only old ones: another logon session of the same user may run an
+    // incognito session of its own right now.
+    public static void SweepStaleSessions(TimeSpan olderThan, string? baseDir = null, DateTime? utcNow = null)
+    {
+        var root = baseDir ?? Path.GetTempPath();
+        var now = utcNow ?? DateTime.UtcNow;
+        try
+        {
+            foreach (var dir in System.IO.Directory.EnumerateDirectories(root, DirectoryPrefix + "*"))
+            {
+                try
+                {
+                    if (now - System.IO.Directory.GetLastWriteTimeUtc(dir) > olderThan)
+                    {
+                        System.IO.Directory.Delete(dir, recursive: true);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // In use or protected: the next start retries.
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
         }
     }
 

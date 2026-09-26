@@ -29,4 +29,9 @@ public sealed class CaptureOptions
     public bool ProtectPinned { get; set; } = true;
 
     public bool ProtectTagged { get; set; } = true;
+
+    // How often, at most, image files no stored item references are
+    // deleted while the app runs (checked after a stored capture). The
+    // startup sweep alone left evicted screenshots on disk for weeks.
+    public TimeSpan OrphanImageSweepInterval { get; set; } = TimeSpan.FromMinutes(15);
 }
