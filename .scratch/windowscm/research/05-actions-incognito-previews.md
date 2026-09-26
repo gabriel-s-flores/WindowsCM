@@ -1,6 +1,6 @@
 # 05 — Ações + incognito + colar + previews/sons/toast + IPC (porte Windows)
 
-Ticket: `.scratch/windowscm/issues/05-research-acoes-incognito-previews.md` (não editado).
+Ticket: `.scratch/windowscm/issues/05-research-actions-incognito-previews.md` (não editado).
 Base portada (não re-auditada): `.scratch/windowscm/research/01-parity-inventory.md` §§4 (ações) e 8 (dependências) + `.scratch/windowscm/research/02-clipboard-core.md` (colar/single-instance).
 Método: só fontes primárias — Microsoft Learn + docs oficiais das libs (GitHub/LICENSE + NuGet). Cada claim de API cita o Learn; cada lib traz nome+versão+licença+link oficial.
 

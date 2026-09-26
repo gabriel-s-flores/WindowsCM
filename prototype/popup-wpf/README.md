@@ -65,4 +65,4 @@ variant · theme · selected n/8 · pins · filter · incognito · last action.
   best as possible (no narrow floating box).
 
 Capture: commit this folder to branch `prototype/popup-wpf` (out of main),
-point from `.scratch/windowscm/issues/07-prototype-popup-estilo.md`.
+point from `.scratch/windowscm/issues/07-prototype-popup-style.md`.

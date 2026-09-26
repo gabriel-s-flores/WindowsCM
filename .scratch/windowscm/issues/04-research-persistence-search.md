@@ -19,7 +19,7 @@ Só começar quando `01` estiver `resolved` (precisa do inventário).
 
 ## Answer
 
-Achados em `.scratch/windowscm/research/04-persistencia-busca.md` (só fontes primárias; 6 seções, DDL + SQL prontos para a spec).
+Achados em `.scratch/windowscm/research/04-persistence-search.md` (só fontes primárias; 6 seções, DDL + SQL prontos para a spec).
 
 Load-bearing:
 - **`Microsoft.Data.Sqlite` direto** (EF Core rejeitado: tracker/migrations/rebuild + NativeAOT sem queries dinâmicas). `UNIQUE(type,content)` + `INTEGER 0/1` + `TEXT ISO8601` + `WAL` + `BackupDatabase` confirmados; `BOOLEAN`/`DATETIME` como nomes têm afinidade NUMERIC — usar `INTEGER`/`TEXT`.

@@ -20,7 +20,7 @@ Só começar quando `01` estiver `resolved`.
 
 ## Answer
 
-Achados em `.scratch/windowscm/research/05-acoes-incognito-previews.md` (só fontes primárias; 10 seções, cada lib com nome+versão+licença+link).
+Achados em `.scratch/windowscm/research/05-actions-incognito-previews.md` (só fontes primárias; 10 seções, cada lib com nome+versão+licença+link).
 
 Load-bearing:
 - `actions.json` em `%AppData%\WindowsCM`, schema 1:1 (command/color/qrcode, submenu, defaults), shortcut `Ctrl+Q`. **Regex .NET ≠ JS (`\w` casa Unicode)** — documentar, nunca `ECMAScript` por default; todo `new Regex` com timeout 2s + `catch ArgumentException` = no-match (anti-ReDoS).
