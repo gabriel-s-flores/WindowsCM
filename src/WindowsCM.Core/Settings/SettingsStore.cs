@@ -40,9 +40,34 @@ public static class SettingsStore
             settings.ClampAll();
             return settings;
         }
-        catch (Exception ex) when (ex is IOException or JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // Locked or permission-denied: never block startup on settings.
             return AppSettings.Default();
+        }
+        catch (Exception)
+        {
+            // Any unreadable content (malformed JSON, wrong types, values a
+            // clamp cannot digest): start from defaults — settings must
+            // never keep the app from starting — but keep the user's file
+            // aside first, since the next Save would otherwise overwrite
+            // every preference without a trace.
+            PreserveCorrupt(path);
+            return AppSettings.Default();
+        }
+    }
+
+    public static string CorruptCopyPath(string path) => path + ".corrupt";
+
+    private static void PreserveCorrupt(string path)
+    {
+        try
+        {
+            File.Copy(path, CorruptCopyPath(path), overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort: the defaults still load.
         }
     }
 

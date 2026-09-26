@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Every push to main and every PR: build the whole solution (Core, tests
-# and the WPF app) and run the test suite on Windows.
+# and the WPF app), run the test suite and the real-app smoke on Windows.
 # Pushes to main that pass: cut the next version, build the installer and
 # the portable zip with scripts/build-dist.ps1, and publish a GitHub Release.
 #
@@ -50,6 +50,25 @@ jobs:
         with:
           name: test-results
           path: TestResults
+          if-no-files-found: ignore
+
+      # The built app on a real Windows desktop: clipboard stress, popup
+      # timing and memory, large-window placement modes and auto-paste end
+      # to end (scripts/smoke/app-smoke.ps1). Windows PowerShell for STA
+      # clipboard access; the runner is throwaway, so user data is reset.
+      - name: App smoke (real app)
+        shell: powershell
+        run: >
+          ./scripts/smoke/app-smoke.ps1
+          -Exe src/WindowsCM.App/bin/Release/net8.0-windows/WindowsCM.exe
+          -OutDir smoke-results -ResetUserData
+
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-results
+          path: smoke-results
           if-no-files-found: ignore
 
   release:
