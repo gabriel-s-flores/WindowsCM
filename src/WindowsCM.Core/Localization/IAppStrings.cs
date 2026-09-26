@@ -25,6 +25,9 @@ public interface IAppStrings
     string HistoryDatabaseFallbackBalloon(string path);
     string HistoryDatabaseMemoryOnlyBalloon { get; }
     string LinkPreviewYouTubeFallbackTitle { get; }
+    string MobileUploadLinkInvalidTitle { get; }
+    string MobileUploadLinkInvalidBody { get; }
+    string TransferServerUnavailableBalloon { get; }
     string TrayIconTooltip { get; }
     string TrayIconTooltipIncognito { get; }
     string TrayAutoPaste { get; }

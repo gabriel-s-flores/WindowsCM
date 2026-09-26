@@ -73,7 +73,7 @@ public partial class App : System.Windows.Application
     internal ActionExecutor Executor => _executor ?? throw new InvalidOperationException("Services not built.");
     internal ActionConfig Actions => _actions;
     internal bool IsIncognito => _coordinator?.IsIncognito ?? false;
-    internal MiniTransferHttpServer? TransferServer => _transferServer;
+    internal MiniTransferHttpServer? TransferServer => EnsureTransferServer();
 
     internal void SetIncognito(bool on)
     {
@@ -311,9 +311,11 @@ public partial class App : System.Windows.Application
             LogError("link-image-sweep", ex);
         }
 
+        // Started on first use (EnsureTransferServer): listening on the
+        // network from every startup put a firewall prompt in front of every
+        // user and kept a port open for a feature most never touch.
         _transferServer = new MiniTransferHttpServer();
         _transferServer.PayloadReceived += OnTransferPayloadReceived;
-        _transferServer.Start();
         _disposables.Add(_transferServer);
 
         _popupModel = new PopupViewModel(_coordinator);
@@ -790,9 +792,32 @@ public partial class App : System.Windows.Application
         ShowInFront(new QrWindow(payload));
     }
 
+    // The transfer server, started on first use; null (and explained)
+    // when no port can be opened.
+    private MiniTransferHttpServer? EnsureTransferServer()
+    {
+        if (_transferServer is null || _transferServer.IsRunning)
+        {
+            return _transferServer;
+        }
+        try
+        {
+            _transferServer.Start();
+            return _transferServer;
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException
+            or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LogError("transfer-start", ex);
+            _tray?.ShowBalloon("WindowsCM", LocalizationManager.Strings.TransferServerUnavailableBalloon);
+            return null;
+        }
+    }
+
     internal void ShowQr(ClipboardItem item)
     {
-        if (_transferServer != null && (item.Kind == ItemKind.File || item.Kind == ItemKind.Files || item.Kind == ItemKind.Image || item.Content.Length > 250))
+        var needsServer = item.Kind == ItemKind.File || item.Kind == ItemKind.Files || item.Kind == ItemKind.Image || item.Content.Length > 250;
+        if (needsServer && EnsureTransferServer() is { } transferServer)
         {
             string? filePath = null;
             List<string>? filePaths = null;
@@ -811,7 +836,7 @@ public partial class App : System.Windows.Application
                 filePath = ItemDisplayFormatter.TryGetLocalImagePath(item);
             }
 
-            var session = _transferServer.RegisterShare(
+            var session = transferServer.RegisterShare(
                 title: ItemDisplayFormatter.GetTitle(item),
                 kindLabel: ItemDisplayFormatter.GetTypeLabel(item, _settings.FileCategories),
                 filePath: filePath,
@@ -820,7 +845,7 @@ public partial class App : System.Windows.Application
                 itemId: item.Id);
 
             var ip = LocalNetworkResolver.GetPreferredLocalIp();
-            var url = _transferServer.BuildUrl(ip, $"/d/{session.Token}");
+            var url = transferServer.BuildUrl(ip, $"/d/{session.Token}");
             ShowInFront(new QrWindow(session, url, this));
             return;
         }
@@ -828,15 +853,24 @@ public partial class App : System.Windows.Application
         var textPayload = WindowsCM.Core.Actions.QrActions.Payload(item.Kind, item.Content);
         if (textPayload != null)
         {
-            ShowInFront(new QrWindow(textPayload));
+            try
+            {
+                ShowInFront(new QrWindow(textPayload));
+            }
+            catch (QRCoder.Exceptions.DataTooLongException ex)
+            {
+                // Only when the transfer server could not start (long text
+                // normally goes through it): already explained by a balloon.
+                LogError("qr", ex);
+            }
         }
     }
 
     internal void ShowMobileTransfer()
     {
-        if (_transferServer == null) return;
+        if (EnsureTransferServer() is not { } transferServer) return;
         var ip = LocalNetworkResolver.GetPreferredLocalIp();
-        ShowInFront(new MobileTransferWindow(_transferServer, ip));
+        ShowInFront(new MobileTransferWindow(transferServer, ip));
     }
 
     // The large popup stays up behind a QR opened from it and is Topmost, so
@@ -848,9 +882,12 @@ public partial class App : System.Windows.Application
         window.Activate();
     }
 
+    // Raised on the server's connection thread: queued, not waited for (a
+    // busy UI thread held the phone's request open, and at exit the
+    // server's disposal could wait on a handler blocked here).
     private void OnTransferPayloadReceived(IncomingTransferPayload payload)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.BeginInvoke(() =>
         {
             if (!string.IsNullOrWhiteSpace(payload.Text))
             {

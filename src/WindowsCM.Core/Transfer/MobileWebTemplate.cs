@@ -137,7 +137,35 @@ public static class MobileWebTemplate
         """;
     }
 
-    public static string RenderUploadPage(string host, bool? isPortuguese = null)
+    // Shown for the upload page without its key (typed by hand, bookmarked
+    // from an earlier session): sends the user back to the QR code.
+    public static string RenderUploadLinkInvalidPage()
+    {
+        var strings = LocalizationManager.Strings;
+        var lang = LocalizationManager.IsPortuguese ? "pt-BR" : "en";
+        return $$"""
+        <!DOCTYPE html>
+        <html lang="{{lang}}">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>WindowsCM</title>
+          <style>{{GetCommonCss()}}</style>
+        </head>
+        <body>
+          <div class="app-card">
+            <div class="header">
+              <div class="badge">WindowsCM Transfer</div>
+              <h1 class="title">{{EscapeHtml(strings.MobileUploadLinkInvalidTitle)}}</h1>
+              <div class="meta">{{EscapeHtml(strings.MobileUploadLinkInvalidBody)}}</div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """;
+    }
+
+    public static string RenderUploadPage(string host, bool? isPortuguese = null, string uploadEndpoint = "/api/upload")
     {
         var pt = isPortuguese ?? LocalizationManager.IsPortuguese;
         var langAttr = pt ? "pt-BR" : "en";
@@ -296,7 +324,7 @@ public static class MobileWebTemplate
               btn.disabled = true;
 
               const xhr = new XMLHttpRequest();
-              xhr.open('POST', '/api/upload', true);
+              xhr.open('POST', '{{uploadEndpoint}}', true);
 
               xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
@@ -345,7 +373,7 @@ public static class MobileWebTemplate
                 alert('{{enterSomething}}');
                 return;
               }
-              fetch('/api/upload', {
+              fetch('{{uploadEndpoint}}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: text })
