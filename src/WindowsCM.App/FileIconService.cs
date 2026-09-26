@@ -77,6 +77,25 @@ public static class FileIconService
         return iconSource;
     }
 
+    // The generic icon for the path's extension, from the registry only:
+    // never touches the file, so it is safe on the UI thread while the
+    // file's own icon is still being probed (CardFileFacts).
+    public static ImageSource? GetExtensionIcon(string? rawPath, bool isLarge = true)
+    {
+        var ext = Path.GetExtension(FileDisplayHelper.NormalizePath(rawPath))?.ToLowerInvariant() ?? "";
+        var cacheKey = $"ext:{ext}_{(isLarge ? "L" : "S")}";
+        if (Cache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+        var iconSource = ExtractByAttributes(ext, isDir: false, isLarge);
+        if (iconSource != null)
+        {
+            Cache[cacheKey] = iconSource;
+        }
+        return iconSource;
+    }
+
     private static ImageSource? ExtractIcon(string path, string ext, bool isDir, bool isLarge)
     {
         var flags = SHGFI_ICON | (isLarge ? SHGFI_LARGEICON : SHGFI_SMALLICON);
@@ -92,7 +111,15 @@ public static class FileIconService
             }
         }
 
-        // Fallback: extract using attributes and extension (works even when file was deleted or disk unmounted)
+        return ExtractByAttributes(ext, isDir, isLarge);
+    }
+
+    private static ImageSource? ExtractByAttributes(string ext, bool isDir, bool isLarge)
+    {
+        var flags = SHGFI_ICON | (isLarge ? SHGFI_LARGEICON : SHGFI_SMALLICON);
+        SHFILEINFO shinfo;
+
+        // Extract using attributes and extension (works even when file was deleted or disk unmounted)
         var attr = isDir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
         var probeTarget = isDir ? "dummy_folder" : (string.IsNullOrEmpty(ext) ? "file.txt" : $"dummy{ext}");
         var fallbackRes = SHGetFileInfo(probeTarget, attr, out shinfo, (uint)Marshal.SizeOf<SHFILEINFO>(), flags | SHGFI_USEFILEATTRIBUTES);
