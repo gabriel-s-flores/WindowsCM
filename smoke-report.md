@@ -1,94 +1,94 @@
-# WindowsCM — Relatório Final de Smoke & Validação
+# WindowsCM — Final Smoke & Validation Report
 
-- Data (UTC): 2026-09-11T04:10:00Z
-- Configuração: Debug / Release (.NET 8 WPF x64)
-- Suíte de Testes: **735/735 Aprovados (0 falhas, 0 warnings)**
-- Arquivos temporários em `%TEMP%`: **Nenhum (logs temporários e scripts de transição removidos)**
-- Status Geral: **PASS**
+- Date (UTC): 2026-09-11T04:10:00Z
+- Configuration: Debug / Release (.NET 8 WPF x64)
+- Test suite: **735/735 Passed (0 failures, 0 warnings)**
+- Temporary files in `%TEMP%`: **None (temporary logs and transition scripts removed)**
+- Overall status: **PASS**
 
 ---
 
-## 1. Resumo Executivo da Validação
+## 1. Validation Executive Summary
 
-Este relatório consolida a validação manual e automatizada dos componentes centrais de interação do WindowsCM (popup determinístico em 1080p, colagem visível no Notepad, clique simples, Shift+clique, barreira UIPI com alvo elevado e tray na gaveta do Windows 11).
+This report consolidates the manual and automated validation of WindowsCM's core interaction components (deterministic popup at 1080p, visible paste in Notepad, single click, Shift+click, UIPI barrier with an elevated target and the tray in the Windows 11 overflow).
 
-| Componente / Cenário | Resultado | Modo de Verificação | Detalhes |
+| Component / Scenario | Result | Verification mode | Details |
 | -------------------- | --------- | ------------------- | -------- |
-| **Build da Solução** | **PASS** | Automatizado | `dotnet build WindowsCM.sln` com zero warnings e zero erros. |
-| **Suíte de Testes Unitários** | **PASS** | Automatizado | 735 testes verdes cobrindo Store, Classificadores, Monitor, Colagem, Ações, Previews, Hotkeys, Tray, Settings, Popup e IPC. |
-| **Popup 1080p: 4 Quadrantes** | **PASS** | Automatizado + Unit | Ancoragem determinística no cursor (+12 DIPs) com clamp de tela em Top-Left, Top-Right, Bottom-Left, Bottom-Right e Centro. Largura fixa de 380 DIPs sem flicker. |
-| **Notepad: Enter (Colagem Comum)** | **PASS** | Automatizado (Live UI) | Seleção do item e ativação via Enter restaura a janela anterior do Notepad e injeta `Ctrl+V` via `SendInput`. Verificação de ida e volta lendo o clipboard (`outcome=Pasted chord=CtrlV`). |
-| **Notepad: Shift+Enter (Só-Copia)** | **PASS** | Automatizado (Live UI) | Shift+Enter copia o item para a área de transferência sem fechar o popup e sem injetar teclas (`outcome=CopiedOnly chord=<none>`). |
-| **Notepad: Clique Simples** | **PASS** | Automatizado (Live UI) | Clique esquerdo no item ativa a colagem (`PopupClickPolicy.ShouldActivate`), restaurando foco e colando no Notepad (`outcome=Pasted noteOk=True`). Idempotência preservada em duplo-clique. |
-| **Notepad: Shift+Clique** | **PASS** | Automatizado (Live UI) | Clique esquerdo com Shift pressionado copia o item para o clipboard sem injetar caracteres (`outcome=CopiedOnly chord=<none>`). |
-| **Navegação por Teclado** | **PASS** | Automatizado (Live UI) | Navegação via setas (Up/Down), Home e End altera a seleção visual sem disparar nenhuma colagem acidental. |
-| **Foco Perdido Pré-Injeção** | **PASS** | Automatizado (Live UI) | Quando o alvo é fechado/morto antes da injeção, o app relata `CopiedOnlyForegroundLost` com balão explicativo, sem diagnosticar falsamente como elevação. |
-| **Item Ausente (Histórico Limpo)** | **PASS** | Automatizado (Live UI) | Ao limpar o histórico durante a exibição, o enter resulta em `MissingItem` e balão informativo, atualizando a lista sem falha silenciosa. |
-| **Alvo Elevado (UIPI)** | **PASS** | Unitário + Heurística de Sessão | Processo comum não-elevado prevê a recusa de injeção (`IsTargetElevated`) e faz fallback seguro para cópia com orientação (`CopiedOnlyElevated`), prevenindo absorção silenciosa pelo Windows. |
-| **Tray na Gaveta (Windows 11)** | **PASS** | Automatizado (Live UI) | Ícone presente com tooltip `WindowsCM`, visível no overflow (`TopLevelWindowForOverflowXamlIsland`), feedback de cópia (flash 3x65ms + balão) e onboarding claro em Settings. |
+| **Solution Build** | **PASS** | Automated | `dotnet build WindowsCM.sln` with zero warnings and zero errors. |
+| **Unit Test Suite** | **PASS** | Automated | 735 green tests covering Store, Classifiers, Monitor, Paste, Actions, Previews, Hotkeys, Tray, Settings, Popup and IPC. |
+| **Popup 1080p: 4 Quadrants** | **PASS** | Automated + Unit | Deterministic anchoring at the cursor (+12 DIPs) with screen clamping at Top-Left, Top-Right, Bottom-Left, Bottom-Right and Center. Fixed width of 380 DIPs without flicker. |
+| **Notepad: Enter (Regular Paste)** | **PASS** | Automated (Live UI) | Selecting the item and activating it with Enter restores the previous Notepad window and injects `Ctrl+V` via `SendInput`. Round-trip verification by reading the clipboard (`outcome=Pasted chord=CtrlV`). |
+| **Notepad: Shift+Enter (Copy Only)** | **PASS** | Automated (Live UI) | Shift+Enter copies the item to the clipboard without closing the popup and without injecting keys (`outcome=CopiedOnly chord=<none>`). |
+| **Notepad: Single Click** | **PASS** | Automated (Live UI) | A left click on the item triggers the paste (`PopupClickPolicy.ShouldActivate`), restoring focus and pasting into Notepad (`outcome=Pasted noteOk=True`). Idempotency preserved on double-click. |
+| **Notepad: Shift+Click** | **PASS** | Automated (Live UI) | A left click with Shift held down copies the item to the clipboard without injecting characters (`outcome=CopiedOnly chord=<none>`). |
+| **Keyboard Navigation** | **PASS** | Automated (Live UI) | Navigating with the arrows (Up/Down), Home and End changes the visual selection without triggering any accidental paste. |
+| **Focus Lost Before Injection** | **PASS** | Automated (Live UI) | When the target is closed/killed before the injection, the app reports `CopiedOnlyForegroundLost` with an explanatory balloon, without falsely diagnosing it as elevation. |
+| **Missing Item (History Cleared)** | **PASS** | Automated (Live UI) | When the history is cleared while it is displayed, pressing Enter results in `MissingItem` and an informative balloon, updating the list without a silent failure. |
+| **Elevated Target (UIPI)** | **PASS** | Unit + Session Heuristic | A regular non-elevated process anticipates the injection refusal (`IsTargetElevated`) and safely falls back to copying with guidance (`CopiedOnlyElevated`), preventing silent absorption by Windows. |
+| **Tray in the Overflow (Windows 11)** | **PASS** | Automated (Live UI) | Icon present with the `WindowsCM` tooltip, visible in the overflow (`TopLevelWindowForOverflowXamlIsland`), copy feedback (flash 3x65ms + balloon) and clear onboarding in Settings. |
 
 ---
 
-## 2. Detalhamento dos Testes de Posicionamento do Popup (4 Quadrantes)
+## 2. Breakdown of the Popup Placement Tests (4 Quadrants)
 
-O posicionamento do popup foi calibrado para telas 1920x1080 com escala de 100% (área útil padrão 1920x1032 desconsiderando a barra de tarefas) com largura fixa de 380 DIPs e altura restrita a até 520 DIPs:
+The popup placement was calibrated for 1920x1080 screens at 100% scale (standard work area 1920x1032 excluding the taskbar), with a fixed width of 380 DIPs and a height capped at 520 DIPs:
 
-1. **Centro (Cursor em 960, 540):**
-   - Posição esperada: (972, 552).
-   - Verificação de determinismo: A primeira abertura (logo após o boot do app) e a segunda abertura geram exatamente o mesmo retângulo (`final=972,552 size=380x298 cursorPx=960,540`), eliminando o bug de layout inicial com dimensões zero.
-2. **Top-Left (Cursor em 10, 10):**
-   - Posição calculada: (22, 22), mantendo o deslocamento de +12 DIPs sem necessidade de clamp.
-3. **Top-Right (Cursor em 1900, 10):**
-   - Posição calculada: (1540, 22), aplicando clamp horizontal para não extrapolar a borda direita (1920 - 380 = 1540).
-4. **Bottom-Left (Cursor em 10, 1000):**
-   - Posição calculada: (22, 512), aplicando clamp vertical para respeitar a barra de tarefas inferior (1032 - 520 = 512).
-5. **Bottom-Right (Cursor em 1880, 1000):**
-   - Posição calculada: (1540, 566 / 1540, 512), aplicando clamp em ambos os eixos X e Y.
-
----
-
-## 3. Detalhamento da Colagem e Diagnóstico no Notepad
-
-A interação de ativação de histórico valida o pipeline ponta a ponta:
-- **`Enter`**: Captura o HWND do Notepad antes da abertura (`TargetCapturingPopup`), oculta o popup, aguarda o delay configurado, verifica se o foco permanece no Notepad, injeta `Ctrl+V` e sinaliza o feedback de cópia (flash no tray).
-- **`Shift+Enter`**: Copia o texto selecionado para o clipboard do sistema e mantém a janela do popup ativa sem disparar injeção de teclas.
-- **`Clique Simples`**: Manipulado no evento `PreviewMouseLeftButtonUp` da lista; o helper puro `PopupClickPolicy.ShouldActivate` valida se o clique atingiu uma linha de item válida, despachando `ActivateAsync` e acionando o portão `_isActivating` para evitar reentrância em múltiplos cliques.
-- **`Shift+Clique`**: Detecta `Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)` e executa a ramificação de só-copiar.
-- **`Alvo Elevado`**: O Windows User Interface Privilege Isolation (UIPI) descarta `SendInput` vindo de processos com integridade média para processos com integridade alta. A política do WindowsCM intercepta a condição via `_elevation.IsTargetElevated(hwnd)` e retorna `PasteStatus.CopiedOnlyElevated`, notificando o usuário com balão instrutivo em vez de tentar colar no vazio.
+1. **Center (Cursor at 960, 540):**
+   - Expected position: (972, 552).
+   - Determinism check: The first opening (right after the app boots) and the second opening produce exactly the same rectangle (`final=972,552 size=380x298 cursorPx=960,540`), eliminating the initial layout bug with zero dimensions.
+2. **Top-Left (Cursor at 10, 10):**
+   - Computed position: (22, 22), keeping the offset of +12 DIPs without needing a clamp.
+3. **Top-Right (Cursor at 1900, 10):**
+   - Computed position: (1540, 22), applying a horizontal clamp so as not to go past the right edge (1920 - 380 = 1540).
+4. **Bottom-Left (Cursor at 10, 1000):**
+   - Computed position: (22, 512), applying a vertical clamp to respect the bottom taskbar (1032 - 520 = 512).
+5. **Bottom-Right (Cursor at 1880, 1000):**
+   - Computed position: (1540, 566 / 1540, 512), applying a clamp on both the X and Y axes.
 
 ---
 
-## 4. Detalhamento do Tray na Gaveta do Windows 11
+## 3. Breakdown of Paste and Diagnostics in Notepad
 
-- **Localização**: Ícones de aplicativos em primeiro uso iniciam agrupados na gaveta de overflow do Windows 11.
-- **Interação**: O smoke interativo abre a gaveta de overflow via clique nas coordenadas do chevron da taskbar, captura evidência visual em screenshot (`WindowsCM-tray-overflow.png` e recorte `WindowsCM-tray-overflow-cropped.png`) e fecha a gaveta via ESC/clique.
-- **Feedback**: A recepção de cópias dispara `Flash(times: 3, intervalMs: 65)` e `ShowBalloonTip` para notificações de advertência/diagnóstico.
-- **Onboarding no Settings**: Conforme especificado no ticket 24, a tela de Configurações/Diagnóstico exibe orientação explícita orientando o usuário a arrastar o ícone para fora da gaveta, sem nenhuma tentativa programática de furar as restrições de promoção de ícones do SO.
-
----
-
-## 5. Cleanup dos Logs Temporários
-
-- O logger estático temporário `TempSmokeLog.cs` e sua suíte de testes `TempSmokeLogTests.cs` foram removidos.
-- Todas as chamadas instrumentais em `App.xaml.cs`, `PopupWindow.xaml.cs` e `TrayManager.cs` foram limpas.
-- O script temporário de transição `smoke-ui.ps1` foi removido.
-- O aplicativo em tempo de execução agora tem **gravação zero de arquivos em `%TEMP%`**, operando com footprint leve e sem resíduos em disco.
+The history activation interaction validates the pipeline end to end:
+- **`Enter`**: Captures the Notepad HWND before opening (`TargetCapturingPopup`), hides the popup, waits for the configured delay, checks whether focus remains on Notepad, injects `Ctrl+V` and signals the copy feedback (flash on the tray).
+- **`Shift+Enter`**: Copies the selected text to the system clipboard and keeps the popup window active without triggering key injection.
+- **`Single Click`**: Handled in the list's `PreviewMouseLeftButtonUp` event; the pure helper `PopupClickPolicy.ShouldActivate` validates whether the click hit a valid item row, dispatching `ActivateAsync` and engaging the `_isActivating` gate to prevent reentrancy on multiple clicks.
+- **`Shift+Click`**: Detects `Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)` and runs the copy-only branch.
+- **`Elevated Target`**: Windows User Interface Privilege Isolation (UIPI) discards `SendInput` coming from medium-integrity processes to high-integrity processes. The WindowsCM policy intercepts the condition via `_elevation.IsTargetElevated(hwnd)` and returns `PasteStatus.CopiedOnlyElevated`, notifying the user with an instructive balloon instead of trying to paste into the void.
 
 ---
 
-## 6. Comportamentos Adiados (Follow-up) e Justificativas
+## 4. Breakdown of the Tray in the Windows 11 Overflow
 
-Conforme planejado ao longo dos tickets 19 a 24, os seguintes itens complementares foram adiados para iterações pós-MVP com seus respectivos motivos:
+- **Location**: Icons of apps on first use start out grouped in the Windows 11 tray overflow.
+- **Interaction**: The interactive smoke opens the tray overflow by clicking at the coordinates of the taskbar chevron, captures visual evidence in a screenshot (`WindowsCM-tray-overflow.png` and the crop `WindowsCM-tray-overflow-cropped.png`) and closes the tray overflow via ESC/click.
+- **Feedback**: Receiving copies triggers `Flash(times: 3, intervalMs: 65)` and `ShowBalloonTip` for warning/diagnostic notifications.
+- **Onboarding in Settings**: As specified in ticket 24, the Settings/Diagnostics screen shows explicit guidance telling the user to drag the icon out of the tray overflow, with no programmatic attempt to get around the OS icon promotion restrictions.
 
-1. **Telas completas de Configurações avançadas (History limits/age, Behavior, Exclusions, Dialog/Item/Header, per-type, Shortcuts, Actions UI)**:
-   - *Motivo*: O MVP foca na estabilidade do núcleo, hotkeys globais, tray com menu funcional, popup determinístico e Settings para Diagnóstico/Sobre + autostart + pastas + onboarding do tray. Telas extensivas de edição de ações e atalhos estão documentadas para as próximas iterações.
-2. **Controle de código com syntax highlighting (AvalonEdit)**:
-   - *Motivo*: A exibição atual utiliza fallback direto em texto plano de alta performance com densidade Copyous; integração de highlight por linguagem adiada para refinamento visual.
-3. **Assets de áudio em disco (.wav) com reprodução via `MediaPlayer`**:
-   - *Motivo*: O feedback padrão opera visualmente (flash no ícone do tray e balão); sons personalizados aguardam pacote de mídia dedicado.
-4. **Posicionamento no cursor de texto global (Caret-UIA)**:
-   - *Motivo*: A estratégia cursor-first v1 com ancoragem no ponteiro do mouse e clamp DPI foi trancada na pesquisa 03/07 por ser robusta e confiável em todo o shell do Windows. Caret global via UI Automation fica para a v2.
-5. **Distribuição via pacote MSIX / Windows Store**:
-   - *Motivo*: A distribuição v1 utiliza executável portable single-file e instalador Inno Setup per-user (sem dependência de privilégios de administrador).
-6. **Injeção interativa em janela elevada durante o smoke automatizado**:
-   - *Motivo*: A proteção UAC do Windows impede a elevação silenciosa de processos sem consentimento interativo do usuário na área de trabalho segura. A barreira UIPI permanece 100% coberta e comprovada pela suíte de testes unitários (`PasteOrchestratorTests`).
+---
+
+## 5. Cleanup of the Temporary Logs
+
+- The temporary static logger `TempSmokeLog.cs` and its test suite `TempSmokeLogTests.cs` were removed.
+- All instrumentation calls in `App.xaml.cs`, `PopupWindow.xaml.cs` and `TrayManager.cs` were cleaned up.
+- The temporary transition script `smoke-ui.ps1` was removed.
+- The running app now performs **zero file writes to `%TEMP%`**, operating with a light footprint and no leftovers on disk.
+
+---
+
+## 6. Deferred Behaviors (Follow-up) and Rationale
+
+As planned across tickets 19 to 24, the following complementary items were deferred to post-MVP iterations, each with its reason:
+
+1. **Full advanced Settings screens (History limits/age, Behavior, Exclusions, Dialog/Item/Header, per-type, Shortcuts, Actions UI)**:
+   - *Reason*: The MVP focuses on core stability, global hotkeys, a tray with a working menu, a deterministic popup and Settings for Diagnostics/About + autostart + folders + tray onboarding. Extensive action and shortcut editing screens are documented for the next iterations.
+2. **Code control with syntax highlighting (AvalonEdit)**:
+   - *Reason*: The current display uses a direct high-performance plain-text fallback with Copyous density; per-language highlighting integration is deferred for visual refinement.
+3. **On-disk audio assets (.wav) played via `MediaPlayer`**:
+   - *Reason*: The default feedback is visual (flash on the tray icon and a balloon); custom sounds await a dedicated media package.
+4. **Placement at the global text caret (Caret-UIA)**:
+   - *Reason*: The v1 cursor-first strategy, anchoring to the mouse pointer with DPI clamping, was locked in research 03/07 for being robust and reliable across the whole Windows shell. A global caret via UI Automation is left for v2.
+5. **Distribution via an MSIX package / Windows Store**:
+   - *Reason*: The v1 distribution uses a single-file portable executable and a per-user Inno Setup installer (no dependency on administrator privileges).
+6. **Interactive injection into an elevated window during the automated smoke**:
+   - *Reason*: Windows UAC protection prevents the silent elevation of processes without the user's interactive consent on the secure desktop. The UIPI barrier remains 100% covered and proven by the unit test suite (`PasteOrchestratorTests`).

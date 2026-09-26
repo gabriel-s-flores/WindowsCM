@@ -8,7 +8,7 @@ Windows clipboard manager with full parity to GNOME Copyous: history, pins, tags
 
 **Item**:
 A single clipboard record as the user sees and manipulates it: text, code, image, file(s), link, character, or color.
-_Avoid_: entry (code/database only), clip, registro
+_Avoid_: entry (code/database only), clip
 
 **Item type**:
 One of the eight detected kinds: Text, Code, Image, File, Files, Link, Character, Color.
@@ -16,7 +16,7 @@ _Avoid_: format, kind, MIME (a MIME is evidence, not the type)
 
 **Pin**:
 Marking an item as favorite so history limits and clears never remove it.
-_Avoid_: star, favorite (verb), fixar
+_Avoid_: star, favorite (verb)
 
 **File category**:
 A semantic sub-classification for File and Files items (e.g. Images, Audio, Video, Documents, Spreadsheets, Presentations, Code, Archives), mapping file extensions to customized labels and accent colors, with fallback to Windows PerceivedType associations.
@@ -24,7 +24,7 @@ _Avoid_: file format, MIME type, file tag
 
 **Tag**:
 Legacy feature originally representing one of nine colored labels manually assigned to items. Retired from the interactive UI and context menus in favor of semantic item types and file categories; preserved as an optional database column for historical compatibility.
-_Avoid_: label, category, etiqueta
+_Avoid_: label, category
 
 **Action**:
 A user-defined operation run against an item's content (command, color-conversion, or QR-code kinds), matched by item type and regex.
@@ -48,7 +48,7 @@ _Avoid_: cloud sync, pairing, bluetooth
 
 **Compact menu**:
 A sleek, lightweight popup opening directly under the mouse cursor for agile paste-and-go workflows, configurable in vertical (320x480px) or horizontal (540x240px) format, equipped with a dedicated top search bar and immediate keyboard navigation.
-_Avoid_: sub-janela, menu secundário
+_Avoid_: sub-window, secondary menu
 
 **Clipboard orientation**:
 The spatial axis of the clipboard popup window: `Horizontal` (full-width strip across the display) or `Vertical` (tall side panel filling display height).
