@@ -169,6 +169,9 @@ public partial class App : System.Windows.Application
 
         BuildServices(pipeName);
         _servicesReady = true;
+        var updater = new AutoUpdater(this);
+        _disposables.Add(updater);
+        updater.Start();
         // Also on a --hidden (autostart) first start: a tray-only app is
         // otherwise invisible to someone who never opened it themselves.
         ShowWelcomeOnFirstRun();

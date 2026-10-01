@@ -3,6 +3,14 @@ namespace WindowsCM.Core.Localization;
 
 public interface IAppStrings
 {
+    string UpdateTitle { get; }
+    string UpdateDescription { get; }
+    string UpdateLater { get; }
+    string UpdateInstall { get; }
+    string UpdateDownloading { get; }
+    string UpdateFailed { get; }
+    string UpdateApplyFailed { get; }
+
     // General / App info
     string AppName { get; }
     string SettingsTitle { get; }

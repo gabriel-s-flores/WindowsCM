@@ -38,6 +38,7 @@ internal static class Program
         try
         {
             var scenario = args.FirstOrDefault() ?? "cards";
+            if (scenario == "screenshots") return ScreenshotSmoke.Run(args.Length > 1 ? args[1] : "assets");
             if (scenario.StartsWith("remote-", StringComparison.Ordinal)) return CheckRemote(scenario);
             if (scenario == "image-shapes") return CheckImageShapes();
             if (scenario == "workflow") return RunWorkflow();

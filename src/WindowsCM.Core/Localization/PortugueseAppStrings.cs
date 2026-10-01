@@ -5,6 +5,13 @@ namespace WindowsCM.Core.Localization;
 
 public sealed class PortugueseAppStrings : IAppStrings
 {
+    public string UpdateTitle => "Atualização disponível";
+    public string UpdateApplyFailed => "Não foi possível instalar a atualização. Seu histórico salvo e suas configurações são preservados. Feche outras instâncias do WindowsCM e tente novamente, ou baixe a versão mais recente no GitHub.";
+    public string UpdateDescription => "Uma nova versão do WindowsCM está disponível. Atualize agora para baixar, verificar e instalar, e reiniciar o aplicativo. Seu histórico salvo e suas configurações são preservados. Sair do modo anônimo apaga seus itens temporários.";
+    public string UpdateLater => "Mais tarde";
+    public string UpdateInstall => "Atualizar agora";
+    public string UpdateDownloading => "Baixando e verificando a atualização…";
+    public string UpdateFailed => "Não foi possível preparar a atualização. O WindowsCM continua em execução. Verifique sua conexão e tente novamente.";
     public static PortugueseAppStrings Instance { get; } = new();
 
     public string AppName => "WindowsCM";

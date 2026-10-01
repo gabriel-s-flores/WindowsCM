@@ -1,210 +1,163 @@
 <p align="center">
-  <img src="assets/hero-logo.png" alt="WindowsCM Logo" width="150" />
+  <img src="src/WindowsCM.App/Assets/app.png" alt="WindowsCM application icon" width="120" />
 </p>
 
 <h1 align="center">WindowsCM</h1>
+<p align="center">A visual clipboard manager for Windows, inspired by <a href="https://github.com/boerdereinar/copyous">Copyous</a>.</p>
 
-<p align="center">
-  <strong>Fast, visual clipboard manager for Windows 11 with full parity to GNOME Copyous.</strong><br />
-  Rich multi-format card previews, cursor-anchored compact popup, local Wi-Fi mobile transfer, and an ephemeral RAM-only incognito session.
-</p>
+Copy text, code, images or files as usual. WindowsCM keeps a searchable local history so you can reuse something you copied earlier. Open the compact menu next to your mouse, select an item and paste it into your previous application.
 
-<p align="center">
-  <a href="https://dotnet.microsoft.com/download/dotnet/8.0"><img src="https://img.shields.io/badge/.NET-8.0_WPF-512BD4?style=flat-square&logo=dotnet" alt=".NET 8" /></a>
-  <a href="https://www.microsoft.com/windows"><img src="https://img.shields.io/badge/Platform-Windows_10_%2F_11_x64-0078D4?style=flat-square&logo=windows" alt="Windows 11" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg?style=flat-square" alt="License: GPL-3.0" /></a>
-  <img src="https://img.shields.io/badge/Tests-1030_Passed-brightgreen?style=flat-square" alt="1030 Tests Passing" />
-  <img src="https://img.shields.io/badge/Localization-EN_%7C_PT--BR-success?style=flat-square" alt="Bilingual" />
-</p>
+## Install and start
 
----
+Download the latest package from [GitHub Releases](https://github.com/gabriel-s-flores/WindowsCM/releases/latest):
 
-## Overview
+| Package | How to use it |
+| --- | --- |
+| `WindowsCM-Setup-<version>.exe` | Run the per-user installer. No administrator account is required. Launch WindowsCM from the Start menu. |
+| `WindowsCM-portable-<version>.zip` | Extract the ZIP into a writable folder and run `WindowsCM.exe`. Keep `LICENSE` alongside it. |
 
-WindowsCM brings the fluid, card-centric clipboard workflow of GNOME Copyous to Windows 11. Built with C#, .NET 8, and WPF, it replaces the standard Windows clipboard history (`Win+V`) with a responsive, keyboard-driven interface tailored for developers, writers, and power users.
+Requires **Windows 10 20H2 (build 19042) or later, or Windows 11, x64**. Release packages include the .NET runtime; you do not need to install it separately.
 
-Instead of plain text snippets, WindowsCM categorizes copies into semantic cards with syntax-highlighted code, high-resolution YouTube and OpenGraph thumbnails, album art for audio files, color swatches, and native Windows Shell thumbnails for photos, videos, and office documents.
+WindowsCM runs in the notification area. The welcome guide explains the shortcuts and lets you enable launch at sign-in. If the tray icon is hidden, look in the notification area's overflow menu.
 
-<p align="center">
-  <img src="assets/compact-popup.png" alt="WindowsCM Compact Popup Window" width="340" />
-  <br />
-  <em>Compact popup anchored under cursor with instant search, syntax highlighting, media metadata, and YouTube previews.</em>
-</p>
+1. Copy a few items in any application.
+2. Click the field where you want to paste.
+3. Press **Ctrl+Shift+V** to open the compact menu.
+4. Search or use the arrow keys, then select an item.
+5. With **Paste automatically** enabled (the default), WindowsCM pastes into the previous field. Hold **Shift** while selecting to copy only.
 
----
+The tray menu also opens the large clipboard window and Settings. WindowsCM uses its own shortcuts; Windows' built-in clipboard history remains available.
 
-## Visual Tour
+## Clipboard history at a glance
 
-<p align="center">
-  <img src="assets/rich-preview-cards.png" alt="Rich Multi-Format Preview Cards" width="520" />
-  <br />
-  <em>Rich cards: FLAC audio with embedded album art and duration; YouTube URL with video thumbnail and channel details.</em>
-</p>
+<p align="center"><img src="assets/compact-popup.png" alt="English compact clipboard menu with text, code and pinned items" width="320" /></p>
 
-<br />
+- **Search and pins:** find saved items quickly and pin frequently used snippets. Configure history size and age limits in Settings; protected pins survive ordinary clearing.
+- **Eight item types:** text, code, images, a file, multiple files, links, characters and colors. Cards provide code highlighting, color information, image previews and file details. Link previews and native file thumbnails depend on the source and availability of metadata.
+- **Two windows:** a compact menu near the pointer and a larger card window. Both support horizontal or vertical layouts and configurable item order. Place the large window on a screen edge, on a fixed monitor, or drag and resize it in free placement mode.
+- **Item actions:** edit content or titles, copy, pin, delete, convert colors and use QR actions. Custom actions are configured in `actions.json`.
+- **Appearance:** dark, light and high-contrast schemes, configurable item colors and file categories. English and Brazilian Portuguese can be switched in Settings without restarting.
+- **Capture controls:** configure excluded applications, history limits, shortcuts and feedback in Settings.
 
-<p align="center">
-  <img src="assets/settings-layout.png" alt="Layout and Placement Settings" width="48%" />
-  <img src="assets/settings-colors.png" alt="File Categories and Colors Settings" width="48%" />
-  <br />
-  <em>Left: Interactive monitor layout preview and dock configuration. Right: Semantic file categories, custom extensions, and accent colors.</em>
-</p>
+![Large clipboard window showing code, pinned notes, a color and an emoji](assets/rich-preview-cards.png)
 
----
+| Search a pinned item | Browse an incognito session |
+| --- | --- |
+| ![English search results containing a pinned release checklist](assets/search-pinned.png) | ![English compact menu with the incognito indicator active](assets/incognito-popup.png) |
 
-## Key Features
+## Incognito mode
 
-### 1. Dual Interface: Agile Compact Popup & Expanded Card Strip
-- **Compact Popup (`Ctrl+Shift+V`)**: Opens directly under the mouse pointer. Features a top search bar, fast arrow-key navigation, and instantaneous paste on `Enter` or copy-only on `Shift+Enter`. Configurable in vertical (`320x480px`) or horizontal (`540x240px`) format.
-- **Large Clipboard Window**: An expansive card strip with horizontal mouse-wheel scrolling (`250x230px` per card). Dockable to the bottom, top, left, or right edges of your display with customizable chronological flow directions (`Recent on Left/Top` vs `Recent on Right/Bottom`). Three placement modes: docked on the monitor under the mouse (default), docked on a **fixed monitor** you pick (with an **Identify** button that flashes each monitor's number), or **free** — drag it by the top, resize it from the edges, and it reopens exactly where you left it.
+Press **Ctrl+Shift+Alt+V** or use the incognito control to start an isolated session. Incognito history is held in memory rather than the saved history. Image assets use an isolated temporary folder that is cleaned when the session ends. You can search and paste them while the session is active. Hiding a window does not end the session; **explicitly exiting incognito clears its temporary items**. Updating or quitting the app also ends the session.
 
-### 2. Rich Multi-Format Previews & Shell Thumbnails
-WindowsCM automatically identifies 8 distinct clipboard kinds and presents them with dedicated renderers:
-- **Code & Scripts**: Displays multi-line snippets in monospace font (`Cascadia Code` / `Consolas`) with line numbers and syntax tokenization.
-- **Web Links & YouTube**: Fetches OpenGraph metadata, site titles, favicons, and high-definition YouTube video thumbnails (`img.youtube.com`) in the background.
-- **Audio Files**: Reads embedded ID3 / Vorbis tags to show album artwork, track title, artist name, and audio duration.
-- **Photos, Videos & Documents**: Native integration with `IShellItemImageFactory` renders Windows Explorer thumbnails directly on the card for video frames, images, presentations, and PDFs.
-- **Colors & Hex Swatches**: Parses color codes (`HEX`, `RGB`, `HSL`), displays visual swatch cards, and provides instant color format conversion.
-- **Emojis**: Built-in multi-emoji classifier with full-color Unicode rendering.
+Incognito controls WindowsCM's own storage. It does not prevent other applications or Windows clipboard services from observing copied content.
 
-### 3. Ephemeral Incognito Session
-- Activate with `Ctrl+Shift+Alt+V`, the tray menu, or the hat-and-glasses icon.
-- Clips copied during an incognito session live strictly in RAM (`EphemeralImageAssetStore`).
-- Zero disk writes, zero SQLite transactions.
-- You can search, browse, and paste incognito items freely. Once you exit incognito mode, the memory pool is cleared immediately, leaving no trace on disk.
+## Transfer between your phone and PC
 
-### 4. Bidirectional Mobile Transfer via QR Code & Local Wi-Fi
-- Built-in asynchronous HTTP server powered by `TcpListener` that requires **zero administrator privileges**, zero firewall configuration, and zero third-party cloud accounts.
-- **PC to Mobile**: Click the QR button on any clipboard card (text, code, image, audio, or document). Scanning the QR code with your smartphone opens a mobile web client with audio playback or direct file download.
-- **Mobile to PC**: Click the phone button (`Send from phone`) in the header to display a pairing QR code. Scan it to upload photos, audio recordings, files, or text from your smartphone straight into the Windows clipboard and WindowsCM history.
+Use the QR action on an item to open it on your phone, or **Send from phone** to receive text and files on the PC. Scan the displayed QR code with your phone's camera and open the local web page.
 
-### 5. Configurable Semantic File Categories & Colors
-- Replaced legacy color tags with customizable file categories: *Images*, *Audio*, *Video*, *Documents*, *Spreadsheets*, *Presentations*, *Code*, and *Archives*.
-- Add custom file extensions, define new categories, and set custom hex accent colors in Settings.
-- Unregistered extensions dynamically fall back to Windows Registry `PerceivedType` classifications.
+Both devices must be on a network that allows them to reach each other. Transfer uses a temporary local HTTP server, with no cloud account. Network isolation or Windows Firewall rules can prevent access. Only share the QR link with devices you trust and close the transfer window when finished.
 
-### 6. UIPI Protection & Safe Paste Orchestration
-- **Elevated Window Detection**: Windows User Interface Privilege Isolation (UIPI) drops synthetic keystrokes sent from standard applications to elevated (Administrator) windows. WindowsCM detects elevated foreground targets (`IsTargetElevated`) and falls back safely to clipboard-copy mode with an informative balloon notification instead of dropping the paste silently.
-- **Idempotent Input Pipeline**: Clean focus restoration and input injection via Win32 `SendInput`, protecting against double-paste race conditions.
-- **Paste Automatically (on by default)**: picking an item pastes it into the field you had clicked before opening WindowsCM — also when you open it from the tray icon, where the taskbar briefly holds the focus. If your last click was on the desktop, the item is only copied. Turn it off from the tray menu (**Paste automatically**) or in Settings to make every pick copy-only.
+## Automatic updates
 
-### 7. Windows 11 Fluent UI & Accessibility
-- Native Windows 11 design language: rounded corners, Segoe Fluent Icons, subtle surface elevation, and system accent tinting.
-- Full support for **Dark Mode**, **Light Mode**, and high-visibility **High Contrast Mode** (`#000000` deep black surface with crisp `#FFFFFF` borders).
-- Follows Windows system theme changes automatically.
+WindowsCM checks the latest stable GitHub release when a packaged app starts and every **six hours** while it is running. If a newer version has the matching package and checksum file, an update prompt appears.
 
-### 8. Strict Bilingual Parity
-- 100% localized in **English** and **Brazilian Portuguese**.
-- Switch languages on the fly in Settings with immediate runtime resource invalidation (no app restart required).
+<p align="center"><img src="assets/update-prompt.png" alt="English update prompt with Later and Update now buttons; example version 1.2.3" width="450" /></p>
 
----
+- **Update now** downloads the matching package, checks its SHA-256 checksum and restarts WindowsCM after applying it. Installed copies use the per-user installer; portable copies replace the executable in their existing folder.
+- **Later** leaves the app running and suppresses that version's prompt for the current session. It can be offered again after you restart.
+- Saved history, settings and actions are kept. An active incognito session ends during restart.
+- If the download or checksum validation fails, the running app remains open and you can retry. If applying the update fails, the next launch reports the failure. Portable updates require a writable app folder.
+- Offline checks do not interrupt clipboard use. Prereleases are excluded. Updating requires access to GitHub.
 
-## Keyboard Shortcuts
+This feature starts working after installing a build that includes it. Older WindowsCM versions need one manual update first.
 
-| Shortcut | Context | Action |
-| :--- | :--- | :--- |
-| `Ctrl + Shift + V` | Global | Open Compact Clipboard Popup under mouse cursor |
-| `Ctrl + Shift + Alt + V` | Global | Start or open Ephemeral Incognito session |
-| `Enter` | Popup | Paste selected item into the previously focused field and close popup (copy only when **Paste automatically** is off) |
-| `Shift + Enter` | Popup | Copy selected item to clipboard without pasting |
-| `Left-Click` | Popup | Paste clicked item into the previously focused field (copy only when **Paste automatically** is off) |
-| `Shift + Left-Click` | Popup | Copy clicked item to clipboard |
-| `Delete` | Popup | Remove selected item from history |
-| `P` | Popup | Pin or unpin selected item (prevents auto-deletion) |
-| `Ctrl + Q` | Popup | Open QR Code transfer dialog for selected item |
-| `Ctrl + F` / Type | Popup | Focus search bar and filter items |
-| `Esc` | Popup | Close clipboard window without pasting |
-| `Arrow Keys` | Popup | Navigate items (Up/Down or Left/Right according to layout) |
-| `Home` / `End` | Popup | Jump to the newest or oldest clipboard item |
+## Settings
 
----
+![English layout and screen placement settings](assets/settings-layout.png)
+![English item colors and file category settings](assets/settings-colors.png)
 
-## Architecture
+## Useful shortcuts
 
-WindowsCM is engineered with clear separation between a pure, dependency-free domain core and the WPF desktop shell:
+| Shortcut or gesture | Action |
+| --- | --- |
+| `Ctrl+Shift+V` | Open the compact menu |
+| `Ctrl+Shift+Alt+V` | Start or open incognito |
+| Arrow keys | Navigate items |
+| `Enter` / click an item | Use the selected item; paste automatically if enabled |
+| `Shift+Enter` / Shift+click | Copy without pasting |
+| `Ctrl+S` | Pin or unpin the selected item |
+| `Delete` | Delete the selected item when the item list has focus |
+| `Esc` | Close the popup |
 
-```mermaid
-graph TD
-  Win32[Win32 Clipboard Hook & Hotkeys] --> Capture[CaptureService]
-  Capture --> Classifier[Item Classifier & LinkPreviewService]
-  Classifier --> NormalStore[(SqliteHistoryStore / Local DB)]
-  Classifier --> EphemeralStore[(Ephemeral RAM Pool / Incognito)]
-  NormalStore --> ViewModel[PopupViewModel & Ordering Policy]
-  EphemeralStore --> ViewModel
-  ViewModel --> WPF[WPF UI: Compact Popup / Card Strip / Settings]
-  WPF --> PasteOrch[PasteOrchestrator]
-  PasteOrch --> UIPI{Target Elevated?}
-  UIPI -- No --> SendInput[Win32 SendInput Ctrl+V]
-  UIPI -- Yes --> CopyFallback[Copy to Clipboard + Notification]
-  WPF --> TransferServer[MiniTransferHttpServer / TcpListener]
-  TransferServer <--> Phone[Mobile Devices on Local Wi-Fi]
-```
+Global shortcuts are configurable in Settings. If a shortcut is already registered by another app, WindowsCM reports the conflict. Pasting into an elevated application may fall back to copying: paste manually in that application.
 
-- **`WindowsCM.Core`**: Zero UI dependencies. Houses the SQLite storage engine, classifiers, OpenGraph parsers, YouTube thumbnail extractors, keyboard maps, placement mathematics, and the async HTTP server.
-- **`WindowsCM.App`**: WPF presentation layer. Implements dynamic resource localization, Segoe Fluent Icons, custom window chrome, and Win32 shell interop (`IShellItemImageFactory`).
-- **`WindowsCM.Core.Tests`**: 1,030 automated unit tests guaranteeing behavioral stability across placement, classification, ordering, serialization, and paste dispatching.
+## Local data and license
 
----
+Saved history, images, caches and logs live under `%LOCALAPPDATA%\WindowsCM`. Settings and custom actions live under `%APPDATA%\WindowsCM`. The portable package uses these same user data locations. Ordinary upgrades keep this data; uninstalling keeps it unless you explicitly choose removal.
 
-## Installation & Downloads
+WindowsCM is licensed under [GPL-3.0-or-later](LICENSE). It is inspired by [Copyous](https://github.com/boerdereinar/copyous) and its [Pano](https://github.com/oae/gnome-shell-pano) lineage.
 
-Pre-built binaries for Windows 10 and Windows 11 (x64) are available in each [GitHub Release](../../releases):
+## Developer notes
 
-| Format | File | Details |
-| :--- | :--- | :--- |
-| **Portable** | `WindowsCM-portable.zip` | Standalone single-file executable. Extract and run `WindowsCM.exe` anywhere with zero installation. |
-| **Installer** | `WindowsCM-Setup-1.0.0.exe` | Clean per-user installer generated with Inno Setup. No administrator privileges required. |
+### Dependencies and local development
 
-### System Requirements
-- Windows 10 (version 1809 or newer) / Windows 11 (64-bit)
-- [.NET 8.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (included in self-contained builds)
+Use Windows with the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Visual Studio 2022 with desktop .NET development support is optional. Packaging additionally requires [Inno Setup 6](https://jrsoftware.org/isinfo.php), with `ISCC.exe` on `PATH` or in a standard installation location.
 
----
-
-## Building from Source
-
-### Prerequisites
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- Visual Studio 2022 or VS Code with C# Dev Kit
-- [Inno Setup 6](https://jrsoftware.org/isinfo.php) (optional, required only for building the setup installer)
-
-### Quick Build & Test
-
-Clone the repository and compile the solution:
+NuGet dependencies are restored automatically. No separate database service or Node.js installation is needed.
 
 ```powershell
 git clone https://github.com/gabriel-s-flores/WindowsCM.git
 cd WindowsCM
-
-# Run test suite
-dotnet test WindowsCM.sln
-
-# Build Release
+$env:DOTNET_CLI_UI_LANGUAGE = 'en'
+dotnet restore WindowsCM.sln
 dotnet build WindowsCM.sln -c Release
+dotnet test WindowsCM.sln -c Release
+dotnet run --project src/WindowsCM.App/WindowsCM.App.csproj
 ```
 
-### Packaging Distribution Artifacts
+Development builds do not run the automatic updater. The app starts in the tray; use its hotkey or tray menu. Command-line options include `--hidden`, `--show`, `--hide`, `--toggle` and `--help`. Commands sent by a second launch are forwarded to the running instance.
 
-To compile the self-contained single-file portable build, generate the zip archive, and build the Inno Setup installer in a single command:
+### Smoke tests and README captures
+
+The isolated WPF harness exercises production windows with fixture data, without capturing your clipboard or modifying your saved history:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/smoke/ui-stress.ps1 -Cards 500
+dotnet run --project scripts/smoke/WindowsCM.UiStress -c Release -- screenshots assets
+```
+
+The screenshot scenario renders the actual English window content into PNG files and checks pinned search, settings navigation and live localization of the update prompt. The update screenshot uses an example version. The incognito scenario uses an isolated session, checks that exiting clears its temporary history, and verifies that the normal history is preserved.
+
+`app-smoke.ps1` and `scroll-smoke.ps1` additionally drive the real app on a Windows desktop. **They delete the current user's WindowsCM data and require `-ResetUserData`; run them only on a disposable account or CI runner.**
+
+### Build portable and installer packages
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build-dist.ps1
 ```
 
-All distribution artifacts will be generated in the `dist/` directory:
-- `dist/WindowsCM-portable/`
-- `dist/WindowsCM-portable.zip`
-- `dist/WindowsCM-Setup-1.0.0.exe`
+The script closes running WindowsCM processes and creates both packages in `dist/`:
 
----
+- `WindowsCM-portable/WindowsCM.exe` and `LICENSE`
+- `WindowsCM-portable.zip`
+- `WindowsCM-Setup-1.0.0.exe`
 
-## Acknowledgments
+To stamp a release version into the app and installer:
 
-- **[Copyous](https://github.com/philgale/copyous)** by Phil Gale — the outstanding GNOME extension that served as the design and functional inspiration for WindowsCM.
-- **[QRCoder](https://github.com/codebude/QRCoder)** — lightweight QR code generation in pure .NET.
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-dist.ps1 -Version 1.2.3
+```
 
----
+### Release contract and project structure
 
-## License
+CI builds and tests changes, runs desktop smoke tests, and publishes a new patch release after a successful push to `main`. It stamps the same version into the app and installer and uploads `WindowsCM-Setup-<version>.exe`, `WindowsCM-portable-<version>.zip`, and `SHA256SUMS.txt`. Preserve these names and the `v<major>.<minor>.<patch>` tag format: the updater selects assets by exact name. It uses GitHub's [latest stable release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) and verifies the package against `SHA256SUMS.txt` before applying it.
 
-This project is licensed under the [GNU General Public License v3.0 or later](LICENSE).
+| Directory | Responsibility |
+| --- | --- |
+| `src/WindowsCM.Core` | Capture, classification, SQLite history, paste policies, settings, transfer and update checks |
+| `src/WindowsCM.App` | WPF windows, tray, Win32 adapters and update installation |
+| `tests/WindowsCM.Core.Tests` | Automated behavior and localization regression tests |
+| `scripts/smoke` | Desktop smoke scripts and isolated WPF harness |
+| `installer` | Inno Setup installer definition |
+
+See [CONTEXT.md](CONTEXT.md) and [architecture decisions](docs/adr/) for domain and design details. All repository prose and code are English. New user-facing text must have English and Portuguese catalog entries, use dynamic localization resources in XAML, and pass `LocalizationTests`.

@@ -3,6 +3,13 @@ namespace WindowsCM.Core.Localization;
 
 public sealed class EnglishAppStrings : IAppStrings
 {
+    public string UpdateTitle => "Update available";
+    public string UpdateApplyFailed => "The update could not be installed. Your saved history and settings are kept. Close other WindowsCM instances and try again, or download the latest release from GitHub.";
+    public string UpdateDescription => "A new WindowsCM version is ready. Update now to download, verify and install it, then restart the app. Your saved history and settings are kept. Exiting incognito clears its temporary items.";
+    public string UpdateLater => "Later";
+    public string UpdateInstall => "Update now";
+    public string UpdateDownloading => "Downloading and verifying the update…";
+    public string UpdateFailed => "The update could not be prepared. WindowsCM is still running. Check your connection and try again.";
     public static EnglishAppStrings Instance { get; } = new();
 
     public string AppName => "WindowsCM";

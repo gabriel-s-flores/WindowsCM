@@ -3,6 +3,11 @@ bin/
 obj/
 [Dd]ebug/
 [Rr]elease/
+# Release domain sources are not build output.
+!src/WindowsCM.Core/Release/
+!src/WindowsCM.Core/Release/**
+!tests/WindowsCM.Core.Tests/Release/
+!tests/WindowsCM.Core.Tests/Release/**
 x64/
 x86/
 build/
