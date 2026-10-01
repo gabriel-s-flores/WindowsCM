@@ -23,7 +23,11 @@ namespace WindowsCM.Core.Tests.Stability;
 public sealed class ProductionSoakTests : IDisposable
 {
     private const int MaxItems = 100;
-    private static readonly TimeSpan SoakDuration = TimeSpan.FromSeconds(3);
+    // Keep the default suite fast; opt into a sustained local/CI stress run.
+    private static readonly TimeSpan SoakDuration = TimeSpan.FromSeconds(
+        int.TryParse(Environment.GetEnvironmentVariable("WINDOWSCM_SOAK_SECONDS"), out var seconds)
+            ? Math.Clamp(seconds, 3, 300)
+            : 3);
 
     private readonly ITestOutputHelper _output;
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "wcm-soak-" + Guid.NewGuid().ToString("N"));

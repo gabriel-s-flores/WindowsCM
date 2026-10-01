@@ -158,18 +158,21 @@ public static partial class LinkMetadataParser
         return cleaned;
     }
 
-    [GeneratedRegex(@"<meta\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    // Pages can contain thousands of unfinished tags. Backtracking repeatedly
+    // rescanned the remaining page and exhausted background preview workers.
+    // These patterns need no backreferences/lookarounds, so use linear matching.
+    [GeneratedRegex(@"<meta\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.NonBacktracking)]
     private static partial Regex MetaTagRegex();
 
     [GeneratedRegex(
         @"(?<name>[A-Za-z_:][\w\-.:]*)\s*=\s*(?:""(?<dq>[^""]*)""|'(?<sq>[^']*)'|(?<bare>[^\s>]+))",
-        RegexOptions.IgnoreCase)]
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex MetaAttrRegex();
 
-    [GeneratedRegex(@"<title\b[^>]*>(?<t>.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"<title\b[^>]*>(?<t>.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.NonBacktracking)]
     private static partial Regex TitleRegex();
 
-    [GeneratedRegex(@"<link\b[^>]*\brel\s*=\s*[""']?image_src[""']?[^>]*\bhref\s*=\s*[""'](?<href>[^""']+)[""']", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"<link\b[^>]*\brel\s*=\s*[""']?image_src[""']?[^>]*\bhref\s*=\s*[""'](?<href>[^""']+)[""']", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex LinkImageSrcRegex();
 }
 

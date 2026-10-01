@@ -6,6 +6,27 @@ namespace WindowsCM.Core.Tests.Popup;
 
 public sealed class ItemDisplayFormatterTests
 {
+    [Theory]
+    [InlineData(ItemKind.Image, @"C:\WindowsCM-missing\image.png", @"C:\WindowsCM-missing\image.png")]
+    [InlineData(ItemKind.Image, "file:///C:/WindowsCM-missing/image.png", @"C:\WindowsCM-missing\image.png")]
+    [InlineData(ItemKind.Image, @"\\unavailable\share\image.png", @"\\unavailable\share\image.png")]
+    [InlineData(ItemKind.File, @"C:\WindowsCM-missing\image.png", @"C:\WindowsCM-missing\image.png")]
+    public void TryGetLocalImagePath_ResolvesWithoutCheckingDisk(ItemKind kind, string content, string expected)
+    {
+        var item = new ClipboardItem(kind, content, false, null, DateTime.UtcNow, null, null);
+        Assert.Equal(expected, ItemDisplayFormatter.TryGetLocalImagePath(item));
+    }
+
+    [Theory]
+    [InlineData("https://example.test/image.png")]
+    [InlineData("relative.png")]
+    [InlineData("file://")]
+    public void TryGetLocalImagePath_InvalidOrRemoteWebPath_ReturnsNull(string content)
+    {
+        var item = new ClipboardItem(ItemKind.Image, content, false, null, DateTime.UtcNow, null, null);
+        Assert.Null(ItemDisplayFormatter.TryGetLocalImagePath(item));
+    }
+
     [Fact]
     public void GetTitle_ImageItem_ReturnsGenericTitle_NeverExposesInternalUri()
     {

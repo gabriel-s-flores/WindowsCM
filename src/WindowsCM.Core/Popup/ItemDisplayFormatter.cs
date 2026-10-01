@@ -211,6 +211,8 @@ public static class ItemDisplayFormatter
         return result;
     }
 
+    // Resolves a path only. Checking existence here blocks the popup on
+    // unavailable shares; thumbnail workers validate and open the file.
     public static string? TryGetLocalImagePath(ClipboardItem item)
     {
         if (string.IsNullOrWhiteSpace(item.Content))
@@ -226,14 +228,14 @@ public static class ItemDisplayFormatter
                 try
                 {
                     var local = new Uri(uriStr).LocalPath;
-                    return File.Exists(local) ? local : null;
+                    return Path.IsPathFullyQualified(local) ? local : null;
                 }
                 catch
                 {
                     return null;
                 }
             }
-            return File.Exists(uriStr) ? uriStr : null;
+            return Path.IsPathFullyQualified(uriStr) ? uriStr : null;
         }
 
         if (item.Kind == ItemKind.File)
@@ -242,7 +244,7 @@ public static class ItemDisplayFormatter
             var path = NormalizePath(firstLine);
             if (!string.IsNullOrWhiteSpace(path) && IsImageFilePath(path))
             {
-                return File.Exists(path) ? path : null;
+                return path;
             }
         }
 

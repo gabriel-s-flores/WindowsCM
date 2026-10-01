@@ -147,19 +147,19 @@ internal sealed class ImageThumbConverter : IValueConverter
                 try
                 {
                     var p = new Uri(content).LocalPath;
-                    if (File.Exists(p)) localPath = p;
+                    localPath = p;
                 }
                 catch
                 {
                 }
             }
-            else if (File.Exists(content))
+            else if (Path.IsPathFullyQualified(content))
             {
                 localPath = content;
             }
         }
 
-        if (string.IsNullOrEmpty(localPath) || !File.Exists(localPath))
+        if (string.IsNullOrEmpty(localPath))
         {
             return null;
         }
@@ -961,7 +961,7 @@ internal static class LinkPreviewImages
         {
             return null;
         }
-        return File.Exists(image) ? image : null;
+        return image;
     }
 }
 

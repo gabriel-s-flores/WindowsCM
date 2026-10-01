@@ -12,4 +12,11 @@ public sealed record ClipboardItem(
     DateTime CapturedAt,
     string? MetadataJson,
     string? Title,
-    long Id = 0);
+    long Id = 0)
+{
+    // WPF pixel virtualization stores sizes in a dictionary keyed by item.
+    // The synthesized record hash scanned Content and MetadataJson on every
+    // lookup, turning a scroll over large pastes into gigabytes of hashing.
+    // Equal records share these scalar fields; full value equality stays intact.
+    public override int GetHashCode() => HashCode.Combine(Id, Kind, CapturedAt, Pinned);
+}
