@@ -5,6 +5,33 @@ namespace WindowsCM.Core.Tests.Previews;
 
 public sealed class CodeSyntaxTokenizerTests
 {
+    [Theory]
+    [InlineData("C#")]
+    [InlineData("var color = (#ff00aa);")]
+    [InlineData("/page#section")]
+    [InlineData("echo ${value##prefix}")]
+    public async Task Tokenize_InlineHash_CompletesWithoutBlockingCardRendering(string code)
+    {
+        // Card realization calls this synchronously while scrolling. A worker
+        // and deadline let the test report an infinite loop instead of hanging.
+        var tokens = await Task.Run(() => CodeSyntaxTokenizer.Tokenize(code))
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(code, string.Concat(tokens.Select(token => token.Text)));
+        Assert.DoesNotContain(tokens, token => token.Kind == CodeSyntaxTokenKind.Comment);
+    }
+
+    [Fact]
+    public void Tokenize_HashComments_RemainCommentsAtLineStartOrAfterWhitespace()
+    {
+        const string code = "# comment\nvalue # another comment";
+        var tokens = CodeSyntaxTokenizer.Tokenize(code);
+
+        Assert.Equal(code, string.Concat(tokens.Select(token => token.Text)));
+        Assert.Contains(tokens, token => token.Kind == CodeSyntaxTokenKind.Comment && token.Text == "# comment");
+        Assert.Contains(tokens, token => token.Kind == CodeSyntaxTokenKind.Comment && token.Text == "# another comment");
+    }
+
     [Fact]
     public void Tokenize_EmptyOrNull_ReturnsEmpty()
     {

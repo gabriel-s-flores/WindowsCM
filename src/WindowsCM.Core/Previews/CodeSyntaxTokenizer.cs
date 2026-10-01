@@ -216,6 +216,16 @@ public static class CodeSyntaxTokenizer
             }
 
             // 6. Whitespace and generic characters
+            // Every character must advance the scanner. An inline '#' is
+            // not a comment, but is excluded from the plain-text loop below;
+            // leaving it unconsumed froze card realization on the UI thread.
+            if (ch == '#')
+            {
+                spans.Add(new CodeSyntaxSpan("#", CodeSyntaxTokenKind.PlainText));
+                i++;
+                continue;
+            }
+
             var plainStart = i;
             while (i < len && !char.IsAsciiLetter(code[i]) && !char.IsAsciiDigit(code[i])
                    && code[i] is not ('_' or '$' or '@' or '"' or '\'' or '`' or '/' or '#' or '-' or '=' or '!' or '<' or '>' or '+' or '*' or '&' or '|' or '^' or '~' or '?' or ':'))
