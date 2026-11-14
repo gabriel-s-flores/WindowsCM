@@ -297,6 +297,12 @@ function Sample-Process([string]$label) {
 $gcdumpExe = Join-Path $env:USERPROFILE '.dotnet\tools\dotnet-gcdump.exe'
 function Heap-After-GC([string]$label) {
     if (-not (Test-Path $gcdumpExe)) { return $null }
+    # The tool's warnings go to stderr. Under the script-wide 'Stop',
+    # Windows PowerShell 5.1 turns each redirected stderr line into a
+    # terminating error: dotnet-gcdump 10.0.750501 started warning about
+    # lossy buffering on every collect and aborted the smoke. The dump and
+    # its report are checked below instead (scoped to this function).
+    $ErrorActionPreference = 'Continue'
     $dump = Join-Path $OutDir "heap-$label.gcdump"
     & $gcdumpExe collect -p $script:app.Id -o $dump 2>&1 | Out-Null
     if (-not (Test-Path $dump)) { return $null }

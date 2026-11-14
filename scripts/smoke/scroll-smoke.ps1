@@ -217,6 +217,10 @@ function Item-Counts {
 function Save-Stacks([string]$label) {
     $stackExe = Join-Path $dotnetTools 'dotnet-stack.exe'
     if (-not (Test-Path $stackExe)) { Note "    (dotnet-stack unavailable: no stacks for $label)"; return }
+    # Tool warnings arrive on stderr; under the script-wide 'Stop', Windows
+    # PowerShell 5.1 would abort on them and lose the diagnosis. Scoped to
+    # this function.
+    $ErrorActionPreference = 'Continue'
     $file = Join-Path $OutDir "stacks-$label.txt"
     & $stackExe report -p $script:app.Id 2>&1 | Set-Content -Path $file -Encoding UTF8
     Note "    managed stacks saved to $(Split-Path $file -Leaf)"
@@ -232,6 +236,8 @@ function Save-Stacks([string]$label) {
 
 function Summarise-Dumps {
     $dumpExe = Join-Path $dotnetTools 'dotnet-dump.exe'
+    # As in Save-Stacks: a stderr warning must not abort the summary.
+    $ErrorActionPreference = 'Continue'
     foreach ($dump in (Get-ChildItem $OutDir -Filter 'crash-*.dmp' -ErrorAction SilentlyContinue)) {
         Note "  crash dump: $($dump.Name) ($([math]::Round($dump.Length / 1MB, 1)) MB)"
         if (-not (Test-Path $dumpExe)) { continue }

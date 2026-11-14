@@ -56,8 +56,11 @@ jobs:
       # timing and memory, large-window placement modes and auto-paste end
       # to end (scripts/smoke/app-smoke.ps1). Windows PowerShell for STA
       # clipboard access; the runner is throwaway, so user data is reset.
+      # Diagnostics tools are pinned (here and below): an unpinned install
+      # picked up 10.0.750501, whose new stderr warning aborted the smoke.
+      # Bump them together, deliberately.
       - name: Install dotnet-gcdump (smoke heap measurement)
-        run: dotnet tool install --global dotnet-gcdump
+        run: dotnet tool install --global dotnet-gcdump --version 10.0.745401
 
       - name: App smoke (real app)
         shell: powershell
@@ -81,8 +84,8 @@ jobs:
       # dump (dotnet-dump).
       - name: Install dotnet-stack and dotnet-dump (scroll smoke diagnostics)
         run: |
-          dotnet tool install --global dotnet-stack
-          dotnet tool install --global dotnet-dump
+          dotnet tool install --global dotnet-stack --version 10.0.745401
+          dotnet tool install --global dotnet-dump --version 10.0.745401
 
       - name: Scroll smoke (real app)
         shell: powershell
