@@ -75,6 +75,21 @@ public sealed class LinkImageCacheTests : IDisposable
         Assert.Null(cache.TryGet(drop));
     }
 
+    [Fact]
+    public void SweepOrphans_WithACutoff_KeepsFilesWrittenAfterIt()
+    {
+        var cache = new LinkImageCache(_dir);
+        const string old = "https://example.com/old";
+        const string fresh = "https://example.com/fresh";
+        File.SetLastWriteTimeUtc(cache.SaveIfAbsent(old, [1]), DateTime.UtcNow.AddHours(-2));
+        cache.SaveIfAbsent(fresh, [2]);
+
+        cache.SweepOrphans([], writtenBeforeUtc: DateTime.UtcNow.AddHours(-1));
+
+        Assert.Null(cache.TryGet(old));
+        Assert.NotNull(cache.TryGet(fresh));
+    }
+
     // "Clear cache" in Settings deletes the folder; the cache only created
     // it once, so every later preview image failed (and its whole preview
     // with it) until restart.

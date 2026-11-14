@@ -22,7 +22,7 @@ internal static class ScreenshotSmoke
         using var store = new SqliteHistoryStore("Data Source=:memory:");
         using var images = new EphemeralImageAssetStore();
         using var coordinator = new IncognitoSessionCoordinator(store, images);
-        var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var app = Program.IsolatedApp();
         typeof(App).GetField("_coordinator", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(app, coordinator);
         var language = typeof(App).GetMethod("UpdateLanguage", BindingFlags.Instance | BindingFlags.NonPublic)!;
         language.Invoke(app, [AppLanguage.English]);

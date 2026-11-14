@@ -39,6 +39,11 @@ internal static class Program
         {
             var scenario = args.FirstOrDefault() ?? "cards";
             if (scenario == "screenshots") return ScreenshotSmoke.Run(args.Length > 1 ? args[1] : "assets");
+            if (scenario == "perf")
+            {
+                _phase = "perf " + (args.Length > 1 ? args[1] : "");
+                return Perf.Run(args, () => Interlocked.Exchange(ref _heartbeat, Environment.TickCount64));
+            }
             if (scenario.StartsWith("remote-", StringComparison.Ordinal)) return CheckRemote(scenario);
             if (scenario == "image-shapes") return CheckImageShapes();
             if (scenario == "workflow") return RunWorkflow();
@@ -49,6 +54,21 @@ internal static class Program
             Console.Error.WriteLine($"FAIL during {_phase}: {ex}");
             return 1;
         }
+    }
+
+    // App writes timing notes (popup opens) to its error log: point it at a
+    // temporary file so the harness never writes into the user's log.
+    internal static App IsolatedApp()
+    {
+        var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var log = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WindowsCM-ui-stress-" + Guid.NewGuid().ToString("N") + ".log");
+        typeof(App).GetField("_errorLog", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(app, new WindowsCM.Core.Diagnostics.ErrorLog(log));
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { System.IO.File.Delete(log); } catch (System.IO.IOException) { }
+        };
+        return app;
     }
 
     private static IValueConverter Converter(string name) =>
@@ -124,7 +144,7 @@ internal static class Program
     private static int RunCardsInDirectory(int count, string dir)
     {
         using var store = new SqliteHistoryStore("Data Source=:memory:");
-        var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var app = Program.IsolatedApp();
         var updateLanguage = typeof(App).GetMethod("UpdateLanguage", BindingFlags.Instance | BindingFlags.NonPublic)!;
         updateLanguage.Invoke(app, [AppLanguage.English]);
         var settings = (AppSettings)typeof(App).GetField("_settings", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
@@ -279,7 +299,7 @@ internal static class Program
             for (var i = 0; i < 1000; i++)
                 store.AddOrUpdate(new ClipboardItem(i % 3 == 0 ? ItemKind.Code : ItemKind.Text,
                     $"var item{i} = value;\nC#\n" + new string('x', 1000), i % 7 == 0, null, now.AddSeconds(i), null, null));
-            var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            var app = Program.IsolatedApp();
             var settings = (AppSettings)typeof(App).GetField("_settings", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
             var language = typeof(App).GetMethod("UpdateLanguage", BindingFlags.Instance | BindingFlags.NonPublic)!;
             language.Invoke(app, [AppLanguage.English]);

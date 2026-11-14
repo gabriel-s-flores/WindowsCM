@@ -83,6 +83,35 @@ public sealed class UiHangWatchdogTests
     }
 
     [Fact]
+    public void BlockedUi_NamesTheStage_AndEveryStageSeenUntilItAnswers()
+    {
+        var ui = new FakeUi { Blocked = true };
+        var reports = new ConcurrentQueue<string>();
+        var stage = "startup 0.2 s > history-open 0.1 s";
+        using var watchdog = new UiHangWatchdog(ui.Post, reports.Enqueue, Threshold, Interval,
+            describeActivity: () => Volatile.Read(ref stage), samplePeriod: TimeSpan.FromMilliseconds(20));
+
+        watchdog.Start();
+        Assert.True(WaitFor(() => reports.Count == 1));
+        Assert.Contains("stage: startup 0.2 s > history-open 0.1 s", reports.First());
+
+        // Only the durations change: the same stage, not reported twice.
+        Volatile.Write(ref stage, "startup 0.4 s > history-open 0.3 s");
+        Thread.Sleep(100);
+        Volatile.Write(ref stage, "startup 0.5 s > theme 0.1 s");
+        Thread.Sleep(100);
+        ui.Blocked = false;
+        ui.Drain();
+
+        Assert.True(WaitFor(() => reports.Count == 2));
+        var recovery = reports.Last();
+        Assert.Contains("stages seen:", recovery);
+        Assert.Contains("history-open", recovery);
+        Assert.Contains("theme 0.1 s", recovery);
+        Assert.Equal(2, recovery.Split(" | ").Length);
+    }
+
+    [Fact]
     public void Dispose_StopsWatching()
     {
         var ui = new FakeUi { Blocked = true };

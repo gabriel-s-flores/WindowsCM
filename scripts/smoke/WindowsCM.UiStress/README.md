@@ -10,7 +10,8 @@ The harness runs the production large popup, compact popup, settings window,
 converters and thumbnail decoder. It constructs `App` without calling its
 startup, so it never starts clipboard capture, the tray, global hotkeys, IPC,
 or paste injection. Fixtures use an in-memory database or a uniquely named
-temporary directory. Settings windows save into that directory. Favicons are
+temporary directory. Settings windows save into that directory, and the app's
+log notes (popup open timings) go to a temporary file. Favicons are
 seeded in memory to prevent downloads and user-cache writes.
 
 Scenarios run in separate processes. Each has a watchdog that fails after
@@ -30,6 +31,27 @@ and writes reports under `TestResults/stress/ui/`.
   search flushed by navigation, selection/activation identity, pins, deletion,
   empty results, reversed ordering, languages, themes and settings windows.
   After 50 warmup cycles, memory/handle growth budgets are 64 MB / 100 handles.
+
+- `perf card-updates`: image cards realized before their thumbnail is
+  decoded must show it once the decode lands, in all four layouts, without
+  the popup being reopened. Run by `ui-stress.ps1`.
+
+Timing scenarios (numbers are printed, not asserted; the popups appear on
+screen; 60 synthetic items in memory, favicons seeded in memory):
+
+```powershell
+$exe = 'scripts/smoke/WindowsCM.UiStress/bin/Release/net8.0-windows/WindowsCM.UiStress.exe'
+& $exe perf firstshow-compact no-large       # first ShowAtCursor, cold
+& $exe perf firstshow-compact no-large warm  # same, after the startup warm-up
+& $exe perf firstshow-large
+& $exe perf wheel    # distance moved per wheel delta, all four layouts
+& $exe perf frames   # offset changes, layout passes, UI CPU, frame pacing, card refresh cost
+```
+
+`perf frames` counts distinct `RenderingTime` values as frames (WPF raises
+`Rendering` several times per frame). A loop that writes the offset on every
+callback keeps WPF rendering continuously and inflates that count; compare
+it together with the UI thread CPU.
 
 Scroll timings measure synchronous WPF layout, not GPU presentation latency
 or monitor frame rate. Initial loading/JIT is included in maximum timings.

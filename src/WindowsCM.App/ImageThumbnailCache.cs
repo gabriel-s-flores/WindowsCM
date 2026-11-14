@@ -47,11 +47,12 @@ internal static class ImageThumbnailCache
         capacity: 128,
         comparer: StringComparer.OrdinalIgnoreCase);
 
-    // Raised on a worker thread when a queued decode lands (or fails):
-    // marshal before touching the UI.
-    public static event Action? Updated;
+    // Raised on a worker thread with the image path when a queued decode
+    // lands (or fails): marshal before touching the UI.
+    public static event Action<string>? Updated;
 
-    static ImageThumbnailCache() => AsyncCache.Updated += _ => Updated?.Invoke();
+    static ImageThumbnailCache() => AsyncCache.Updated += key =>
+        Updated?.Invoke(key.EndsWith("|banner", StringComparison.Ordinal) ? key[..^7] : key);
 
     // UI-thread lookup for card images (captured screenshots, link preview
     // images): never decodes here. A miss — an older screenshot scrolling

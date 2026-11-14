@@ -651,6 +651,7 @@
                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
                  VirtualizingPanel.ScrollUnit="Pixel"
                  PreviewMouseWheel="OnItemsListPreviewMouseWheel"
+                 PreviewMouseDown="OnItemsListPreviewMouseDown"
                  PreviewMouseLeftButtonUp="OnItemClicked"
                  MouseDoubleClick="OnItemDoubleClicked">
           <ListBox.ItemsPanel>

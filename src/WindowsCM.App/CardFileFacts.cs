@@ -42,10 +42,18 @@ internal static class CardFileFacts
         comparer: StringComparer.OrdinalIgnoreCase,
         onProbeFailed: (_, ex) => (System.Windows.Application.Current as App)?.LogError("card-probe", ex));
 
-    // Raised on the probe thread: marshal before touching the UI.
-    public static event Action? Updated;
+    // Raised on the probe thread with the (normalized) path whose facts
+    // changed: marshal before touching the UI.
+    public static event Action<string>? Updated;
 
-    static CardFileFacts() => Cache.Updated += _ => Updated?.Invoke();
+    static CardFileFacts() => Cache.Updated += path => Updated?.Invoke(path);
+
+    // The key a card's lookups use for this raw path (see TryGet).
+    public static string? KeyFor(string? rawPath)
+    {
+        var path = FileDisplayHelper.NormalizePath(rawPath);
+        return string.IsNullOrWhiteSpace(path) ? null : path;
+    }
 
     // Null while the path has not been probed yet (the card shows its
     // extension icon and name meanwhile).

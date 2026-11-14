@@ -406,6 +406,7 @@
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  VirtualizingPanel.ScrollUnit="Pixel"
                  PreviewMouseWheel="OnItemsListPreviewMouseWheel"
+                 PreviewMouseDown="OnItemsListPreviewMouseDown"
                  PreviewMouseLeftButtonUp="OnItemClicked"
                  MouseDoubleClick="OnItemDoubleClicked">
           <ListBox.ItemsPanel>

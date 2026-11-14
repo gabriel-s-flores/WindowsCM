@@ -194,6 +194,60 @@ public sealed class IncognitoSessionCoordinatorTests : IDisposable
         Assert.Equal("persistent alpha", _coordinator.PersistentStore.List()[0].Content);
     }
 
+    // An image store whose write blocks until released.
+    private sealed class BlockingImages(string directory) : IImageAssetStore
+    {
+        public readonly ManualResetEventSlim Writing = new();
+        public readonly ManualResetEventSlim Release = new();
+        public string Directory { get; } = directory;
+
+        public string SaveIfAbsent(string fileName, byte[] bytes)
+        {
+            Writing.Set();
+            Release.Wait(TimeSpan.FromSeconds(10));
+            return Path.Combine(Directory, fileName);
+        }
+
+        public void SweepOrphans(IEnumerable<string> referencedFileNames)
+        {
+        }
+    }
+
+    [Fact]
+    public async Task SlowImageWrite_DoesNotHoldUpHistoryQueries()
+    {
+        var images = new BlockingImages(_imagesDir);
+        using var coordinator = new IncognitoSessionCoordinator(_persistentStore, images);
+        var write = Task.Run(() => coordinator.SaveIfAbsent("a.png", [1]));
+        Assert.True(images.Writing.Wait(TimeSpan.FromSeconds(5)));
+
+        // The popup's query answers while the write is still in progress.
+        var query = Task.Run(() => coordinator.Search(""));
+        var finished = await Task.WhenAny(query, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        images.Release.Set();
+        await write;
+        Assert.Same(query, finished);
+    }
+
+    [Fact]
+    public async Task IncognitoToggle_WaitsForAnImageWriteInProgress()
+    {
+        var images = new BlockingImages(_imagesDir);
+        using var coordinator = new IncognitoSessionCoordinator(_persistentStore, images);
+        var write = Task.Run(() => coordinator.SaveIfAbsent("a.png", [1]));
+        Assert.True(images.Writing.Wait(TimeSpan.FromSeconds(5)));
+
+        var toggle = Task.Run(() => coordinator.SetIncognito(true));
+        await Task.Delay(200);
+        Assert.False(toggle.IsCompleted);
+
+        images.Release.Set();
+        await write;
+        await toggle;
+        Assert.True(coordinator.IsIncognito);
+    }
+
     [Fact]
     public async Task ConcurrentUseWhileToggling_NeverThrows()
     {

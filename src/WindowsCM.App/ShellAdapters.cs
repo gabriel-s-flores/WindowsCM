@@ -15,25 +15,32 @@ namespace WindowsCM.App;
 
 // UI-thread popup behind TrayController and the pipe dispatcher: the tray
 // gestures already run on the UI thread, but pipe commands arrive on pool
-// threads, so every call marshals to the window's dispatcher.
-public sealed class ShellPopup(PopupWindow window, Dispatcher dispatcher, IIncognitoToggle incognito) : ITrayPopup
+// threads, so every call marshals to the window's dispatcher. The large
+// window is built on its first show (App.EnsureLargePopup): most users only
+// open the compact one.
+public sealed class ShellPopup(
+    Func<PopupWindow?> existing,
+    Func<PopupWindow> ensure,
+    Dispatcher dispatcher,
+    IIncognitoToggle incognito) : ITrayPopup
 {
-    public bool IsVisible => dispatcher.Invoke(() => window.IsVisible);
+    public bool IsVisible => dispatcher.Invoke(() => existing()?.IsVisible == true);
 
     public void Show(bool incognito) =>
-        dispatcher.Invoke(() => window.ShowAtCursor(incognito));
+        dispatcher.Invoke(() => ensure().ShowAtCursor(incognito));
 
-    public void Hide() => dispatcher.Invoke(window.Hide);
+    public void Hide() => dispatcher.Invoke(() => existing()?.Hide());
 
     public void Toggle() => dispatcher.Invoke(() =>
     {
-        if (window.IsVisible)
+        var window = existing();
+        if (window?.IsVisible == true)
         {
             window.Hide();
         }
-        else if (!window.WasRecentlyHidden)
+        else if (window is null || !window.WasRecentlyHidden)
         {
-            window.ShowAtCursor(incognito.IsIncognito);
+            ensure().ShowAtCursor(incognito.IsIncognito);
         }
     });
 }
