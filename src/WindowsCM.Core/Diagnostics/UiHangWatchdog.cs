@@ -17,6 +17,7 @@ public sealed class UiHangWatchdog : IDisposable
     private readonly Action<Action> _postToUi;
     private readonly Action<string> _report;
     private readonly Func<string>? _describeProcess;
+    private readonly Func<string>? _describeActivity;
     private readonly ManualResetEventSlim _stop = new();
     // One event reused for every ping. A fresh one per ping (every second)
     // left a kernel handle for the finalizer each time: thousands per hour
@@ -30,18 +31,28 @@ public sealed class UiHangWatchdog : IDisposable
         Action<string> report,
         TimeSpan threshold,
         TimeSpan? interval = null,
-        Func<string>? describeProcess = null)
+        Func<string>? describeProcess = null,
+        Func<string>? describeActivity = null,
+        TimeSpan? samplePeriod = null)
     {
         _postToUi = postToUi;
         _report = report;
         Threshold = threshold;
         Interval = interval ?? TimeSpan.FromSeconds(1);
+        SamplePeriod = samplePeriod ?? TimeSpan.FromMilliseconds(250);
         _describeProcess = describeProcess;
+        _describeActivity = describeActivity;
     }
 
     public TimeSpan Threshold { get; }
 
     public TimeSpan Interval { get; }
+
+    // How often the stage of a stuck UI is sampled until it answers: a hang
+    // can move through several stages (a layout pass, then a re-theme).
+    public TimeSpan SamplePeriod { get; }
+
+    private const int MaxStagesReported = 8;
 
     public void Start()
     {
@@ -75,17 +86,42 @@ public sealed class UiHangWatchdog : IDisposable
                 {
                     return;
                 }
+                var stage = DescribeActivity();
                 _report(string.Format(CultureInfo.InvariantCulture,
-                    "the UI thread has not answered for {0:0.#} s{1}",
-                    Threshold.TotalSeconds, Describe()));
-                WaitAnsweredOrStopped(answered, Timeout.InfiniteTimeSpan);
+                    "the UI thread has not answered for {0:0.#} s{1}{2}",
+                    Threshold.TotalSeconds, Describe(),
+                    stage is null ? "" : "; stage: " + stage));
+                // Distinct stages seen while stuck, with when each was first
+                // seen (seconds since the ping was sent).
+                var stages = new List<string>();
+                if (stage is not null)
+                {
+                    stages.Add(string.Format(CultureInfo.InvariantCulture, "at {0:0.0} s: {1}",
+                        Stopwatch.GetElapsedTime(sentAt).TotalSeconds, stage));
+                }
+                var lastStage = stage;
+                while (!WaitAnsweredOrStopped(answered, SamplePeriod))
+                {
+                    if (_stop.IsSet)
+                    {
+                        return;
+                    }
+                    var now = DescribeActivity();
+                    if (now is not null && StageKey(now) != StageKey(lastStage) && stages.Count < MaxStagesReported)
+                    {
+                        stages.Add(string.Format(CultureInfo.InvariantCulture, "at {0:0.0} s: {1}",
+                            Stopwatch.GetElapsedTime(sentAt).TotalSeconds, now));
+                    }
+                    lastStage = now;
+                }
                 if (_stop.IsSet)
                 {
                     return;
                 }
                 _report(string.Format(CultureInfo.InvariantCulture,
-                    "the UI thread answered again after {0:0.0} s",
-                    Stopwatch.GetElapsedTime(sentAt).TotalSeconds));
+                    "the UI thread answered again after {0:0.0} s{1}",
+                    Stopwatch.GetElapsedTime(sentAt).TotalSeconds,
+                    stages.Count == 0 ? "" : "; stages seen: " + string.Join(" | ", stages)));
             }
             _stop.Wait(Interval);
         }
@@ -96,6 +132,24 @@ public sealed class UiHangWatchdog : IDisposable
         WaitHandle.WaitAny([answered.WaitHandle, _stop.WaitHandle], timeout);
         return answered.IsSet;
     }
+
+    private string? DescribeActivity()
+    {
+        try
+        {
+            var text = _describeActivity?.Invoke();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // A stage without its running durations ("hotkey 2.1 s > show 0.4 s"
+    // and "hotkey 2.4 s > show 0.7 s" are the same stage).
+    private static string? StageKey(string? stage) =>
+        stage is null ? null : System.Text.RegularExpressions.Regex.Replace(stage, @" \d+(\.\d+)? s", "");
 
     private string Describe()
     {

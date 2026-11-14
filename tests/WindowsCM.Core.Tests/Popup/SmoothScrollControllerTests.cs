@@ -101,4 +101,49 @@ public sealed class SmoothScrollControllerTests
         controller.Tick(dt);
         Assert.True(controller.CurrentOffset > intermediateOffset);
     }
+
+    [Fact]
+    public void Rebase_ContinuesFromTheActualOffset_TowardTheClampedTarget()
+    {
+        var controller = new SmoothScrollController();
+        controller.AddDelta(500, scrollableWidth: 1000);
+
+        // The list's extent shrank to 400 while scrolling.
+        controller.Rebase(150, scrollableWidth: 400);
+
+        Assert.Equal(150, controller.CurrentOffset);
+        Assert.Equal(400, controller.TargetOffset);
+        Assert.True(controller.IsAnimating);
+    }
+
+    [Fact]
+    public void Rebase_AtTheTarget_StopsAnimating()
+    {
+        var controller = new SmoothScrollController();
+        controller.AddDelta(300, scrollableWidth: 1000);
+
+        controller.Rebase(300, scrollableWidth: 1000);
+
+        Assert.False(controller.IsAnimating);
+    }
+
+    [Theory]
+    [InlineData(-120, 96, 96)]
+    [InlineData(-30, 96, 24)]
+    [InlineData(-360, 96, 288)]
+    [InlineData(120, 260, -260)]
+    public void WheelDistance_IsProportionalToTheDelta(int delta, double perNotch, double expected)
+    {
+        Assert.Equal(expected, WheelScrollStep.Distance(delta, perNotch), 6);
+    }
+
+    [Theory]
+    [InlineData(3, 400, 96)]
+    [InlineData(1, 400, 32)]
+    [InlineData(0, 400, 0)]
+    [InlineData(-1, 400, 360)]
+    public void VerticalStep_FollowsTheWindowsLinesSetting(int lines, double viewport, double expected)
+    {
+        Assert.Equal(expected, WheelScrollStep.VerticalPerNotch(lines, viewport), 6);
+    }
 }

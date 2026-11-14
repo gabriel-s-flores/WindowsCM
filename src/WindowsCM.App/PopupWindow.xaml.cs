@@ -8,6 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using WindowsCM.Core.Actions;
+using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
 using WindowsCM.Core.Settings;
@@ -33,10 +34,11 @@ public partial class PopupWindow : Window
     private bool _isLightTheme;
     private bool _isContextMenuOpen;
     private bool _isDialogOpen;
-    private readonly SmoothScrollController _scrollController = new();
-    private bool _isRenderingHooked;
-    private long _lastRenderTicks;
-    private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
+    private readonly SmoothWheelScroller _scroller;
+    private int _opens;
+    // Card width + right margin (HorizontalCardItemStyle): a notch moves
+    // one card.
+    private const double HorizontalCardPitch = 260;
     private readonly System.Windows.Threading.DispatcherTimer _searchTimer;
     // Free placement (ADR 0006): drag by the top, resize from the edges.
     private bool _isFreePlacement;
@@ -57,22 +59,12 @@ public partial class PopupWindow : Window
             HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
         ItemsList.SelectionChanged += OnListSelectionChanged;
         // Favicons and file facts (thumbnails, sizes, tags) land one at a
-        // time from background probes; refreshing the whole list per result
-        // regenerated every card N times on open. One refresh per burst is
-        // enough.
-        _cardRefreshTimer = new System.Windows.Threading.DispatcherTimer(
-            System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(250),
-        };
-        _cardRefreshTimer.Tick += (_, _) =>
-        {
-            _cardRefreshTimer.Stop();
-            if (IsVisible)
-            {
-                ItemsList.Items.Refresh();
-            }
-        };
+        // time from background probes: only the cards they belong to are
+        // updated.
+        _ = new CardRefreshQueue(this, ItemsList);
+        _scroller = new SmoothWheelScroller(ItemsList,
+            () => _app.Settings.Dialog.Orientation == DialogOrientation.Horizontal,
+            () => HorizontalCardPitch);
         // Each keystroke reloaded the history and rebuilt every visible card:
         // the search applies once typing pauses, and before any key that
         // acts on the list (PendingSearchKeys), so Enter never picks from
@@ -83,23 +75,12 @@ public partial class PopupWindow : Window
             Interval = TimeSpan.FromMilliseconds(120),
         };
         _searchTimer.Tick += (_, _) => ApplyPendingSearch();
-        FaviconService.FaviconUpdated += _ => RequestCardRefresh();
-        CardFileFacts.Updated += RequestCardRefresh;
-        ImageThumbnailCache.Updated += RequestCardRefresh;
     }
 
-    // Thread-safe: file facts arrive on their probe thread.
-    private void RequestCardRefresh() =>
-        Dispatcher.BeginInvoke(() =>
-        {
-            // At most one refresh per interval: restarting the timer on every
-            // result kept pushing it back while decodes streamed in, and the
-            // cards stayed blank until the whole queue was done.
-            if (!_cardRefreshTimer.IsEnabled)
-            {
-                _cardRefreshTimer.Start();
-            }
-        });
+    // The cards whose item matches re-read their converters (used by the
+    // background-result queue and the perf harness).
+    internal int RefreshRealizedCards(Func<ClipboardItem, bool> affected) =>
+        CardRefreshQueue.RefreshRealized(ItemsList, affected);
 
     public void ApplyTheme(ColorScheme scheme)
     {
@@ -117,28 +98,56 @@ public partial class PopupWindow : Window
 
     public void ShowAtCursor(bool incognito)
     {
+        var activity = UiActivity.Shared;
+        using var stage = activity.Enter("large.show");
+        var timeline = new PhaseTimeline();
         _isActivating = false;
         _lastShowTimestamp = Environment.TickCount64;
-        SizeToContent = SizeToContent.Manual;
-        ApplyLayoutOrientation(_app.Settings.Dialog.Orientation);
-        if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
+        using (timeline.Measure("orientation", activity))
         {
-            _model.SetSearch("");
+            SizeToContent = SizeToContent.Manual;
+            ApplyLayoutOrientation(_app.Settings.Dialog.Orientation);
         }
-        _model.Show(incognito);
-        SearchBox.Text = _model.SearchText;
-        RefreshView();
-        _app.EnsureLinkPreviewsForRecentItems();
-        PlaceAtCursor(incognito);
-        ResetScrollToInitial();
-        UpdateLayout();
-        // A QR opened last time may have stepped the strip down a band.
-        Topmost = true;
-        Show();
-        var handle = new WindowInteropHelper(this).EnsureHandle();
-        SetForegroundWindow(handle);
-        Activate();
-        ItemsList.Focus();
+        using (timeline.Measure("model", activity))
+        {
+            if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
+            {
+                _model.SetSearch("");
+            }
+            _model.Show(incognito);
+        }
+        using (timeline.Measure("view", activity))
+        {
+            SearchBox.Text = _model.SearchText;
+            RefreshView();
+        }
+        using (timeline.Measure("link-previews", activity))
+        {
+            _app.EnsureLinkPreviewsForRecentItems();
+        }
+        using (timeline.Measure("place", activity))
+        {
+            PlaceAtCursor(incognito);
+            ResetScrollToInitial();
+        }
+        using (timeline.Measure("layout", activity))
+        {
+            UpdateLayout();
+        }
+        using (timeline.Measure("show", activity))
+        {
+            // A QR opened last time may have stepped the strip down a band.
+            Topmost = true;
+            Show();
+        }
+        using (timeline.Measure("focus", activity))
+        {
+            var handle = new WindowInteropHelper(this).EnsureHandle();
+            SetForegroundWindow(handle);
+            Activate();
+            ItemsList.Focus();
+        }
+        _app.ReportPopupOpen("large", ++_opens, timeline, warmedUp: false);
     }
 
     // Modeless windows opened from the strip (QR, mobile transfer) land in
@@ -291,7 +300,7 @@ public partial class PopupWindow : Window
 
     public void ResetScrollToInitial()
     {
-        StopSmoothScroll();
+        _scroller.Stop();
         var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
         if (scrollViewer != null)
         {
@@ -304,24 +313,15 @@ public partial class PopupWindow : Window
             {
                 scrollViewer.ScrollToHorizontalOffset(0);
                 scrollViewer.ScrollToVerticalOffset(0);
-                _scrollController.SetImmediate(0, scrollViewer.ScrollableWidth);
+            }
+            else if (orientation == DialogOrientation.Horizontal)
+            {
+                scrollViewer.ScrollToRightEnd();
             }
             else
             {
-                if (orientation == DialogOrientation.Horizontal)
-                {
-                    scrollViewer.ScrollToRightEnd();
-                    _scrollController.SetImmediate(scrollViewer.ScrollableWidth, scrollViewer.ScrollableWidth);
-                }
-                else
-                {
-                    scrollViewer.ScrollToBottom();
-                }
+                scrollViewer.ScrollToBottom();
             }
-        }
-        else
-        {
-            _scrollController.SetImmediate(0, 0);
         }
     }
 
@@ -792,78 +792,12 @@ public partial class PopupWindow : Window
         _app.OpenSettings();
     }
 
-    private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (_app.Settings.Dialog.Orientation == DialogOrientation.Vertical)
-        {
-            return;
-        }
-        if (ItemsList == null) return;
-        var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
-        if (scrollViewer != null)
-        {
-            if (!_scrollController.IsAnimating)
-            {
-                _scrollController.SetImmediate(scrollViewer.HorizontalOffset, scrollViewer.ScrollableWidth);
-            }
+    private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e) =>
+        _scroller.OnPreviewMouseWheel(e);
 
-            // 1 card width (250) + margin (10) = 260 DIPs per wheel notch
-            var deltaCards = e.Delta / 120.0;
-            _scrollController.AddDelta(-deltaCards * 260.0, scrollViewer.ScrollableWidth);
-
-            StartSmoothScroll();
-            e.Handled = true;
-        }
-    }
-
-    private void StartSmoothScroll()
-    {
-        if (!_isRenderingHooked)
-        {
-            _lastRenderTicks = Stopwatch.GetTimestamp();
-            CompositionTarget.Rendering += OnRenderFrame;
-            _isRenderingHooked = true;
-        }
-    }
-
-    private void StopSmoothScroll()
-    {
-        if (_isRenderingHooked)
-        {
-            CompositionTarget.Rendering -= OnRenderFrame;
-            _isRenderingHooked = false;
-        }
-    }
-
-    private void OnRenderFrame(object? sender, EventArgs e)
-    {
-        if (ItemsList == null)
-        {
-            StopSmoothScroll();
-            return;
-        }
-
-        var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
-        if (scrollViewer == null)
-        {
-            StopSmoothScroll();
-            return;
-        }
-
-        var nowTicks = Stopwatch.GetTimestamp();
-        var dt = (double)(nowTicks - _lastRenderTicks) / Stopwatch.Frequency;
-        _lastRenderTicks = nowTicks;
-
-        if (dt > 0.05) dt = 0.05;
-
-        var keepAnimating = _scrollController.Tick(dt);
-        scrollViewer.ScrollToHorizontalOffset(_scrollController.CurrentOffset);
-
-        if (!keepAnimating)
-        {
-            StopSmoothScroll();
-        }
-    }
+    // A click (the scrollbar, a card) takes the offset over from the wheel.
+    private void OnItemsListPreviewMouseDown(object sender, MouseButtonEventArgs e) =>
+        _scroller.Stop();
 
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
     {
@@ -1429,6 +1363,7 @@ public partial class PopupWindow : Window
             return;
         }
         _syncingSelection = true;
+        _scroller.Stop();
         try
         {
             ItemsList.SelectedIndex = _model.SelectedIndex;

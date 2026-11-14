@@ -52,7 +52,12 @@ internal sealed class AutoUpdater(App app) : IDisposable
             var service = new GitHubUpdateService(_client);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
             timeout.CancelAfter(TimeSpan.FromSeconds(30));
-            var update = await service.CheckAsync(version, IsInstalled(Environment.ProcessPath!), timeout.Token);
+            var installed = IsInstalled(Environment.ProcessPath!);
+            // On a worker thread: HttpClient does real work before its first
+            // await (proxy discovery, DNS, the TLS setup of a first request),
+            // and this ran on the UI thread during startup. The window below
+            // is created back on the UI thread (the await resumes there).
+            var update = await Task.Run(() => service.CheckAsync(version, installed, timeout.Token), timeout.Token);
             if (update is null || update.Version == _offered || _stop.IsCancellationRequested) return;
             _offered = update.Version;
             _window = new UpdateWindow(update, () => InstallAsync(service, update));

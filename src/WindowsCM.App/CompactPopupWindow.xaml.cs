@@ -6,8 +6,10 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using WindowsCM.Core.Actions;
+using WindowsCM.Core.Diagnostics;
 using WindowsCM.Core.History;
 using WindowsCM.Core.Popup;
+using WindowsCM.Core.Previews;
 using WindowsCM.Core.Settings;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
@@ -41,8 +43,11 @@ public partial class CompactPopupWindow : Window
     private readonly App _app;
     private bool _isActivating;
     private long _lastHideTimestamp;
-    private readonly System.Windows.Threading.DispatcherTimer _cardRefreshTimer;
     private readonly System.Windows.Threading.DispatcherTimer _searchTimer;
+    private readonly SmoothWheelScroller _scroller;
+    private int _opens;
+    // Card width + right margin (CompactHorizontalCardItemStyle).
+    private const double HorizontalCardPitch = 208;
 
     public CompactPopupWindow(PopupViewModel model, App app)
     {
@@ -50,21 +55,12 @@ public partial class CompactPopupWindow : Window
         _app = app;
         InitializeComponent();
         ItemsList.ItemsSource = _model.VisibleItems;
-        // File facts (thumbnails, sizes, tags) land from a background probe:
-        // one refresh per burst, like the large popup.
-        _cardRefreshTimer = new System.Windows.Threading.DispatcherTimer(
-            System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(250),
-        };
-        _cardRefreshTimer.Tick += (_, _) =>
-        {
-            _cardRefreshTimer.Stop();
-            if (IsVisible)
-            {
-                ItemsList.Items.Refresh();
-            }
-        };
+        // File facts, thumbnails and favicons land from background work:
+        // only the cards they belong to are updated.
+        _ = new CardRefreshQueue(this, ItemsList);
+        _scroller = new SmoothWheelScroller(ItemsList,
+            () => _app.Settings.Dialog.CompactOrientation == DialogOrientation.Horizontal,
+            () => HorizontalCardPitch);
         // Each keystroke reloaded the history and rebuilt every visible card:
         // the search applies once typing pauses, and before any key that
         // acts on the list, so Enter never picks from a stale list.
@@ -74,57 +70,167 @@ public partial class CompactPopupWindow : Window
             Interval = TimeSpan.FromMilliseconds(120),
         };
         _searchTimer.Tick += (_, _) => ApplyPendingSearch();
-        CardFileFacts.Updated += RequestCardRefresh;
-        ImageThumbnailCache.Updated += RequestCardRefresh;
-        FaviconService.FaviconUpdated += _ => RequestCardRefresh();
     }
 
-    // Thread-safe: file facts and thumbnails arrive from background work.
-    private void RequestCardRefresh() =>
-        Dispatcher.BeginInvoke(() =>
-        {
-            // At most one refresh per interval: restarting the timer on every
-            // result kept pushing it back while decodes streamed in, and the
-            // cards stayed blank until the whole queue was done.
-            if (!_cardRefreshTimer.IsEnabled)
-            {
-                _cardRefreshTimer.Start();
-            }
-        });
+    // The cards whose item matches re-read their converters (used by the
+    // background-result queue and the perf harness).
+    internal int RefreshRealizedCards(Func<ClipboardItem, bool> affected) =>
+        CardRefreshQueue.RefreshRealized(ItemsList, affected);
 
     public bool WasRecentlyHidden => Environment.TickCount64 - _lastHideTimestamp < 350;
 
     public void ShowAtCursor(bool incognito)
     {
-        ApplyLayoutOrientation(_app.Settings.Dialog.CompactOrientation);
-        if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
+        var activity = UiActivity.Shared;
+        using var stage = activity.Enter("compact.show");
+        var timeline = new PhaseTimeline();
+        EndWarmUp();
+        using (timeline.Measure("orientation", activity))
         {
-            _model.SetSearch("");
+            ApplyLayoutOrientation(_app.Settings.Dialog.CompactOrientation);
         }
-        _model.Show(incognito);
-        SearchBox.Text = _model.SearchText;
-        UpdateSearchVisuals();
-        RefreshView();
-        _app.EnsureLinkPreviewsForRecentItems();
-
-        PlaceNearCursor();
-        ResetScrollToInitial();
-        UpdateLayout();
-        Show();
-
-        var handle = new WindowInteropHelper(this).EnsureHandle();
-        SetForegroundWindow(handle);
-        Activate();
-        SearchBox.Focus();
-        if (!string.IsNullOrEmpty(SearchBox.Text))
+        using (timeline.Measure("model", activity))
         {
-            SearchBox.SelectAll();
+            if (!_app.Settings.Behavior.RememberSearch && !string.IsNullOrEmpty(_model.SearchText))
+            {
+                _model.SetSearch("");
+            }
+            _model.Show(incognito);
         }
-
-        if (ItemsList.Items.Count > 0 && ItemsList.SelectedIndex < 0)
+        using (timeline.Measure("view", activity))
         {
-            ItemsList.SelectedIndex = _model.SelectedIndex >= 0 ? _model.SelectedIndex : 0;
+            SearchBox.Text = _model.SearchText;
+            UpdateSearchVisuals();
+            RefreshView();
         }
+        using (timeline.Measure("link-previews", activity))
+        {
+            _app.EnsureLinkPreviewsForRecentItems();
+        }
+        using (timeline.Measure("place", activity))
+        {
+            PlaceNearCursor();
+            ResetScrollToInitial();
+        }
+        using (timeline.Measure("layout", activity))
+        {
+            UpdateLayout();
+        }
+        using (timeline.Measure("show", activity))
+        {
+            Show();
+        }
+        using (timeline.Measure("focus", activity))
+        {
+            var handle = new WindowInteropHelper(this).EnsureHandle();
+            SetForegroundWindow(handle);
+            Activate();
+            SearchBox.Focus();
+            if (!string.IsNullOrEmpty(SearchBox.Text))
+            {
+                SearchBox.SelectAll();
+            }
+
+            if (ItemsList.Items.Count > 0 && ItemsList.SelectedIndex < 0)
+            {
+                ItemsList.SelectedIndex = _model.SelectedIndex >= 0 ? _model.SelectedIndex : 0;
+            }
+        }
+        _app.ReportPopupOpen("compact", ++_opens, timeline, _warmedUp);
+    }
+
+    // Startup warm-up (App, once the tray is up and the UI is idle): the
+    // first open paid for template and font loading, JIT, the first render
+    // and the search box's first focus — ~0.4-0.6 s after every reboot, on
+    // the first Ctrl+Shift+V. Here the window is shown off-screen and fully
+    // transparent, never activated (ShowActivated is False and focus is only
+    // logical), with one sample card of each kind. The samples touch no
+    // network: the link has no favicon domain and no remote image.
+    private bool _warmingUp;
+    private bool _warmedUp;
+    private (double Left, double Top, double Opacity)? _beforeWarmUp;
+
+    internal bool IsWarmedUp => _warmedUp;
+
+    internal async Task WarmUpAsync()
+    {
+        if (_warmedUp || _warmingUp || IsVisible)
+        {
+            return;
+        }
+        _warmingUp = true;
+        try
+        {
+            using (UiActivity.Shared.Enter("compact.warm-up"))
+            {
+                _beforeWarmUp = (Left, Top, Opacity);
+                Opacity = 0;
+                Left = -32000;
+                Top = -32000;
+                ApplyLayoutOrientation(_app.Settings.Dialog.CompactOrientation);
+                ItemsList.ItemsSource = WarmUpSamples();
+                Show();
+                UpdateLayout();
+                FocusManager.SetFocusedElement(this, SearchBox);
+            }
+            // Loaded handlers, the first render pass and the deferred work
+            // of a new window run here, between the warm-up steps.
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+        finally
+        {
+            if (_warmingUp)
+            {
+                // Not claimed by a real open meanwhile.
+                base.Hide();
+                ItemsList.ItemsSource = _model.VisibleItems;
+                RestoreAfterWarmUp();
+            }
+            _warmingUp = false;
+            _warmedUp = true;
+        }
+    }
+
+    // A real open during the warm-up takes the window over as it is.
+    private void EndWarmUp()
+    {
+        if (!_warmingUp)
+        {
+            return;
+        }
+        _warmingUp = false;
+        RestoreAfterWarmUp();
+    }
+
+    private void RestoreAfterWarmUp()
+    {
+        if (_beforeWarmUp is { } before)
+        {
+            Left = before.Left;
+            Top = before.Top;
+            Opacity = before.Opacity;
+            _beforeWarmUp = null;
+        }
+    }
+
+    private static ClipboardItem[] WarmUpSamples()
+    {
+        var now = DateTime.UtcNow;
+        var missingImage = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WindowsCM-warm-up-missing.png");
+        var code = "public sealed class Sample\n{\n    private int _value = 42; // C#\n}\n";
+        return
+        [
+            new(ItemKind.Text, "Warm-up", true, null, now, null, null, -1),
+            new(ItemKind.Code, code, false, null, now, null, null, -2),
+            new(ItemKind.Image, missingImage, false, null, now, null, null, -3),
+            new(ItemKind.Link, "https://localhost/", false, null, now,
+                ItemMetadataJson.EncodeLink("Warm-up", "Warm-up", null), null, -4),
+            new(ItemKind.File, Environment.ProcessPath ?? missingImage, false, null, now, null, null, -5),
+            new(ItemKind.File, System.IO.Path.ChangeExtension(missingImage, ".mp3"), false, null, now, null, null, -6),
+            new(ItemKind.Character, "\U0001F600", false, null, now, null, null, -7),
+            new(ItemKind.Color, "#0078D4", false, null, now, null, null, -8),
+        ];
     }
 
     public void ApplyLayoutOrientation(DialogOrientation orientation)
@@ -185,6 +291,7 @@ public partial class CompactPopupWindow : Window
                 ApplyPendingSearch();
             }
         }
+        EndWarmUp();
         _isActivating = false;
         _lastHideTimestamp = Environment.TickCount64;
         ResetScrollToInitial();
@@ -235,6 +342,7 @@ public partial class CompactPopupWindow : Window
 
     public void ResetScrollToInitial()
     {
+        _scroller.Stop();
         var scrollViewer = FindVisualChild<ScrollViewer>(ItemsList);
         if (scrollViewer != null)
         {
@@ -443,6 +551,10 @@ public partial class CompactPopupWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (_warmingUp)
+        {
+            return;
+        }
         RefreshView();
     }
 
@@ -557,6 +669,7 @@ public partial class CompactPopupWindow : Window
         var next = Math.Clamp(current + delta, 0, ItemsList.Items.Count - 1);
         if (next != current)
         {
+            _scroller.Stop();
             ItemsList.SelectedIndex = next;
             ItemsList.ScrollIntoView(ItemsList.SelectedItem);
         }
@@ -640,41 +753,12 @@ public partial class CompactPopupWindow : Window
         }
     }
 
-    private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        var scrollViewer = FindDescendant<ScrollViewer>(ItemsList);
-        if (scrollViewer is null)
-        {
-            return;
-        }
-        if (_app.Settings.Dialog.CompactOrientation == DialogOrientation.Horizontal)
-        {
-            if (e.Delta < 0)
-            {
-                scrollViewer.LineRight();
-                scrollViewer.LineRight();
-            }
-            else
-            {
-                scrollViewer.LineLeft();
-                scrollViewer.LineLeft();
-            }
-        }
-        else
-        {
-            if (e.Delta < 0)
-            {
-                scrollViewer.LineDown();
-                scrollViewer.LineDown();
-            }
-            else
-            {
-                scrollViewer.LineUp();
-                scrollViewer.LineUp();
-            }
-        }
-        e.Handled = true;
-    }
+    private void OnItemsListPreviewMouseWheel(object sender, MouseWheelEventArgs e) =>
+        _scroller.OnPreviewMouseWheel(e);
+
+    // A click (the scrollbar, a card) takes the offset over from the wheel.
+    private void OnItemsListPreviewMouseDown(object sender, MouseButtonEventArgs e) =>
+        _scroller.Stop();
 
     private void OnCardPinButtonClicked(object sender, RoutedEventArgs e)
     {
@@ -887,28 +971,5 @@ public partial class CompactPopupWindow : Window
         }
         var index = ItemsList.ItemContainerGenerator.IndexFromContainer(item);
         return index >= 0 ? index : null;
-    }
-
-    private static T? FindDescendant<T>(DependencyObject? current) where T : DependencyObject
-    {
-        if (current is null)
-        {
-            return null;
-        }
-        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(current);
-        for (var i = 0; i < count; i++)
-        {
-            var child = System.Windows.Media.VisualTreeHelper.GetChild(current, i);
-            if (child is T match)
-            {
-                return match;
-            }
-            var nested = FindDescendant<T>(child);
-            if (nested is not null)
-            {
-                return nested;
-            }
-        }
-        return null;
     }
 }

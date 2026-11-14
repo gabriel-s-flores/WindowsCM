@@ -1,7 +1,8 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
 namespace WindowsCM.Core.Popup;
 
-// Frame-rate independent smooth scrolling controller for horizontal cards.
+// Frame-rate independent smooth scrolling for the popup card lists (both
+// popups, both orientations; one axis per list).
 // Uses continuous exponential decay (V-Sync synchronized) to achieve native monitor refresh rate
 // (60Hz, 120Hz, 144Hz, 240Hz) with zero stutter and smooth momentum accumulation.
 public sealed class SmoothScrollController
@@ -39,6 +40,21 @@ public sealed class SmoothScrollController
         }
     }
 
+    // The view moved the offset itself (the virtualizing panel corrected an
+    // estimated extent, or clamped past the end): continue from where the
+    // list really is, toward the same target, kept within the new bounds.
+    public void Rebase(double actualOffset, double scrollableWidth)
+    {
+        var max = Math.Max(0, scrollableWidth);
+        CurrentOffset = Math.Clamp(actualOffset, 0, max);
+        TargetOffset = Math.Clamp(TargetOffset, 0, max);
+        if (Math.Abs(TargetOffset - CurrentOffset) <= ConvergenceThreshold)
+        {
+            CurrentOffset = TargetOffset;
+            IsAnimating = false;
+        }
+    }
+
     public bool Tick(double dtSeconds)
     {
         if (!IsAnimating)
@@ -65,4 +81,27 @@ public sealed class SmoothScrollController
 
         return true;
     }
+}
+
+// How far one wheel event scrolls a card list, in DIPs: proportional to the
+// delta (a notch is 120; precision touchpads send small deltas often), so a
+// fast spin goes further and a touchpad glide stays fine-grained. Positive
+// distances move toward the end of the list.
+public static class WheelScrollStep
+{
+    public const int NotchDelta = 120;
+
+    // Per line of the Windows "lines to scroll" setting: 3 lines (the
+    // default) move ~100 DIPs a notch, about a quarter of the compact
+    // popup's list. The old fixed 32 DIPs per event ignored the delta.
+    public const double LineDips = 32;
+
+    public static double Distance(int wheelDelta, double dipsPerNotch) =>
+        -wheelDelta / (double)NotchDelta * dipsPerNotch;
+
+    // wheelScrollLines is -1 when Windows is set to scroll a page a notch.
+    public static double VerticalPerNotch(int wheelScrollLines, double viewport) =>
+        wheelScrollLines < 0
+            ? Math.Max(LineDips, viewport * 0.9)
+            : wheelScrollLines * LineDips;
 }

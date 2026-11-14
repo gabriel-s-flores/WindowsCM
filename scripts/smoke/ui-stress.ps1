@@ -18,4 +18,8 @@ foreach ($scenario in @('remote-image', 'remote-link', 'image-shapes', 'cards', 
     & $exe $scenario $Cards | Tee-Object -FilePath (Join-Path $OutDir "$scenario.txt")
     if ($LASTEXITCODE -ne 0) { throw "UI stress failed: $scenario (exit code $LASTEXITCODE)." }
 }
+# Background results (thumbnails) must update the cards already on screen.
+Write-Host "==> UI stress: perf card-updates"
+& $exe perf card-updates | Tee-Object -FilePath (Join-Path $OutDir "card-updates.txt")
+if ($LASTEXITCODE -ne 0) { throw "UI stress failed: card-updates (exit code $LASTEXITCODE)." }
 Write-Host "All isolated UI stress scenarios passed. Reports: $OutDir"

@@ -16,6 +16,11 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
     private SqliteHistoryStore? _incognitoStore;
     private EphemeralImageAssetStore? _incognitoImages;
     private readonly object _lock = new();
+    // Image writes (a multi-megabyte PNG on a slow disk) ran under _lock,
+    // so every popup query waited for them. They have their own lock now;
+    // the session swap takes both, always _imageLock first, so a write never
+    // lands in an ephemeral folder being deleted.
+    private readonly object _imageLock = new();
 
     public event EventHandler<bool>? IncognitoChanged;
 
@@ -59,7 +64,7 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
     {
         get
         {
-            lock (_lock)
+            lock (_imageLock)
             {
                 return (IsIncognito && _incognitoImages is not null) ? _incognitoImages : _persistentImages;
             }
@@ -69,6 +74,7 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
     public void SetIncognito(bool on)
     {
         bool changed = false;
+        lock (_imageLock)
         lock (_lock)
         {
             if (on && !IsIncognito)
@@ -122,7 +128,7 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
 
     private T LockedImages<T>(Func<IImageAssetStore, T> call)
     {
-        lock (_lock)
+        lock (_imageLock)
         {
             return call((IsIncognito && _incognitoImages is not null) ? _incognitoImages : _persistentImages);
         }
@@ -188,6 +194,7 @@ public sealed class IncognitoSessionCoordinator : IHistoryStore, IImageAssetStor
 
     public void Dispose()
     {
+        lock (_imageLock)
         lock (_lock)
         {
             _incognitoStore?.Dispose();

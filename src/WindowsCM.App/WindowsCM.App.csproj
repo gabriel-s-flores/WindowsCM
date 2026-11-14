@@ -18,6 +18,12 @@
          installer ships only WindowsCM.exe, so without this the installed
          app dies silently at startup. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Published builds (scripts/build-dist.ps1 passes a runtime) ship
+         precompiled code, so startup waits less for the JIT. Measured on
+         a warm disk, launch to IPC pipe: median 1,028 -> 898 ms; the exe
+         grows 166.0 -> 185.4 MB. Disabling TieredPGO changed nothing
+         measurable (895 ms), so it keeps the .NET default. -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

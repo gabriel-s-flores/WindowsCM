@@ -49,7 +49,10 @@ public sealed class LinkImageCache : ILinkImageCache
         return path;
     }
 
-    public void SweepOrphans(IEnumerable<string> referencedUrls)
+    // writtenBeforeUtc: only files older than this are candidates. The sweep
+    // runs in the background while captures go on; a preview image saved
+    // after the history was listed would otherwise be deleted as an orphan.
+    public void SweepOrphans(IEnumerable<string> referencedUrls, DateTime? writtenBeforeUtc = null)
     {
         var keep = new HashSet<string>(
             referencedUrls.Select(FileNameFor),
@@ -62,6 +65,10 @@ public sealed class LinkImageCache : ILinkImageCache
         {
             if (!keep.Contains(Path.GetFileName(file)))
             {
+                if (writtenBeforeUtc is { } cutoff && File.GetLastWriteTimeUtc(file) >= cutoff)
+                {
+                    continue;
+                }
                 try
                 {
                     File.Delete(file);

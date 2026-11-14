@@ -66,7 +66,13 @@ public partial class App : System.Windows.Application
     private System.Windows.Threading.DispatcherTimer? _liveSettingsTimer;
     private Win32ForegroundTracker? _foregroundTracker;
     private ColorScheme _lastSystemScheme = ColorScheme.Dark;
+    private ColorScheme _effectiveScheme = ColorScheme.Dark;
     private bool _servicesReady;
+    private LinkImageCache? _linkImages;
+    private HistoryOpenOutcome _historyOutcome;
+    private static readonly UiActivity Activity = UiActivity.Shared;
+    // Opens slower than this are logged (the first one always is).
+    private const double SlowOpenMs = 250;
 
     internal AppSettings Settings => _settings;
     // What the popups act on (pin, edit, delete, paste): the history they
@@ -84,7 +90,7 @@ public partial class App : System.Windows.Application
 
     internal void SetIncognito(bool on)
     {
-        if (_coordinator is null || _popupModel is null || _popup is null)
+        if (_coordinator is null || _popupModel is null)
         {
             return;
         }
@@ -106,6 +112,7 @@ public partial class App : System.Windows.Application
         {
             return;
         }
+        using var stage = Activity.Enter("view-refresh");
         if (_popup?.IsVisible == true)
         {
             _popupModel.Refresh();
@@ -120,15 +127,29 @@ public partial class App : System.Windows.Application
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        // Runtime start, single-file setup and WPF init, before any app code.
+        var beforeStartupMs = ProcessAge().TotalMilliseconds;
+        var startup = new PhaseTimeline();
+        using var stage = Activity.Enter("startup");
         InstallCrashHandlers();
-        AppFolders.EnsureCreated();
-        _settingsPath = AppFolders.SettingsPath();
-        _settings = SettingsStore.Load(_settingsPath);
-        _actionsPath = ActionsPaths.Resolve(null);
-        _actions = ActionsStore.Load(_actionsPath);
+        // Before anything slow: a startup that hangs (a cold disk after a
+        // reboot, a locked database) is logged with the step it hung in.
+        TrackDispatcherWork();
+        StartUiWatchdog();
+        using (startup.Measure("settings", Activity))
+        {
+            AppFolders.EnsureCreated();
+            _settingsPath = AppFolders.SettingsPath();
+            _settings = SettingsStore.Load(_settingsPath);
+            _actionsPath = ActionsPaths.Resolve(null);
+            _actions = ActionsStore.Load(_actionsPath);
+        }
 
-        LocalizationManager.CurrentLanguage = _settings.Language;
-        UpdateLanguage(_settings.Language);
+        using (startup.Measure("language", Activity))
+        {
+            LocalizationManager.CurrentLanguage = _settings.Language;
+            UpdateLanguage(_settings.Language);
+        }
 
         var cli = CliOptions.Parse(e.Args);
         if (cli.ShowHelp)
@@ -149,11 +170,16 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var mutex = new MutexSingleInstanceLock(InstanceNames.BuildMutexName(sid));
-        _disposables.Add(mutex);
-        var pipeName = InstanceNames.BuildPipeName(sid);
-        var outcome = SingleInstanceCoordinator.Decide(
-            mutex, new NamedPipeForwarder(), cli, pipeName);
+        SingleInstanceOutcome outcome;
+        string pipeName;
+        using (startup.Measure("single-instance", Activity))
+        {
+            var mutex = new MutexSingleInstanceLock(InstanceNames.BuildMutexName(sid));
+            _disposables.Add(mutex);
+            pipeName = InstanceNames.BuildPipeName(sid);
+            outcome = SingleInstanceCoordinator.Decide(
+                mutex, new NamedPipeForwarder(), cli, pipeName);
+        }
         if (outcome != SingleInstanceOutcome.IsPrimary)
         {
             if (outcome == SingleInstanceOutcome.ForwardFailed)
@@ -167,11 +193,14 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        BuildServices(pipeName);
+        BuildServices(pipeName, startup);
         _servicesReady = true;
-        var updater = new AutoUpdater(this);
-        _disposables.Add(updater);
-        updater.Start();
+        using (startup.Measure("updater", Activity))
+        {
+            var updater = new AutoUpdater(this);
+            _disposables.Add(updater);
+            updater.Start();
+        }
         // Also on a --hidden (autostart) first start: a tray-only app is
         // otherwise invisible to someone who never opened it themselves.
         ShowWelcomeOnFirstRun();
@@ -179,6 +208,203 @@ public partial class App : System.Windows.Application
         {
             // Normal start stays tray-only; the popup opens via hotkey/tray.
         }
+        // Phase names and durations only (ErrorLog contract: never clipboard
+        // content).
+        _errorLog.Note("startup", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "{0} start; before app code {1:0} ms; {2}; {3}",
+            cli.StartHidden ? "hidden" : "normal", beforeStartupMs, startup.Format(), DescribeAges()));
+        ScheduleIdleStartupWork();
+    }
+
+    private static readonly DateTime ProcessStartedUtc = ReadProcessStart();
+
+    private static DateTime ReadProcessStart()
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            return process.StartTime.ToUniversalTime();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return DateTime.UtcNow;
+        }
+    }
+
+    private static TimeSpan ProcessAge() => DateTime.UtcNow - ProcessStartedUtc;
+
+    // How long after process start (and after boot) something happened: the
+    // slow first open after a reboot is a question of when.
+    private static string DescribeAges() => string.Format(System.Globalization.CultureInfo.InvariantCulture,
+        "process age {0:0.0} s, system uptime {1:0} s", ProcessAge().TotalSeconds, Environment.TickCount64 / 1000.0);
+
+    // The dispatcher operation the UI thread is running, for the watchdog:
+    // a hang outside the named stages (a layout pass, a render, a timer)
+    // still says what it was in.
+    private void TrackDispatcherWork()
+    {
+        var method = typeof(System.Windows.Threading.DispatcherOperation).GetField("_method",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Activity.DescribeWork = work =>
+        {
+            if (work is not System.Windows.Threading.DispatcherOperation operation)
+            {
+                return "dispatcher operation";
+            }
+            var name = method?.GetValue(operation) is Delegate callback
+                ? $"{callback.Method.DeclaringType?.Name}.{callback.Method.Name}"
+                : "operation";
+            return $"dispatcher {operation.Priority} {name}";
+        };
+        var hooks = Dispatcher.Hooks;
+        hooks.OperationStarted += (_, args) => Activity.EnterWork(args.Operation);
+        hooks.OperationCompleted += (_, args) => Activity.ExitWork(args.Operation);
+        hooks.OperationAborted += (_, args) => Activity.ExitWork(args.Operation);
+    }
+
+    // A frozen UI leaves a trace in the log (start, duration, the stages it
+    // was in, resources) even when the user ends up killing the app. Two
+    // seconds: the 55 s hang seen after a logon was the only one logged, and
+    // shorter stalls (a slow first open) left nothing to go on.
+    private void StartUiWatchdog()
+    {
+        var dispatcher = Dispatcher;
+        var watchdog = new UiHangWatchdog(
+            work => dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, work),
+            detail => _errorLog.Note("ui-hang", detail),
+            threshold: TimeSpan.FromSeconds(2),
+            describeProcess: DescribeProcessResources,
+            describeActivity: Activity.Describe);
+        _disposables.Add(watchdog);
+        watchdog.Start();
+    }
+
+    // Startup work that does not have to happen before the tray icon and
+    // the hotkey exist: housekeeping on a worker thread, then the compact
+    // popup's warm-up once the UI is idle.
+    private void ScheduleIdleStartupWork()
+    {
+        var startedUtc = DateTime.UtcNow;
+        _ = Task.Run(() => RunStartupHousekeeping(startedUtc));
+        var warmUp = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle, Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(2),
+        };
+        warmUp.Tick += async (_, _) =>
+        {
+            warmUp.Stop();
+            if (_compactPopup is null)
+            {
+                return;
+            }
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                await _compactPopup.WarmUpAsync().ConfigureAwait(true);
+                _errorLog.Note("warm-up", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "compact popup {0:0} ms; {1}", watch.Elapsed.TotalMilliseconds, DescribeAges()));
+            }
+            catch (Exception ex)
+            {
+                LogError("warm-up", ex);
+            }
+        };
+        warmUp.Start();
+    }
+
+    // Rotation and orphan sweeps (spec Janitor/history limits). They ran on
+    // the UI thread before the tray icon existed, with two full history
+    // queries. Housekeeping: a disk error here must never reach the user.
+    private void RunStartupHousekeeping(DateTime startedUtc)
+    {
+        if (_store is null || _capture is null)
+        {
+            return;
+        }
+        var timeline = new PhaseTimeline();
+        var evicted = 0;
+        try
+        {
+            using (timeline.Measure("evict"))
+            {
+                evicted = _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
+                    DateTime.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
+            }
+            // Under the capture gate: never between a capture's file and row.
+            using (timeline.Measure("image-sweep"))
+            {
+                _capture.SweepOrphanImages();
+            }
+            using (timeline.Measure("incognito-sweep"))
+            {
+                EphemeralImageAssetStore.SweepStaleSessions(TimeSpan.FromDays(1));
+            }
+            // Only the first screenful: a full prewarm would hold every
+            // thumbnail in memory even if the popup is never opened.
+            using (timeline.Measure("thumbnail-prewarm"))
+            {
+                PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogError("startup-housekeeping", ex);
+        }
+        try
+        {
+            // Nothing else removes preview images of links that left the
+            // history: the folder only grew. Only against the real history,
+            // and only files older than this start (captures go on meanwhile).
+            if (_historyOutcome == HistoryOpenOutcome.Opened && _linkImages is not null)
+            {
+                using (timeline.Measure("link-image-sweep"))
+                {
+                    _linkImages.SweepOrphans(_store.Search("", kind: ItemKind.Link).Select(i => i.Content), startedUtc);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+            LogError("link-image-sweep", ex);
+        }
+        _errorLog.Note("housekeeping", $"{timeline.Format()} (worker thread); evicted {evicted}");
+        if (evicted > 0)
+        {
+            RequestViewRefresh();
+        }
+    }
+
+    // The large window, built on its first use: the compact popup is the
+    // daily one, and building both at startup cost ~0.3 s of UI time.
+    internal PopupWindow EnsureLargePopup()
+    {
+        if (_popup is not null)
+        {
+            return _popup;
+        }
+        using var stage = Activity.Enter("large.create");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        _popup = new PopupWindow(_popupModel ?? throw new InvalidOperationException("Services not built."), this);
+        _popup.ApplyTheme(_effectiveScheme);
+        _errorLog.Note("popup-create", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "large popup built in {0:0} ms; {1}", watch.Elapsed.TotalMilliseconds, DescribeAges()));
+        return _popup;
+    }
+
+    // One log line per first open of each popup, and per slow open after:
+    // the step times of ShowAtCursor, then when the first frame was drawn.
+    internal void ReportPopupOpen(string popup, int openNumber, PhaseTimeline timeline, bool warmedUp)
+    {
+        var shown = timeline.Format();
+        if (openNumber > 1 && timeline.TotalMilliseconds < SlowOpenMs)
+        {
+            return;
+        }
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+            _errorLog.Note("popup-open", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "{0} open #{1}: {2} in ShowAtCursor; drawn at {3:0} ms; warmed up {4}; {5}",
+                popup, openNumber, shown, timeline.TotalMilliseconds, warmedUp ? "yes" : "no", DescribeAges())));
     }
 
     // Safety net: before this any exception in a UI handler closed the app
@@ -228,7 +454,7 @@ public partial class App : System.Windows.Application
 
     internal void LogError(string context, Exception exception) => _errorLog.Write(context, exception);
 
-    private void BuildServices(string pipeName)
+    private void BuildServices(string pipeName, PhaseTimeline startup)
     {
         var dispatcher = Dispatcher;
         var clock = new SystemClock();
@@ -247,8 +473,13 @@ public partial class App : System.Windows.Application
 
         // Never throws: a damaged or unreachable database used to end every
         // launch here, before the tray icon existed.
-        var history = HistoryStoreOpener.Open(
-            _settings.History.ResolveDatabasePath(), DatabasePaths.Default(), clock.UtcNow);
+        HistoryOpenResult history;
+        using (startup.Measure("history-open", Activity))
+        {
+            history = HistoryStoreOpener.Open(
+                _settings.History.ResolveDatabasePath(), DatabasePaths.Default(), clock.UtcNow);
+        }
+        _historyOutcome = history.Outcome;
         if (history.Error is not null)
         {
             LogError("history-open", history.Error);
@@ -267,25 +498,10 @@ public partial class App : System.Windows.Application
         _captureOptions = captureOptions;
         _capture = new CaptureService(
             _coordinator, _coordinator, captureOptions, clock);
+        // Rotation and orphan sweeps run after startup, on a worker thread
+        // (RunStartupHousekeeping).
 
-        // Startup rotation + orphan sweep (spec Janitor/history limits).
-        // Housekeeping: a disk error here must not keep the app from
-        // starting.
-        try
-        {
-            _store.Evict(_settings.History.MaxItems, _settings.History.MaxAgeMinutes,
-                clock.UtcNow, _settings.Behavior.ProtectPinned, _settings.Behavior.ProtectTagged);
-            _capture.SweepOrphanImages();
-            EphemeralImageAssetStore.SweepStaleSessions(TimeSpan.FromDays(1));
-            // Only the first screenful: a full prewarm would hold every
-            // thumbnail in memory even if the popup is never opened.
-            PrewarmImageThumbnails(_store.Search("", kind: ItemKind.Image).Take(24));
-        }
-        catch (Exception ex)
-        {
-            LogError("startup-housekeeping", ex);
-        }
-
+        var capturePhase = startup.Measure("capture", Activity);
         var listener = new MessageOnlyClipboardListener();
         _disposables.Add(listener);
         listener.HandlerFailed += (_, ex) => LogError("clipboard-listener", ex);
@@ -310,22 +526,9 @@ public partial class App : System.Windows.Application
 
         _executor = new ActionExecutor(new ProcessRunner(), new ShellLauncher());
 
-        var linkImages = new LinkImageCache(Path.Combine(AppFolders.CacheDir(), "link-images"));
+        _linkImages = new LinkImageCache(Path.Combine(AppFolders.CacheDir(), "link-images"));
         _linkPreviewService = new LinkPreviewService(new LinkPreviewHttpClient(),
-            linkImages, _settings.ToLinkPreviewOptions());
-        try
-        {
-            // Nothing else removes preview images of links that left the
-            // history: the folder only grew. Only against the real history.
-            if (history.Outcome == HistoryOpenOutcome.Opened)
-            {
-                linkImages.SweepOrphans(_store.Search("", kind: ItemKind.Link).Select(i => i.Content));
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            LogError("link-image-sweep", ex);
-        }
+            _linkImages, _settings.ToLinkPreviewOptions());
 
         // Started on first use (EnsureTransferServer): listening on the
         // network from every startup put a firewall prompt in front of every
@@ -334,9 +537,15 @@ public partial class App : System.Windows.Application
         _transferServer.PayloadReceived += OnTransferPayloadReceived;
         _disposables.Add(_transferServer);
 
-        _popupModel = new PopupViewModel(_coordinator);
-        _popup = new PopupWindow(_popupModel, this);
-        _compactPopup = new CompactPopupWindow(_popupModel, this);
+        capturePhase.Dispose();
+
+        using (startup.Measure("compact-popup", Activity))
+        {
+            _popupModel = new PopupViewModel(_coordinator);
+            // The large window is built on first use (EnsureLargePopup).
+            _compactPopup = new CompactPopupWindow(_popupModel, this);
+        }
+        var hotkeyPhase = startup.Measure("hotkeys", Activity);
         _hotkeyWindow = new HotkeyWindow(OnHotkey);
         var hwnd = _hotkeyWindow.EnsureHandle();
         // Before the first parse: gestures may use layout keys (Ç, Cyrillic, ...).
@@ -348,8 +557,10 @@ public partial class App : System.Windows.Application
             new[] { registration.Open.Diagnostics, registration.Incognito.Diagnostics }
                 .Where(d => !string.IsNullOrWhiteSpace(d)));
 
+        hotkeyPhase.Dispose();
+        var trayPhase = startup.Measure("tray", Activity);
         var incognito = new ShellIncognito(this);
-        var shell = new ShellPopup(_popup, dispatcher, incognito);
+        var shell = new ShellPopup(() => _popup, EnsureLargePopup, dispatcher, incognito);
         // Ticket 22: tray and pipe shows capture the paste target too —
         // otherwise the orchestrator pastes with the stale hotkey-time
         // handle and misreports focus loss.
@@ -384,10 +595,15 @@ public partial class App : System.Windows.Application
             _tray.ShowBalloon("WindowsCM", historyNotice);
         }
 
-        var dispatcherFacade = new IpcDispatcher(popup, _coordinator);
-        var server = new NamedPipeServer(pipeName, dispatcherFacade);
-        server.Start();
-        _disposables.Add(server);
+        trayPhase.Dispose();
+        using (startup.Measure("ipc", Activity))
+        {
+            var dispatcherFacade = new IpcDispatcher(popup, _coordinator);
+            var server = new NamedPipeServer(pipeName, dispatcherFacade);
+            server.Start();
+            _disposables.Add(server);
+        }
+        var themePhase = startup.Measure("theme", Activity);
 
         var janitor = new SessionJanitor(new SystemEventsSessionEndingSource(),
             _store, () => _settings.History.EndOfSession);
@@ -396,11 +612,12 @@ public partial class App : System.Windows.Application
         _themeDetector = new Win32WindowsThemeDetector();
         _disposables.Add(_themeDetector);
         _lastSystemScheme = _themeDetector.DetectSystemScheme();
+        // Queued, not waited for: the detector's thread never waits on a
+        // busy UI.
         _themeDetector.ThemeChanged += (_, scheme) =>
-        {
-            try
+            dispatcher.BeginInvoke(() =>
             {
-                dispatcher.Invoke(() =>
+                try
                 {
                     // Windows raises this for many unrelated preference
                     // changes; each rebuilt every window's theme, hidden
@@ -411,26 +628,16 @@ public partial class App : System.Windows.Application
                     }
                     _lastSystemScheme = scheme;
                     UpdateTheme(scheme);
-                });
-            }
-            catch (Exception ex)
-            {
-                LogError("theme", ex);
-            }
-        };
+                }
+                catch (Exception ex)
+                {
+                    LogError("theme", ex);
+                }
+            });
         UpdateTheme(_lastSystemScheme);
+        themePhase.Dispose();
 
         WatchActionsFile();
-
-        // A frozen UI leaves a trace in the log (start, duration, resources)
-        // even when the user ends up killing the app.
-        var watchdog = new UiHangWatchdog(
-            work => dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, work),
-            detail => _errorLog.Note("ui-hang", detail),
-            threshold: TimeSpan.FromSeconds(5),
-            describeProcess: DescribeProcessResources);
-        _disposables.Add(watchdog);
-        watchdog.Start();
     }
 
     // Memory and handle counts: tells a hang from resource exhaustion
@@ -444,9 +651,11 @@ public partial class App : System.Windows.Application
 
     private void UpdateTheme(ColorScheme systemScheme)
     {
+        using var stage = Activity.Enter("theme");
         var effectiveScheme = _settings.Theme.Scheme == ColorScheme.System
             ? systemScheme
             : _settings.Theme.Scheme;
+        _effectiveScheme = effectiveScheme;
         var themeDict = PopupThemeBrushes.CreateThemeDictionary(effectiveScheme, _settings.ItemColors);
         Resources.MergedDictionaries.Clear();
         Resources.MergedDictionaries.Add(themeDict);
@@ -461,6 +670,7 @@ public partial class App : System.Windows.Application
 
     internal void UpdateLanguage(AppLanguage language)
     {
+        using var stage = Activity.Enter("language");
         LocalizationManager.CurrentLanguage = language;
         var strings = LocalizationManager.Strings;
         if (_localizationDict is not null)
@@ -533,12 +743,13 @@ public partial class App : System.Windows.Application
 
     private void OnHotkey(HotkeySlot slot)
     {
-        if (_popup is null || _compactPopup is null || _capture is null || _coordinator is null)
+        if (_compactPopup is null || _capture is null || _coordinator is null)
         {
             return;
         }
+        using var stage = Activity.Enter("hotkey");
         _pasteTarget = CapturePasteTarget();
-        if (_popup.IsVisible)
+        if (_popup?.IsVisible == true)
         {
             _popup.Hide();
             return;
@@ -749,7 +960,7 @@ public partial class App : System.Windows.Application
 
     private async Task ActivateCoreAsync(ActivationRequest request, bool shiftHeld)
     {
-        if (_coordinator is null || _orchestrator is null || _executor is null || _popup is null)
+        if (_coordinator is null || _orchestrator is null || _executor is null)
         {
             return;
         }
@@ -778,7 +989,7 @@ public partial class App : System.Windows.Application
             item.Id, captured, shiftHeld,
             () =>
             {
-                _popup.Hide();
+                _popup?.Hide();
                 _compactPopup?.Hide();
                 return Task.CompletedTask;
             }).ConfigureAwait(true);
@@ -802,7 +1013,7 @@ public partial class App : System.Windows.Application
 
     internal async Task RunActionAsync(ClipboardAction action, ClipboardItem item)
     {
-        if (_executor is null || _popup is null)
+        if (_executor is null)
         {
             return;
         }
@@ -971,20 +1182,16 @@ public partial class App : System.Windows.Application
 
     private async Task HandleActionResultAsync(ActionResult result, ClipboardItem item)
     {
-        if (_popup is null)
-        {
-            return;
-        }
         _compactPopup?.Hide();
         switch (result.Status)
         {
             case ActionStatus.Done:
             case ActionStatus.NoDefault:
             case ActionStatus.NotApplicable:
-                _popup.Hide();
+                _popup?.Hide();
                 break;
             case ActionStatus.Copy when result.Output is not null:
-                _popup.Hide();
+                _popup?.Hide();
                 try
                 {
                     // Another app holding the clipboard open throws here.
@@ -1005,7 +1212,7 @@ public partial class App : System.Windows.Application
                 try
                 {
                     System.Windows.Clipboard.SetText(result.Output);
-                    _popup.Hide();
+                    _popup?.Hide();
                     await Task.Delay(_settings.Paste.DelayMs).ConfigureAwait(true);
                     new Win32PasteInjector().Inject(_settings.ToPasteOptions().PasteSequence);
                     ExplicitCopyFeedback();
@@ -1017,18 +1224,18 @@ public partial class App : System.Windows.Application
                 }
                 break;
             case ActionStatus.ShowQr when result.Output is not null:
-                _popup.Hide();
+                _popup?.Hide();
                 ShowInFront(new QrWindow(result.Output));
                 break;
             case ActionStatus.Failed:
-                _popup.Hide();
+                _popup?.Hide();
                 if (!string.IsNullOrWhiteSpace(result.Diagnostics))
                 {
                     _tray?.ShowBalloon("WindowsCM", result.Diagnostics);
                 }
                 break;
             default:
-                _popup.Hide();
+                _popup?.Hide();
                 break;
         }
     }
@@ -1049,7 +1256,7 @@ public partial class App : System.Windows.Application
 
     internal void ApplyTagSlot(ClipboardItem item, int slot)
     {
-        if (_store is null || _popupModel is null || _popup is null)
+        if (_store is null || _popupModel is null)
         {
             return;
         }
@@ -1151,6 +1358,7 @@ public partial class App : System.Windows.Application
 
     private void ApplyLiveSettings()
     {
+        using var stage = Activity.Enter("settings-live-apply");
         UpdateTheme(_themeDetector?.DetectSystemScheme() ?? ColorScheme.Dark);
         ApplyHistoryLimitsToCapture();
         ApplyAutoPaste();
@@ -1174,6 +1382,7 @@ public partial class App : System.Windows.Application
 
     private void OnSettingsClosed()
     {
+        using var stage = Activity.Enter("settings-closed");
         // First: when anything below threw (a locked settings file, a busy
         // database), the field kept the closed window and every later
         // OpenSettings threw on Show() until restart.
