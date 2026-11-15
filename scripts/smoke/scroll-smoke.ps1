@@ -162,6 +162,8 @@ $configDir = Join-Path $env:APPDATA 'WindowsCM'
 $settingsPath = Join-Path $configDir 'settings.json'
 $dbPath = Join-Path $dataDir 'clipboard.db'
 $logPath = Join-Path $dataDir 'logs\windowscm.log'
+# Startup and popup timings: informational, kept as an artifact, not checked.
+$timingsPath = Join-Path $dataDir 'logs\timings.log'
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $pipeName = "WindowsCM.$sid"
 $dotnetTools = Join-Path $env:USERPROFILE '.dotnet\tools'
@@ -515,6 +517,7 @@ Scroll-Phase 'wheel burst' $ScrollSeconds {
 }
 
 Note ""
+if (Test-Path $timingsPath) { Copy-Item $timingsPath (Join-Path $OutDir 'timings.log') }
 Note "## Error log"
 if (Test-Path $logPath) {
     Copy-Item $logPath (Join-Path $OutDir 'windowscm.log')

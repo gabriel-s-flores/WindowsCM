@@ -56,18 +56,21 @@ internal static class Program
         }
     }
 
-    // App writes timing notes (popup opens) to its error log: point it at a
-    // temporary file so the harness never writes into the user's log.
+    // App writes errors and timing notes (popup opens) to its logs: point
+    // both at temporary files so the harness never writes into the user's.
     internal static App IsolatedApp()
     {
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        var log = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WindowsCM-ui-stress-" + Guid.NewGuid().ToString("N") + ".log");
-        typeof(App).GetField("_errorLog", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(app, new WindowsCM.Core.Diagnostics.ErrorLog(log));
-        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        foreach (var field in new[] { "_errorLog", "_timingLog" })
         {
-            try { System.IO.File.Delete(log); } catch (System.IO.IOException) { }
-        };
+            var log = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WindowsCM-ui-stress-" + Guid.NewGuid().ToString("N") + ".log");
+            typeof(App).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(app, new WindowsCM.Core.Diagnostics.ErrorLog(log));
+            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            {
+                try { System.IO.File.Delete(log); } catch (System.IO.IOException) { }
+            };
+        }
         return app;
     }
 
