@@ -29,6 +29,11 @@ public sealed class ErrorLog
     public static string DefaultPath() =>
         System.IO.Path.Combine(AppFolders.LogsDir(), "windowscm.log");
 
+    // Startup and popup timings: kept apart so the error log holds only
+    // errors and hangs (the smokes fail on any line in it).
+    public static string TimingsPath() =>
+        System.IO.Path.Combine(AppFolders.LogsDir(), "timings.log");
+
     public void Write(string context, Exception? exception = null) =>
         Append(() => Format(_utcNow(), context, exception));
 

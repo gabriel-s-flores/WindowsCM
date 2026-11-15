@@ -202,6 +202,8 @@ $configDir = Join-Path $env:APPDATA 'WindowsCM'
 $settingsPath = Join-Path $configDir 'settings.json'
 $dbPath = Join-Path $dataDir 'clipboard.db'
 $logPath = Join-Path $dataDir 'logs\windowscm.log'
+# Startup and popup timings: informational, kept as an artifact, not checked.
+$timingsPath = Join-Path $dataDir 'logs\timings.log'
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $pipeName = "WindowsCM.$sid"
 $scale = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero).DpiX / 96.0
@@ -636,6 +638,7 @@ Stop-Process -Id $notepad.Id -Force -ErrorAction SilentlyContinue
 # ------------------------------------------------------------ error log
 
 Note ""
+if (Test-Path $timingsPath) { Copy-Item $timingsPath (Join-Path $OutDir 'timings.log') }
 Note "## Error log"
 if (Test-Path $logPath) {
     $log = Get-Content $logPath -Raw

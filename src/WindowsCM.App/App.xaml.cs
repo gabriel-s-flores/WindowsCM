@@ -61,6 +61,8 @@ public partial class App : System.Windows.Application
     private MiniTransferHttpServer? _transferServer;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, byte> _inFlightLinkFetches = new();
     private readonly ErrorLog _errorLog = new(ErrorLog.DefaultPath());
+    // Same format and contract (never clipboard content), separate file.
+    private readonly ErrorLog _timingLog = new(ErrorLog.TimingsPath());
     private readonly UnhandledErrorPolicy _errorPolicy = new();
     private System.Windows.Threading.DispatcherTimer? _viewRefreshTimer;
     private System.Windows.Threading.DispatcherTimer? _liveSettingsTimer;
@@ -210,7 +212,7 @@ public partial class App : System.Windows.Application
         }
         // Phase names and durations only (ErrorLog contract: never clipboard
         // content).
-        _errorLog.Note("startup", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+        _timingLog.Note("startup", string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "{0} start; before app code {1:0} ms; {2}; {3}",
             cli.StartHidden ? "hidden" : "normal", beforeStartupMs, startup.Format(), DescribeAges()));
         ScheduleIdleStartupWork();
@@ -302,7 +304,7 @@ public partial class App : System.Windows.Application
             try
             {
                 await _compactPopup.WarmUpAsync().ConfigureAwait(true);
-                _errorLog.Note("warm-up", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                _timingLog.Note("warm-up", string.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "compact popup {0:0} ms; {1}", watch.Elapsed.TotalMilliseconds, DescribeAges()));
             }
             catch (Exception ex)
@@ -368,7 +370,7 @@ public partial class App : System.Windows.Application
         {
             LogError("link-image-sweep", ex);
         }
-        _errorLog.Note("housekeeping", $"{timeline.Format()} (worker thread); evicted {evicted}");
+        _timingLog.Note("housekeeping", $"{timeline.Format()} (worker thread); evicted {evicted}");
         if (evicted > 0)
         {
             RequestViewRefresh();
@@ -387,7 +389,7 @@ public partial class App : System.Windows.Application
         var watch = System.Diagnostics.Stopwatch.StartNew();
         _popup = new PopupWindow(_popupModel ?? throw new InvalidOperationException("Services not built."), this);
         _popup.ApplyTheme(_effectiveScheme);
-        _errorLog.Note("popup-create", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+        _timingLog.Note("popup-create", string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "large popup built in {0:0} ms; {1}", watch.Elapsed.TotalMilliseconds, DescribeAges()));
         return _popup;
     }
@@ -402,7 +404,7 @@ public partial class App : System.Windows.Application
             return;
         }
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
-            _errorLog.Note("popup-open", string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _timingLog.Note("popup-open", string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "{0} open #{1}: {2} in ShowAtCursor; drawn at {3:0} ms; warmed up {4}; {5}",
                 popup, openNumber, shown, timeline.TotalMilliseconds, warmedUp ? "yes" : "no", DescribeAges())));
     }
